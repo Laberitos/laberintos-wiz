@@ -1,0 +1,43 @@
+{
+  "orden": [
+    "Laberintos_2",
+    "Laberintos_final",
+    "LABERINTOS_1",
+    "PRUEBAS2"
+  ],
+  "datos": {
+    "Laberintos_2": {
+      "escenas": [
+        "prueba_4_azul_blanco",
+        "prueba_2_azul",
+        "prueba1",
+        "prueba_3_amarillo"
+      ]
+    },
+    "Laberintos_final": {
+      "escenas": [
+        "dgsdfgsdf",
+        "dfgsfdgsfdg"
+      ]
+    },
+    "LABERINTOS_1": {
+      "escenas": [
+        "prueba1",
+        "prueba_2_azul",
+        "prueba_3_amarillo",
+        "prueba_4_azul_blanco"
+      ]
+    },
+    "PRUEBAS2": {
+      "escenas": [
+        "1-INTRO_SEC_ON",
+        "1-INTRO_RESPIRACIÓN (1:40)",
+        "1-INTRO_VELA_PARP(2:55)",
+        "1_FINAL",
+        "2-INTRO_BRILO_BAJO",
+        "3-INTRO_TRANSICION",
+        "3.1-PIELES"
+      ]
+    }
+  }
+}

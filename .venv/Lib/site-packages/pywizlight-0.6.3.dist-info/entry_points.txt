@@ -1,0 +1,2 @@
+[console_scripts]
+wizlight = pywizlight.cli:main

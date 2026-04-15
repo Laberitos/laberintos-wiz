@@ -1,0 +1,666 @@
+{
+  "orden": [
+    "1-INTRO_SEC_ON",
+    "1-INTRO_RESPIRACIÓN (1:40)",
+    "1-INTRO_VELA_PARP(2:55)",
+    "1_FINAL",
+    "2-INTRO_BRILO_BAJO",
+    "3-INTRO_TRANSICION",
+    "3.1-PIELES"
+  ],
+  "datos": {
+    "u": {
+      "state": "off",
+      "brillo": 0,
+      "modo": "colour",
+      "h": 0,
+      "s": 1
+    },
+    "w": {
+      "state": "off",
+      "brillo": 0,
+      "modo": "colour",
+      "h": 0,
+      "s": 1
+    },
+    "secuencia_off": {
+      "state": "off",
+      "brillo": 0,
+      "modo": "colour",
+      "h": 0,
+      "s": 1
+    },
+    "dfdsfdsfds": {
+      "state": "off",
+      "brillo": 0,
+      "modo": "colour",
+      "h": 0,
+      "s": 1
+    },
+    "4444": {
+      "state": "off",
+      "brillo": 0,
+      "modo": "colour",
+      "h": 0,
+      "s": 1
+    },
+    "1-INTRO_SEC_ON": {
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": true,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      },
+      "192.168.0.112": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      },
+      "192.168.0.113": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      },
+      "192.168.0.114": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      },
+      "192.168.0.115": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      },
+      "192.168.0.116": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      },
+      "192.168.0.117": {
+        "state": "off",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 16.762554461832735,
+        "s": 0.9631481303453039
+      }
+    },
+    "1-INTRO_RESPIRACIÓN (1:40)": {
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": true,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.112": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.113": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.114": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 105,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      }
+    },
+    "1-INTRO_VELA_PARP(2:55)": {
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": true,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": true,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.112": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.113": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.114": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 150,
+        "h": 18.434948822922024,
+        "s": 0.9838197164968291
+      }
+    },
+    "2-INTRO_BRILO_BAJO": {
+      "fade_in": 18.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      },
+      "192.168.0.112": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      },
+      "192.168.0.113": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      },
+      "192.168.0.114": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 179.33380002981687,
+        "s": 0.9556201528553121
+      }
+    },
+    "1_FINAL": {
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      },
+      "192.168.0.112": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      },
+      "192.168.0.113": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      },
+      "192.168.0.114": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 254,
+        "h": 12.395406833758443,
+        "s": 1.0
+      }
+    },
+    "3-INTRO_TRANSICION": {
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 169.38034472384493,
+        "s": 0.3617515688022157
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      }
+    },
+    "3.1-PIELES": {
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      },
+      "192.168.0.112": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      },
+      "192.168.0.113": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      },
+      "192.168.0.114": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 354.28940686250036,
+        "s": 0.111665284679121
+      }
+    },
+    "1": {
+      "fade_in": 4.9,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 188.9726266148964,
+        "s": 0.8243736026430576
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 280.00797980144137,
+        "s": 0.7398289929270887
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 165.9637565320735,
+        "s": 0.05890150893739515
+      }
+    },
+    "2": {
+      "fade_in": 4.9,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 233.13010235415598,
+        "s": 0.07142857142857142
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 190.15426658020024,
+        "s": 0.9723734900138078
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 293.4286928087454,
+        "s": 0.9341590128155324
+      }
+    },
+    "3": {
+      "fade_in": 4.9,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 304.6409475119163,
+        "s": 0.9550082807633297
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 315.0,
+        "s": 0.020203050891044218
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 8,
+        "h": 181.7623910236605,
+        "s": 0.9290108850222347
+      }
+    }
+  }
+}
