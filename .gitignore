@@ -1,0 +1,41 @@
+# -----------------------------
+# PYTHON
+# -----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# entorno virtual
+.venv/
+venv/
+
+# -----------------------------
+# CONFIGURACIONES LOCALES
+# -----------------------------
+lamp_names.json
+
+# ⚠️ escenas y proyectos (decide si quieres versionarlos)
+escenas.json
+proyectos.json
+
+# -----------------------------
+# SISTEMA / OS
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# VSCODE
+# -----------------------------
+.vscode/
+
+# -----------------------------
+# LOGS / DEBUG
+# -----------------------------
+*.log
+
+# -----------------------------
+# ARCHIVOS TEMPORALES
+# -----------------------------
+*.tmp
