@@ -568,6 +568,7 @@ from acciones.acciones import (
     efecto_atardecer_wiz,
     efecto_desfasado_wiz,
     efecto_latido_wiz,
+    efecto_intercambio_colores,
 )
 
 # ======================================================================
@@ -1037,6 +1038,42 @@ btn_latido = tk.Checkbutton(
 )
 btn_latido.grid(row=3, column=0, padx=3, pady=3, sticky="ew")
 
+
+
+
+
+intercambio_var = tk.BooleanVar(value=False)
+
+def toggle_intercambio():
+    if intercambio_var.get():
+        btn_intercambio.config(text="Detener", bg="#ef5350")
+        efecto_intercambio_colores(
+            send_lamp_color_safe,
+            LAMP_IPS,
+            panels,
+            selected_devices,
+            lamp_status,
+            intercambio_var,
+            root,
+            color_a=(0, 1),       # rojo
+            color_b=(220, 1),     # azul
+            brillo=220,
+            duracion_ms=10000,
+            pasos=100,
+        )
+    else:
+        btn_intercambio.config(text="Intercambio", bg="#20bdec")
+
+btn_intercambio = tk.Checkbutton(
+    frame_fx,
+    text="Intercambio",
+    variable=intercambio_var,
+    font=("Segoe UI", 12, "bold"),
+    bg="#20bdec", fg="#fff", selectcolor="#232b32",
+    command=toggle_intercambio
+)
+btn_intercambio.grid(row=1, column=0, padx=3, pady=3, sticky="ew")
+
 #################_DEFINICIONES DE EFECTOS_##############################
 
 effect_vars = {
@@ -1054,6 +1091,7 @@ effect_vars = {
     "atardecer": atardecer_var,
     "desfase": desfase_var,
     "latido": latido_var,
+    "Intercambio":intercambio_var
 }
 
 effect_toggles = {
@@ -1071,6 +1109,7 @@ effect_toggles = {
     "atardecer": toggle_atardecer,
     "desfase": toggle_desfase,
     "latido": toggle_latido,
+    "Intercambio":toggle_intercambio
 }
 
 
