@@ -14,10 +14,18 @@ venv/
 # CONFIGURACIONES LOCALES
 # -----------------------------
 lamp_names.json
+lamp_ips.txt
+lamp_ips - copia.txt
 
-# ⚠️ escenas y proyectos (decide si quieres versionarlos)
+# Escenas y proyectos locales
 escenas.json
 proyectos.json
+
+# -----------------------------
+# COPIAS / BACKUPS LOCALES
+# -----------------------------
+* - copia*.py
+tablero/backup/
 
 # -----------------------------
 # SISTEMA / OS
