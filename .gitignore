@@ -16,8 +16,8 @@ venv/
 lamp_names.json
 
 # ⚠️ escenas y proyectos (decide si quieres versionarlos)
-escenas.json
-proyectos.json
+#escenas.json
+#proyectos.json
 
 # -----------------------------
 # SISTEMA / OS

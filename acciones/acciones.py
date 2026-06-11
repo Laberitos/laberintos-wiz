@@ -1,6 +1,6 @@
 import math
 
-
+#oscar
 def efecto_golpe_tambor(
     send_lamp_color,
     LAMP_IPS,
