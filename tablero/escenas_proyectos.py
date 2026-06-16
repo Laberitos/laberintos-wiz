@@ -3,10 +3,79 @@
 
 import os
 import json
+import shutil
+from datetime import datetime
 from tkinter import messagebox
 
 ESCENAS_FILE = "escenas.json"
 PROYECTOS_FILE = "proyectos.json"
+LAMPS_CONFIG_FILE = "lamps_config.json"
+BACKUP_DIR = "backups"
+SCENE_FORMAT_VERSION = 2
+PROJECT_FORMAT_VERSION = 2
+
+
+def now_iso():
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def backup_file(path):
+    if not os.path.exists(path):
+        return None
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    base = os.path.splitext(os.path.basename(path))[0]
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = os.path.join(BACKUP_DIR, f"{base}_{stamp}.json")
+    shutil.copy2(path, backup_path)
+    return backup_path
+
+
+def load_lamps_config_snapshot():
+    if not os.path.exists(LAMPS_CONFIG_FILE):
+        return None
+    try:
+        with open(LAMPS_CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def build_ip_to_lamp_id():
+    config = load_lamps_config_snapshot() or {}
+    mapping = {}
+    for lamp in config.get("lamparas", []):
+        ip = str(lamp.get("ip", "")).strip()
+        lamp_id = str(lamp.get("id_escenico", "")).strip()
+        if ip and lamp_id:
+            mapping[ip] = lamp_id
+    return mapping
+
+
+def compact_effects_state(effects_state):
+    active = {}
+    params = effects_state.get("_params", {}) if isinstance(effects_state, dict) else {}
+    for name, enabled in (effects_state or {}).items():
+        if name == "_params":
+            continue
+        if enabled:
+            active[name] = {
+                "enabled": True,
+                "params": params.get(name, {}),
+            }
+    return {
+        "version": 1,
+        "active": active,
+    }
+
+
+def infer_scene_kind(LAMP_IPS, selected_devices, effects_layers):
+    has_lights = any(selected_devices[ip].get() for ip in LAMP_IPS)
+    has_effects = bool(effects_layers)
+    if has_lights and has_effects:
+        return "look_with_effect"
+    if has_effects:
+        return "effect_only"
+    return "look"
 
 
 # ============================= ESCENAS =============================
@@ -34,6 +103,7 @@ def load_escenas():
 
 
 def save_escenas(escenas):
+    backup_file(ESCENAS_FILE)
     with open(ESCENAS_FILE, "w", encoding="utf-8") as f:
         json.dump(escenas, f, ensure_ascii=False, indent=2)
 
@@ -46,6 +116,7 @@ def guardar_escena(
     panels,
     selected_devices,
     effects_state: dict,
+    effects_layers: list | None = None,
 ):
     """
     Guarda una escena completa:
@@ -57,11 +128,25 @@ def guardar_escena(
     if nombre_escena in escenas["orden"]:
         return False
 
+    ip_to_lamp_id = build_ip_to_lamp_id()
+    timestamp = now_iso()
+    effect_layers_data = effects_layers or []
+    scene_kind = infer_scene_kind(LAMP_IPS, selected_devices, effect_layers_data)
+
     escenas["orden"].append(nombre_escena)
     escenas["datos"][nombre_escena] = {
+        "tipo": "escena_luces",
+        "version": SCENE_FORMAT_VERSION,
+        "scene_kind": scene_kind,
+        "nombre": nombre_escena,
+        "created_at": timestamp,
+        "updated_at": timestamp,
         "fade_in": float(fade_in_val),
         "fade_out": float(fade_out_val),
         "effects": effects_state,
+        "effects_config": compact_effects_state(effects_state),
+        "effects_layers": effect_layers_data,
+        "lamparas": {},
     }
 
     usa_secuencia_on = effects_state.get("secuencia_on", False)
@@ -88,6 +173,8 @@ def guardar_escena(
                 })
 
             escenas["datos"][nombre_escena][ip] = escena_lampara
+            lamp_id = ip_to_lamp_id.get(ip, ip)
+            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = dict(escena_lampara, ip=ip)
             continue  # saltamos al siguiente IP
 
 
@@ -108,8 +195,12 @@ def guardar_escena(
                     "temp": getattr(panel, "last_temp", 4000),
                 })
             escenas["datos"][nombre_escena][ip] = estado
+            lamp_id = ip_to_lamp_id.get(ip, ip)
+            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = dict(estado, ip=ip)
         else:
             escenas["datos"][nombre_escena][ip] = {"state": "off"}
+            lamp_id = ip_to_lamp_id.get(ip, ip)
+            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = {"ip": ip, "state": "off"}
 
     save_escenas(escenas)
     return True
@@ -123,6 +214,7 @@ def actualizar_escena_completa(
     panels,
     selected_devices,
     effects_state: dict,
+    effects_layers: list | None = None,
 ):
     """
     Actualiza TODOS los datos de una escena:
@@ -136,9 +228,26 @@ def actualizar_escena_completa(
                              f"No existe la escena '{nombre_escena}'.")
         return False
 
+    ip_to_lamp_id = build_ip_to_lamp_id()
+    escena_data = escenas["datos"][nombre_escena]
+    escena_data.setdefault("tipo", "escena_luces")
+    escena_data.setdefault("version", SCENE_FORMAT_VERSION)
+    escena_data.setdefault("nombre", nombre_escena)
+    escena_data.setdefault("created_at", now_iso())
+    escena_data["updated_at"] = now_iso()
+    escena_data["lamparas"] = {}
+    effect_layers_data = effects_layers or []
+
     escenas["datos"][nombre_escena]["fade_in"] = float(fade_in_val)
     escenas["datos"][nombre_escena]["fade_out"] = float(fade_out_val)
     escenas["datos"][nombre_escena]["effects"] = effects_state
+    escenas["datos"][nombre_escena]["effects_config"] = compact_effects_state(effects_state)
+    escenas["datos"][nombre_escena]["effects_layers"] = effect_layers_data
+    escenas["datos"][nombre_escena]["scene_kind"] = infer_scene_kind(
+        LAMP_IPS,
+        selected_devices,
+        effect_layers_data,
+    )
 
         # --- NUEVO: si la escena usa SECUENCIA_ON, entonces forzamos state="off" ---
     usa_secuencia_on = effects_state.get("secuencia_on", False)
@@ -165,6 +274,8 @@ def actualizar_escena_completa(
                 })
 
             escenas["datos"][nombre_escena][ip] = estado
+            lamp_id = ip_to_lamp_id.get(ip, ip)
+            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = dict(estado, ip=ip)
             continue  # Pasamos al siguiente IP
 
 
@@ -185,8 +296,12 @@ def actualizar_escena_completa(
                     "temp": getattr(panel, "last_temp", 4000),
                 })
             escenas["datos"][nombre_escena][ip] = estado
+            lamp_id = ip_to_lamp_id.get(ip, ip)
+            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = dict(estado, ip=ip)
         else:
             escenas["datos"][nombre_escena][ip] = {"state": "off"}
+            lamp_id = ip_to_lamp_id.get(ip, ip)
+            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = {"ip": ip, "state": "off"}
 
 
     save_escenas(escenas)
@@ -251,6 +366,7 @@ def load_proyectos():
 
 
 def save_proyectos(proyectos):
+    backup_file(PROYECTOS_FILE)
     with open(PROYECTOS_FILE, "w", encoding="utf-8") as f:
         json.dump(proyectos, f, ensure_ascii=False, indent=2)
 
@@ -265,9 +381,19 @@ def guardar_proyecto(nombre_proyecto, escenas_orden):
 
     if nombre_proyecto not in proyectos["orden"]:
         proyectos["orden"].append(nombre_proyecto)
+        created_at = now_iso()
+    else:
+        created_at = proyectos["datos"].get(nombre_proyecto, {}).get("created_at", now_iso())
 
     proyectos["datos"][nombre_proyecto] = {
-        "escenas": list(escenas_orden)
+        "tipo": "proyecto_luces",
+        "version": PROJECT_FORMAT_VERSION,
+        "nombre": nombre_proyecto,
+        "created_at": created_at,
+        "updated_at": now_iso(),
+        "modo_reproduccion": proyectos["datos"].get(nombre_proyecto, {}).get("modo_reproduccion", "manual"),
+        "notas": proyectos["datos"].get(nombre_proyecto, {}).get("notas", ""),
+        "escenas": list(escenas_orden),
     }
     save_proyectos(proyectos)
     return True
@@ -305,10 +431,12 @@ def exportar_proyecto_a_archivo(nombre_proyecto, filename):
 
     data = {
         "tipo": "obra_luces",
-        "version": 1,
+        "version": 2,
         "nombre_proyecto": nombre_proyecto,
+        "exported_at": now_iso(),
         "escenas_orden": escenas_proyecto,
         "escenas_datos": escenas_datos,
+        "lamparas_config": load_lamps_config_snapshot(),
     }
 
     with open(filename, "w", encoding="utf-8") as f:
@@ -352,7 +480,14 @@ def importar_obra_desde_archivo(filename):
 
     proyectos["orden"].append(nombre_proyecto)
     proyectos["datos"][nombre_proyecto] = {
-        "escenas": escenas_orden
+        "tipo": "proyecto_luces",
+        "version": PROJECT_FORMAT_VERSION,
+        "nombre": nombre_proyecto,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "modo_reproduccion": "manual",
+        "notas": f"Importado desde {os.path.basename(filename)}",
+        "escenas": escenas_orden,
     }
     save_proyectos(proyectos)
 
@@ -383,4 +518,34 @@ def borrar_todos_los_proyectos():
     proyectos = {"orden": [], "datos": {}}
     save_proyectos(proyectos)
     return True
+
+
+def diagnosticar_escenas():
+    """
+    Devuelve informacion de mantenimiento sin modificar archivos.
+    """
+    escenas = load_escenas()
+    orden = set(escenas.get("orden", []))
+    datos = set(escenas.get("datos", {}).keys())
+    return {
+        "total_en_orden": len(orden),
+        "total_datos": len(datos),
+        "huerfanas": sorted(datos - orden),
+        "faltantes": sorted(orden - datos),
+    }
+
+
+def limpiar_escenas_huerfanas():
+    """
+    Elimina escenas que existen en datos pero no en orden.
+    Hace backup antes de guardar.
+    """
+    escenas = load_escenas()
+    orden = set(escenas.get("orden", []))
+    datos = escenas.get("datos", {})
+    huerfanas = [nombre for nombre in list(datos.keys()) if nombre not in orden]
+    for nombre in huerfanas:
+        datos.pop(nombre, None)
+    save_escenas(escenas)
+    return huerfanas
 
