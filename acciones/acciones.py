@@ -1,6 +1,6 @@
 import math
 
-#oscar
+
 def efecto_golpe_tambor(
     send_lamp_color,
     LAMP_IPS,
@@ -109,8 +109,6 @@ def efecto_respiracion(
                brillo_min, brillo_max,
                vel_up, vel_down,
                respirando_var, root, fase)
-
-
 
 
 # EFECTO SECUENCIA (CHASE) – SIN THREADS
@@ -907,3 +905,76 @@ def  efecto_atardecer_wiz(
     )
 
 
+def efecto_intercambio_colores(
+    send_lamp_color,
+    LAMP_IPS,
+    panels,
+    selected_devices,
+    lamp_status,
+    efecto_var,
+    root,
+    color_a=(0, 1),        # rojo: h=0, s=1
+    color_b=(220, 1),      # azul: h=220, s=1
+    brillo=220,
+    duracion_ms=8000,
+    pasos=80,
+):
+    """
+    Mitad de lámparas arranca en color A y mitad en color B.
+    Gradualmente intercambian sus colores.
+    """
+
+    activos = [
+        ip for ip in LAMP_IPS
+        if selected_devices[ip].get() and lamp_status.get(ip, False)
+    ]
+
+    if len(activos) < 2:
+        return
+
+    mitad = len(activos) // 2
+    grupo_a = activos[:mitad]
+    grupo_b = activos[mitad:]
+
+    h_a, s_a = color_a
+    h_b, s_b = color_b
+
+    intervalo = max(1, int(duracion_ms / pasos))
+
+    def interpolar(v1, v2, t):
+        return v1 + (v2 - v1) * t
+
+    def paso(i):
+        if not efecto_var.get():
+            return
+
+        t = i / pasos
+
+        # grupo A: color A → color B
+        h1 = interpolar(h_a, h_b, t)
+        s1 = interpolar(s_a, s_b, t)
+
+        # grupo B: color B → color A
+        h2 = interpolar(h_b, h_a, t)
+        s2 = interpolar(s_b, s_a, t)
+
+        for ip in grupo_a:
+            panels[ip].last_hue = h1
+            panels[ip].last_sat = s1
+            panels[ip].last_brillo = brillo
+            panels[ip].last_mode = "colour"
+            send_lamp_color(ip, h1, s1, brillo)
+
+        for ip in grupo_b:
+            panels[ip].last_hue = h2
+            panels[ip].last_sat = s2
+            panels[ip].last_brillo = brillo
+            panels[ip].last_mode = "colour"
+            send_lamp_color(ip, h2, s2, brillo)
+
+        if i < pasos:
+            root.after(intervalo, paso, i + 1)
+        else:
+            efecto_var.set(False)
+
+    paso(0)
