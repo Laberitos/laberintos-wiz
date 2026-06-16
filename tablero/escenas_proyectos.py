@@ -68,6 +68,16 @@ def compact_effects_state(effects_state):
     }
 
 
+def infer_scene_kind(LAMP_IPS, selected_devices, effects_layers):
+    has_lights = any(selected_devices[ip].get() for ip in LAMP_IPS)
+    has_effects = bool(effects_layers)
+    if has_lights and has_effects:
+        return "look_with_effect"
+    if has_effects:
+        return "effect_only"
+    return "look"
+
+
 # ============================= ESCENAS =============================
 
 def load_escenas():
@@ -106,6 +116,7 @@ def guardar_escena(
     panels,
     selected_devices,
     effects_state: dict,
+    effects_layers: list | None = None,
 ):
     """
     Guarda una escena completa:
@@ -119,11 +130,14 @@ def guardar_escena(
 
     ip_to_lamp_id = build_ip_to_lamp_id()
     timestamp = now_iso()
+    effect_layers_data = effects_layers or []
+    scene_kind = infer_scene_kind(LAMP_IPS, selected_devices, effect_layers_data)
 
     escenas["orden"].append(nombre_escena)
     escenas["datos"][nombre_escena] = {
         "tipo": "escena_luces",
         "version": SCENE_FORMAT_VERSION,
+        "scene_kind": scene_kind,
         "nombre": nombre_escena,
         "created_at": timestamp,
         "updated_at": timestamp,
@@ -131,6 +145,7 @@ def guardar_escena(
         "fade_out": float(fade_out_val),
         "effects": effects_state,
         "effects_config": compact_effects_state(effects_state),
+        "effects_layers": effect_layers_data,
         "lamparas": {},
     }
 
@@ -199,6 +214,7 @@ def actualizar_escena_completa(
     panels,
     selected_devices,
     effects_state: dict,
+    effects_layers: list | None = None,
 ):
     """
     Actualiza TODOS los datos de una escena:
@@ -220,11 +236,18 @@ def actualizar_escena_completa(
     escena_data.setdefault("created_at", now_iso())
     escena_data["updated_at"] = now_iso()
     escena_data["lamparas"] = {}
+    effect_layers_data = effects_layers or []
 
     escenas["datos"][nombre_escena]["fade_in"] = float(fade_in_val)
     escenas["datos"][nombre_escena]["fade_out"] = float(fade_out_val)
     escenas["datos"][nombre_escena]["effects"] = effects_state
     escenas["datos"][nombre_escena]["effects_config"] = compact_effects_state(effects_state)
+    escenas["datos"][nombre_escena]["effects_layers"] = effect_layers_data
+    escenas["datos"][nombre_escena]["scene_kind"] = infer_scene_kind(
+        LAMP_IPS,
+        selected_devices,
+        effect_layers_data,
+    )
 
         # --- NUEVO: si la escena usa SECUENCIA_ON, entonces forzamos state="off" ---
     usa_secuencia_on = effects_state.get("secuencia_on", False)

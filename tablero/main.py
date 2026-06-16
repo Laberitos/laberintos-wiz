@@ -118,6 +118,10 @@ def get_lamp_group(ip):
     return get_lamp_config(ip).get("grupo_default", "sin_grupo")
 
 
+def get_lamp_id(ip):
+    return get_lamp_config(ip).get("id_escenico", ip)
+
+
 
 # ---------------------------------------------------------
 # SISTEMA DE EJECUCIÓN ASÍNCRONA ÚNICO Y ESTABLE
@@ -605,6 +609,104 @@ def send_off_safe(ip):
 # GUI
 import tkinter as tk
 from tkinter import ttk
+
+scene_effect_enabled_var = tk.BooleanVar(value=False)
+scene_effect_category_var = tk.StringVar(value="Escena / color configurable")
+scene_effect_display_var = tk.StringVar(value="")
+scene_effect_name_var = tk.StringVar(value="")
+scene_effect_target_var = tk.StringVar(value="seleccion")
+scene_effect_status_var = tk.StringVar(value="Sin efecto asociado")
+scene_effect_combo = None
+
+
+def scene_effect_options_for_category(category):
+    return [
+        effect_name
+        for effect_name in effect_categories.get(category, [])
+        if effect_name in effect_vars
+    ]
+
+
+def update_scene_effect_options(selected_effect=None):
+    global scene_effect_combo
+    options = scene_effect_options_for_category(scene_effect_category_var.get())
+    display_values = [effect_display_names.get(name, name) for name in options]
+    if scene_effect_combo is not None:
+        scene_effect_combo.configure(values=display_values)
+
+    if selected_effect in options:
+        scene_effect_name_var.set(selected_effect)
+    elif options:
+        scene_effect_name_var.set(options[0])
+    else:
+        scene_effect_name_var.set("")
+
+    sync_scene_effect_display()
+    update_scene_effect_status()
+
+
+def on_scene_effect_display_selected(event=None):
+    options = scene_effect_options_for_category(scene_effect_category_var.get())
+    display_value = scene_effect_display_var.get()
+    for effect_name in options:
+        if effect_display_names.get(effect_name, effect_name) == display_value:
+            scene_effect_name_var.set(effect_name)
+            break
+    update_scene_effect_status()
+
+
+def sync_scene_effect_display():
+    effect_name = scene_effect_name_var.get()
+    scene_effect_display_var.set(effect_display_names.get(effect_name, effect_name) if effect_name else "")
+
+
+def update_scene_effect_status(*_):
+    if not scene_effect_enabled_var.get():
+        scene_effect_status_var.set("Sin efecto asociado")
+        return
+
+    effect_name = scene_effect_name_var.get()
+    if not effect_name:
+        scene_effect_status_var.set("Elige un efecto")
+        return
+
+    category = effect_to_category.get(effect_name, scene_effect_category_var.get())
+    label = effect_display_names.get(effect_name, effect_name)
+    scene_effect_status_var.set(f"{label} - {category}")
+
+
+def on_scene_effect_category_changed(event=None):
+    update_scene_effect_options()
+
+
+def load_scene_effect_controls(scene_data):
+    layers = scene_data.get("effects_layers") or []
+    effect_name = None
+    target_mode = "seleccion"
+
+    if layers:
+        first_layer = layers[0]
+        effect_name = first_layer.get("name")
+        target = first_layer.get("target", {})
+        if target.get("mode") == "group":
+            target_mode = target.get("group", "seleccion")
+        elif target.get("mode") == "all":
+            target_mode = "todas"
+        else:
+            target_mode = "seleccion"
+    else:
+        effect_name = get_first_enabled_effect(scene_data.get("effects", {}))
+
+    if effect_name and effect_name in effect_vars:
+        scene_effect_enabled_var.set(True)
+        scene_effect_category_var.set(effect_to_category.get(effect_name, "Escena / color configurable"))
+        update_scene_effect_options(effect_name)
+        scene_effect_target_var.set(target_mode)
+    else:
+        scene_effect_enabled_var.set(False)
+
+    sync_scene_effect_display()
+    update_scene_effect_status()
 
 # tus acciones
 from acciones.acciones import (
@@ -1304,6 +1406,19 @@ effect_category_descriptions = {
     "Ritmo / impacto": "Efectos de pulso, golpe o corte rapido para momentos puntuales.",
 }
 
+effect_category_types = {
+    "Escena / color configurable": "uses_scene_color",
+    "Predefinidos atmosfericos": "predefined",
+    "Ritmo / impacto": "impact",
+}
+
+effect_to_category = {
+    effect_name: category
+    for category, names in effect_categories.items()
+    for effect_name in names
+}
+
+
 effect_param_labels = {
     "brillo_min": "Brillo minimo",
     "brillo_max": "Brillo maximo",
@@ -1356,6 +1471,156 @@ def stop_effect_from_panel(effect_name):
         var.set(False)
         toggle()
     effects_panel_status_var.set(f"Detenido: {effect_display_names.get(effect_name, effect_name)}")
+
+
+def stop_all_active_effects(reason=""):
+    stopped = []
+    for effect_name, var in effect_vars.items():
+        if not var.get():
+            continue
+
+        toggle = effect_toggles.get(effect_name)
+        var.set(False)
+        if toggle is not None:
+            try:
+                toggle()
+            except Exception as exc:
+                print(f"[WARN] No se pudo detener efecto {effect_name}: {exc}")
+        stopped.append(effect_display_names.get(effect_name, effect_name))
+
+    if stopped:
+        label = ", ".join(stopped[:3])
+        if len(stopped) > 3:
+            label += "..."
+        suffix = f" ({reason})" if reason else ""
+        effects_panel_status_var.set(f"Efectos detenidos: {label}{suffix}")
+
+
+def build_effect_target_snapshot(target_mode):
+    if target_mode == "efectos":
+        return {"mode": "group", "group": "efectos"}
+    if target_mode == "atmosfera":
+        return {"mode": "group", "group": "atmosfera"}
+    if target_mode == "todas":
+        return {"mode": "all"}
+
+    selected_lamps = [
+        get_lamp_id(ip)
+        for ip in LAMP_IPS
+        if selected_devices[ip].get()
+    ]
+    return {"mode": "lamps", "lamps": selected_lamps}
+
+
+def build_scene_effect_layers(effects_state, target_mode=None):
+    params_state = effects_state.get("_params", {})
+    target_mode = target_mode or effect_target_var.get()
+    layers = []
+
+    for effect_name, enabled in effects_state.items():
+        if effect_name == "_params" or not enabled:
+            continue
+
+        category = effect_to_category.get(effect_name, "Sin categoria")
+        layers.append({
+            "name": effect_name,
+            "display_name": effect_display_names.get(effect_name, effect_name),
+            "enabled": True,
+            "category": category,
+            "type": effect_category_types.get(category, "custom"),
+            "target": build_effect_target_snapshot(target_mode),
+            "params": params_state.get(effect_name, {}),
+        })
+
+    return layers
+
+
+def build_scene_save_effects_state():
+    state = get_effects_state(effect_vars, effect_param_vars)
+    for effect_name in effect_vars:
+        state[effect_name] = False
+
+    if not scene_effect_enabled_var.get():
+        return state
+
+    selected_effect = scene_effect_name_var.get()
+    if selected_effect in effect_vars:
+        state[selected_effect] = True
+    return state
+
+
+def get_scene_save_effect_target():
+    try:
+        return scene_effect_target_var.get()
+    except Exception:
+        return effect_target_var.get()
+
+
+class BoolSnapshot:
+    def __init__(self, value):
+        self.value = bool(value)
+
+    def get(self):
+        return self.value
+
+
+def build_scene_save_selected_devices():
+    if not scene_effect_enabled_var.get():
+        return selected_devices
+
+    target = get_scene_save_effect_target()
+    if target == "seleccion":
+        return selected_devices
+
+    def in_save_scope(ip):
+        group = get_lamp_group(ip)
+        if target == "todas":
+            return True
+        if target == "efectos":
+            return group == "efectos"
+        if target == "atmosfera":
+            return group == "atmosfera"
+        return selected_devices[ip].get()
+
+    return {
+        ip: BoolSnapshot(in_save_scope(ip))
+        for ip in LAMP_IPS
+    }
+
+
+def get_first_enabled_effect(effects_state):
+    for effect_name, enabled in effects_state.items():
+        if effect_name != "_params" and enabled:
+            return effect_name
+    return None
+
+
+def apply_scene_effect_target(scene_data):
+    layers = scene_data.get("effects_layers") or []
+    if not layers:
+        return
+
+    target = layers[0].get("target", {})
+    mode = target.get("mode")
+
+    if mode == "group":
+        apply_effect_target_selection(target.get("group", "seleccion"))
+    elif mode == "all":
+        apply_effect_target_selection("todas")
+    elif mode == "lamps":
+        lamp_ids = set(target.get("lamps", []))
+        for ip in LAMP_IPS:
+            selected_devices[ip].set(get_lamp_id(ip) in lamp_ids)
+
+
+def apply_scene_effects_for_execution(scene_data):
+    apply_scene_effect_target(scene_data)
+    apply_effects_state(
+        scene_data.get("effects", {}),
+        effect_vars,
+        effect_toggles,
+        effect_param_vars,
+    )
 
 
 def open_lamp_config_panel():
@@ -2696,7 +2961,9 @@ def on_guardar_escena():
     fade_out_val = fade_out_var.get()
 
     # 4) Estado de efectos (respiración, estrobo, fuego, etc.)
-    effects_state = get_effects_state(effect_vars, effect_param_vars)
+    effects_state = build_scene_save_effects_state()
+    effects_layers = build_scene_effect_layers(effects_state, get_scene_save_effect_target())
+    save_selected_devices = build_scene_save_selected_devices()
 
     # 5) Llamar al módulo para que arme y guarde todo
     ok = guardar_escena(
@@ -2705,13 +2972,15 @@ def on_guardar_escena():
         fade_out_val,
         LAMP_IPS,
         panels,
-        selected_devices,
+        save_selected_devices,
         effects_state,
+        effects_layers,
     )
 
     if ok:
         # 6) Actualizar la lista de escenas en la UI
         actualizar_lista_escenas()
+        marcar_proyecto_modificado()
         entry_escena.delete(0, tk.END)
 
 
@@ -2841,7 +3110,11 @@ def ease_in_out_sine(x):
     return -(math.cos(math.pi * x) - 1) / 2
 
 
-def mostrar_estado_escena_en_paneles(nombre_escena):
+def hay_efectos_activos():
+    return any(var.get() for var in effect_vars.values())
+
+
+def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
     """
     Muestra un PREVIEW de la escena en los paneles,
     pero SIN modificar el estado real last_* de las lámparas.
@@ -2868,11 +3141,14 @@ def mostrar_estado_escena_en_paneles(nombre_escena):
         if hasattr(panel, "brillo_var"):
             panel.brillo_var.set(safe_brightness(estado.get("brillo", 0)))
 
-        # ----- PREVIEW DE SELECCIÓN ON/OFF -----
-        if estado.get("state", "off") == "on":
-            selected_devices[ip].set(True)
-        else:
-            selected_devices[ip].set(False)
+        # ----- PREVIEW DE SELECCION ON/OFF -----
+        # Si hay efectos corriendo, no tocamos selected_devices:
+        # esa seleccion es parte del destino vivo del efecto actual.
+        if actualizar_seleccion:
+            if estado.get("state", "off") == "on":
+                selected_devices[ip].set(True)
+            else:
+                selected_devices[ip].set(False)
 
         # ----- PREVIEW DE COLOR / TEMP -----
         if modo == "colour":
@@ -3559,7 +3835,7 @@ def aplicar_escena(nombre_escena):
             panel.last_brillo = estado.get("brillo", 1)
 
         # Aplicar efectos (solo si realmente hay efectos)
-        root.after(10, lambda c=effects: apply_effects_state(c, effect_vars, effect_toggles, effect_param_vars))
+        root.after(10, lambda data=escena: apply_scene_effects_for_execution(data))
 
         escena_en_ejecucion = False
         try: btn_cargar.config(state="normal")
@@ -3650,7 +3926,7 @@ def aplicar_escena(nombre_escena):
     if "effects" in escena:
         root.after(
             0,
-            lambda c=escena["effects"]: apply_effects_state(c, effect_vars, effect_toggles, effect_param_vars)
+            lambda data=escena: apply_scene_effects_for_execution(data)
         )
 
 def marcar_escena_terminada():
@@ -3717,17 +3993,20 @@ def guardar():
         fade_out_val = 0.0
 
     # 👉 NUEVO: leer estado de efectos (respiración, estrobo, etc.)
-    effects_state = get_effects_state(effect_vars, effect_param_vars)
+    effects_state = build_scene_save_effects_state()
+    effects_layers = build_scene_effect_layers(effects_state, get_scene_save_effect_target())
 
     # 👉 NUEVO: delegar en escenas_proyectos.guardar_escena(...)
+    save_selected_devices = build_scene_save_selected_devices()
     exito = guardar_escena(
         nombre,
         fade_in_val,
         fade_out_val,
         LAMP_IPS,
         panels,
-        selected_devices,
+        save_selected_devices,
         effects_state,
+        effects_layers,
     )
 
     if exito:
@@ -3744,18 +4023,23 @@ def on_actualizar_escena():
 
     fade_in_val = normalize_fade_seconds(fade_in_var.get())
     fade_out_val = normalize_fade_seconds(fade_out_var.get())
-    effects_state = get_effects_state(effect_vars, effect_param_vars)
+    effects_state = build_scene_save_effects_state()
+    effects_layers = build_scene_effect_layers(effects_state, get_scene_save_effect_target())
 
+    save_selected_devices = build_scene_save_selected_devices()
     if actualizar_escena_completa(
         escena,
         fade_in_val,
         fade_out_val,
         LAMP_IPS,
         panels,
-        selected_devices,
+        save_selected_devices,
         effects_state,
+        effects_layers,
     ):
         messagebox.showinfo("Escena actualizada", f"'{escena}' guardada.")
+        actualizar_lista_escenas()
+        marcar_proyecto_modificado()
         
 
 
@@ -3767,7 +4051,11 @@ def mostrar_fades_de_escena(event=None):
         datos = escenas["datos"].get(escena, {})
         fade_in_var.set(normalize_fade_seconds(datos.get("fade_in", 0.0)))
         fade_out_var.set(normalize_fade_seconds(datos.get("fade_out", 0.0)))
-        mostrar_estado_escena_en_paneles(escena) 
+        load_scene_effect_controls(datos)
+        mostrar_estado_escena_en_paneles(
+            escena,
+            actualizar_seleccion=not (escena_en_ejecucion or hay_efectos_activos())
+        ) 
                
 def cargar():
     sel = listbox_escenas.curselection()
@@ -3901,22 +4189,26 @@ def actualizar_escena():
         fade_out_val = 0.0
 
     # Obtener efectos
-    effects_state = get_effects_state(effect_vars, effect_param_vars)
+    effects_state = build_scene_save_effects_state()
+    effects_layers = build_scene_effect_layers(effects_state, get_scene_save_effect_target())
 
     # Llamar al módulo escenas_proyectos
+    save_selected_devices = build_scene_save_selected_devices()
     ok = actualizar_escena_completa(
         escena,
         fade_in_val,
         fade_out_val,
         LAMP_IPS,
         panels,
-        selected_devices,
+        save_selected_devices,
         effects_state,
+        effects_layers,
     )
 
     if ok:
         messagebox.showinfo("Escena actualizada", f"La escena '{escena}' ha sido actualizada.")
         actualizar_lista_escenas()
+        marcar_proyecto_modificado()
 
 def set_estado_escena(texto, color):
     estado_escena_var.set(texto)
@@ -3975,6 +4267,97 @@ fade_out_entry = tk.Spinbox(frame_fades, from_=0, to=FADE_MAX_SECONDS, increment
 fade_out_entry.grid(row=1, column=1, sticky="e", pady=(4, 0))
 fade_out_entry.bind("<MouseWheel>", lambda e: on_fade_scroll(e, fade_out_var))
 tk.Label(frame_fades, text="seg", bg="#202428", fg="#8fb8c9", font=("Segoe UI", 9)).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=(4, 0))
+
+frame_scene_effect = tk.LabelFrame(
+    frame_right,
+    text="Efecto de escena",
+    bg="#202428",
+    fg="#20bdec",
+    font=("Segoe UI", 10, "bold"),
+    padx=8,
+    pady=6
+)
+frame_scene_effect.pack(fill="x", padx=16, pady=(0, 8))
+frame_scene_effect.grid_columnconfigure(1, weight=1)
+
+chk_scene_effect = tk.Checkbutton(
+    frame_scene_effect,
+    text="Agregar",
+    variable=scene_effect_enabled_var,
+    command=update_scene_effect_status,
+    bg="#202428",
+    fg="#d9f3ff",
+    selectcolor="#202428",
+    activebackground="#202428",
+    activeforeground="#20bdec",
+    font=("Segoe UI", 9, "bold")
+)
+chk_scene_effect.grid(row=0, column=0, sticky="w", padx=(0, 8))
+
+scene_effect_category_combo = ttk.Combobox(
+    frame_scene_effect,
+    textvariable=scene_effect_category_var,
+    values=list(effect_categories.keys()),
+    state="readonly",
+    width=24
+)
+scene_effect_category_combo.grid(row=0, column=1, columnspan=2, sticky="ew")
+scene_effect_category_combo.bind("<<ComboboxSelected>>", on_scene_effect_category_changed)
+
+tk.Label(frame_scene_effect, text="Efecto", bg="#202428", fg="#b9e3f7",
+         font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w", pady=(5, 0))
+scene_effect_combo = ttk.Combobox(
+    frame_scene_effect,
+    textvariable=scene_effect_display_var,
+    state="readonly",
+    width=24
+)
+scene_effect_combo.grid(row=1, column=1, columnspan=2, sticky="ew", pady=(5, 0))
+scene_effect_combo.bind("<<ComboboxSelected>>", on_scene_effect_display_selected)
+
+scene_effect_scope = tk.Frame(frame_scene_effect, bg="#202428")
+scene_effect_scope.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+for label, value in (
+    ("Sel.", "seleccion"),
+    ("Efectos", "efectos"),
+    ("Atmos.", "atmosfera"),
+    ("Todas", "todas"),
+):
+    tk.Radiobutton(
+        scene_effect_scope,
+        text=label,
+        variable=scene_effect_target_var,
+        value=value,
+        bg="#202428",
+        fg="#d9f3ff",
+        selectcolor="#202428",
+        activebackground="#202428",
+        activeforeground="#20bdec",
+        font=("Segoe UI", 8)
+    ).pack(side="left", padx=(0, 8))
+
+frame_scene_effect_bottom = tk.Frame(frame_scene_effect, bg="#202428")
+frame_scene_effect_bottom.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+frame_scene_effect_bottom.grid_columnconfigure(0, weight=1)
+tk.Label(
+    frame_scene_effect_bottom,
+    textvariable=scene_effect_status_var,
+    bg="#202428",
+    fg="#8fb8c9",
+    font=("Segoe UI", 8, "italic"),
+    anchor="w"
+).grid(row=0, column=0, sticky="ew")
+tk.Button(
+    frame_scene_effect_bottom,
+    text="Config.",
+    command=open_effects_config_panel,
+    bg="#2b343b",
+    fg="#d9f3ff",
+    relief="flat",
+    font=("Segoe UI", 8, "bold")
+).grid(row=0, column=1, padx=(6, 0))
+
+update_scene_effect_options()
             
 # ---- UI Panel derecho ----
 frame_escenas_bar = tk.Frame(frame_right, bg="#202428")
