@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "lamparas": [
+    {
+      "id_escenico": "L9",
+      "ip": "192.0.2.109",
+      "alias": "L9",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 1
+    },
+    {
+      "id_escenico": "L10",
+      "ip": "192.0.2.110",
+      "alias": "L10",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 2
+    },
+    {
+      "id_escenico": "L11",
+      "ip": "192.0.2.111",
+      "alias": "L11",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 3
+    },
+    {
+      "id_escenico": "L12",
+      "ip": "192.0.2.112",
+      "alias": "L12",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 4
+    },
+    {
+      "id_escenico": "L13",
+      "ip": "192.0.2.113",
+      "alias": "L13",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 5
+    },
+    {
+      "id_escenico": "L14",
+      "ip": "192.0.2.114",
+      "alias": "L14",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 6
+    },
+    {
+      "id_escenico": "L15",
+      "ip": "192.0.2.115",
+      "alias": "L15",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 7
+    },
+    {
+      "id_escenico": "L16",
+      "ip": "192.0.2.116",
+      "alias": "L16",
+      "grupo_default": "efectos",
+      "activa": true,
+      "orden": 8
+    },
+    {
+      "id_escenico": "L17",
+      "ip": "192.0.2.117",
+      "alias": "L17",
+      "grupo_default": "atmosfera",
+      "activa": true,
+      "orden": 9
+    },
+    {
+      "id_escenico": "L18",
+      "ip": "192.0.2.118",
+      "alias": "L18",
+      "grupo_default": "atmosfera",
+      "activa": true,
+      "orden": 10
+    },
+    {
+      "id_escenico": "L19",
+      "ip": "192.0.2.119",
+      "alias": "L19",
+      "grupo_default": "atmosfera",
+      "activa": true,
+      "orden": 11
+    },
+    {
+      "id_escenico": "L20",
+      "ip": "192.0.2.120",
+      "alias": "L20",
+      "grupo_default": "atmosfera",
+      "activa": true,
+      "orden": 12
+    }
+  ]
+}

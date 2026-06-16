@@ -195,12 +195,18 @@ def actualizar_escena_completa(
 
 # ===================== ESTADO DE EFECTOS =====================
 
-def get_effects_state(effect_vars: dict) -> dict:
+def get_effects_state(effect_vars: dict, effect_param_vars: dict | None = None) -> dict:
     """effect_vars: dict nombre -> tk.BooleanVar"""
-    return {name: var.get() for name, var in effect_vars.items()}
+    state = {name: var.get() for name, var in effect_vars.items()}
+    if effect_param_vars:
+        state["_params"] = {
+            name: {param: var.get() for param, var in params.items()}
+            for name, params in effect_param_vars.items()
+        }
+    return state
 
 
-def apply_effects_state(effects: dict, effect_vars: dict, toggles: dict):
+def apply_effects_state(effects: dict, effect_vars: dict, toggles: dict, effect_param_vars: dict | None = None):
     """
     Aplica un dict de efectos guardado:
       - effect_vars: nombre -> tk.BooleanVar
@@ -208,7 +214,18 @@ def apply_effects_state(effects: dict, effect_vars: dict, toggles: dict):
     """
     if not effects:
         return
+    params_state = effects.get("_params", {})
+    if effect_param_vars and params_state:
+        for name, params in params_state.items():
+            target_params = effect_param_vars.get(name, {})
+            for param, value in params.items():
+                var = target_params.get(param)
+                if var is not None:
+                    var.set(value)
+
     for name, target in effects.items():
+        if name == "_params":
+            continue
         var = effect_vars.get(name)
         toggle = toggles.get(name)
         if var is None or toggle is None:

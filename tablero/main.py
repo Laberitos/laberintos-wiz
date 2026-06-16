@@ -7,8 +7,14 @@ import asyncio
 import os
 import subprocess
 from pywizlight import wizlight, PilotBuilder
-from tablero.real_colorwheel import RealColorWheel
-from tablero.config import LAMP_IPS  # Lista de IPs
+from tablero.real_colorwheel import RealColorWheel, WhiteTempWheel
+from tablero.config import (
+    LAMP_IPS,
+    LAMPS_CONFIG,
+    lamp_names as CONFIG_LAMP_NAMES,
+    load_lamps_config,
+    save_lamps_config,
+)  # Lista de IPs
 import time
 import threading
 import uuid
@@ -97,6 +103,19 @@ except:
 
 selected_devices = {ip: tk.BooleanVar(value=False) for ip in LAMP_IPS}
 panels = {}
+
+
+def get_lamp_config(ip):
+    if not LAMPS_CONFIG:
+        return {}
+    for lamp in LAMPS_CONFIG.get("lamparas", []):
+        if lamp.get("ip") == ip:
+            return lamp
+    return {}
+
+
+def get_lamp_group(ip):
+    return get_lamp_config(ip).get("grupo_default", "sin_grupo")
 
 
 
@@ -313,15 +332,13 @@ def send_white_to_lamps(ips, brillo, temp):
 
 def map_slider_to_wiz_temp(value):
     """
-    Convierte el valor del slider (0–100) a la temperatura en Kelvin (2200–6255 K)
-    que entiende la bombilla Wiz.
+    Convierte el valor del control (0-255) a Kelvin (2200-6500 K).
     """
     try:
-        value = float(value)
+        value = max(0.0, min(255.0, float(value)))
     except Exception:
-        value = 50.0
-    # 0 → 2200 K, 100 → 6500 K
-    return int(2200 + (value / 100.0) * (6500 - 2200))
+        value = 128.0
+    return int(2200 + (value / 255.0) * (6500 - 2200))
 
 
 def send_lamp_white(ip, brillo_slider, temp_slider):
@@ -346,7 +363,45 @@ def send_lamp_white(ip, brillo_slider, temp_slider):
 
     loop = get_or_create_event_loop()
     if loop.is_running():
-        asyncio.ensure_future(_do(), loop=loop)
+        asyncio.run_coroutine_threadsafe(_do(), loop)
+    else:
+        loop.run_until_complete(_do())
+        
+
+def normalize_scene_colortemp(value):
+    try:
+        value = float(value)
+    except Exception:
+        value = 128.0
+    if value > 1000:
+        return int(max(2200, min(6500, value)))
+    return map_slider_to_wiz_temp(value)
+
+
+def send_lamp_white_scene(ip, brillo, temp):
+    if not lamp_status.get(ip, True):
+        return
+
+    brillo = safe_brightness(brillo)
+    if brillo <= 0:
+        send_off(ip)
+        return
+
+    colortemp = normalize_scene_colortemp(temp)
+
+    async def _do():
+        try:
+            pilot = PilotBuilder(
+                brightness=int(brillo),
+                colortemp=int(colortemp)
+            )
+            await get_wiz(ip).turn_on(pilot)
+        except Exception as e:
+            print(f"[send_lamp_white_scene] error {ip}: {e}")
+
+    loop = get_or_create_event_loop()
+    if loop.is_running():
+        asyncio.run_coroutine_threadsafe(_do(), loop)
     else:
         loop.run_until_complete(_do())
         
@@ -390,8 +445,7 @@ def map_slider_to_wiz_brightness(slider_value):
     return safe_brightness(val)
 
 def map_slider_to_wiz_temperature(slider_value):
-    # Slider a la izquierda = cálido, derecha = frío (más intuitivo)
-    return int(2200 + ((int(slider_value)) * (6500 - 2200) / 255))
+    return map_slider_to_wiz_temp(slider_value)
 
 # === Estado de conexión de las lámparas ===
 def ip_online(ip):
@@ -448,11 +502,12 @@ def save_lamp_names(names):
         json.dump(names, f, ensure_ascii=False, indent=2)
 
 lamp_names = load_lamp_names()
+lamp_names.update(CONFIG_LAMP_NAMES)
 
 
 # 0 ------ FRAME PRINCIPAL
 frame_main = tk.Frame(root, bg="#181b1e")
-frame_main.pack(fill="both", expand=False)
+frame_main.pack(fill="both", expand=True)
 
 # ----- 1. FRAME IZQUIERDO (vertical, maestro + efectos) -----
 frame_left = tk.Frame(frame_main, bg="#181b1e")
@@ -603,8 +658,86 @@ frame_wiz        = make_section(frame_efectos, "Estilos Wiz")
 # ======================== SUAVES / AMBIENTE ==========================
 respirando = tk.BooleanVar(value=False)
 
+effect_param_vars = {
+    "respiracion": {
+        "brillo_min": tk.IntVar(value=1),
+        "brillo_max": tk.IntVar(value=255),
+    },
+    "secuencia": {
+        "brillo_on": tk.IntVar(value=255),
+        "tiempo_on_ms": tk.IntVar(value=500),
+    },
+    "secuencia_on": {
+        "tiempo_on_ms": tk.IntVar(value=4000),
+    },
+    "secuencia_off": {
+        "tiempo_off_ms": tk.IntVar(value=20000),
+        "fade_ms": tk.IntVar(value=20000),
+        "pasos_fade": tk.IntVar(value=20),
+    },
+    "parpadeo": {
+        "brillo_on": tk.IntVar(value=230),
+        "brillo_off": tk.IntVar(value=0),
+        "tiempo_on_ms": tk.IntVar(value=20),
+        "tiempo_off_ms": tk.IntVar(value=20),
+    },
+    "estrobo": {
+        "brillo_on": tk.IntVar(value=255),
+        "brillo_off": tk.IntVar(value=0),
+        "on_ms": tk.IntVar(value=70),
+        "off_ms": tk.IntVar(value=70),
+    },
+    "estrobo_udp": {
+        "on_ms": tk.IntVar(value=50),
+        "off_ms": tk.IntVar(value=50),
+    },
+    "fuego": {
+        "brillo_min": tk.IntVar(value=140),
+        "brillo_max": tk.IntVar(value=255),
+    },
+    "vela": {
+        "brillo_base": tk.IntVar(value=120),
+    },
+    "Intercambio": {
+        "hue_a": tk.IntVar(value=0),
+        "hue_b": tk.IntVar(value=220),
+        "brillo": tk.IntVar(value=220),
+        "duracion_ms": tk.IntVar(value=10000),
+        "pasos": tk.IntVar(value=100),
+    },
+}
+
+
+def clamp_int(value, min_value, max_value):
+    try:
+        value = int(float(value))
+    except Exception:
+        value = min_value
+    return max(min_value, min(max_value, value))
+
+
+def apply_effect_target_selection(target):
+    for ip in LAMP_IPS:
+        group = get_lamp_group(ip)
+        should_select = (
+            target == "seleccion"
+            and selected_devices[ip].get()
+        ) or (
+            target == "todas"
+        ) or (
+            target == "efectos"
+            and group == "efectos"
+        ) or (
+            target == "atmosfera"
+            and group == "atmosfera"
+        )
+
+        if target != "seleccion":
+            selected_devices[ip].set(bool(should_select))
+
 def toggle_respiracion():
     if respirando.get():
+        params = effect_param_vars["respiracion"]
         btn_respiracion.config(text="Detener", bg="#ef5350")
         efecto_respiracion(
             send_lamp_color_safe,
@@ -612,10 +745,10 @@ def toggle_respiracion():
             panels,
             selected_devices,
             lamp_status,   # ← PASAMOS lamp_status
-            1,    # brillo_min
-            255,  # brillo_max
-            0.1,  # vel subida
-            0.1,  # vel bajada
+            clamp_int(params["brillo_min"].get(), 1, 255),
+            clamp_int(params["brillo_max"].get(), 1, 255),
+            0.1,
+            0.1,
             respirando,
             root
         )
@@ -640,6 +773,7 @@ secuencia_var = tk.BooleanVar(value=False)
 
 def toggle_secuencia():
     if secuencia_var.get():
+        params = effect_param_vars["secuencia"]
         btn_secuencia.config(text="Detener", bg="#ef5350")
         efecto_secuencia(
             send_lamp_color_safe,
@@ -647,8 +781,8 @@ def toggle_secuencia():
             panels,
             selected_devices,
             lamp_status,
-            500,   # ms
-            255,
+            clamp_int(params["brillo_on"].get(), 1, 255),
+            clamp_int(params["tiempo_on_ms"].get(), 20, 60000),
             secuencia_var,
             root
         )
@@ -697,7 +831,7 @@ def toggle_secuencia_on():
             selected_devices=selected_devices,
             lamp_status=lamp_status,
             valores_destino=valores_destino,
-            tiempo_on_ms=4000,
+            tiempo_on_ms=clamp_int(effect_param_vars["secuencia_on"]["tiempo_on_ms"].get(), 20, 60000),
             secuencia_var=secuencia_on_var,
             root=root,
             nombre_escena=escena,
@@ -725,6 +859,7 @@ secuencia_off_var = tk.BooleanVar(value=False)
 
 def toggle_secuencia_off():
     if secuencia_off_var.get():
+        params = effect_param_vars["secuencia_off"]
         btn_secuencia_off.config(text="Detener", bg="#ef5350")
         secuencia_off(
             send_lamp_color_safe,
@@ -732,11 +867,11 @@ def toggle_secuencia_off():
             panels,
             selected_devices,
             lamp_status,
-            20000,               # tiempo entre apagados
+            clamp_int(params["tiempo_off_ms"].get(), 20, 60000),
             secuencia_off_var,
             root,
-            fade_ms=20000,
-            pasos_fade=20
+            fade_ms=clamp_int(params["fade_ms"].get(), 20, 60000),
+            pasos_fade=clamp_int(params["pasos_fade"].get(), 1, 200)
         )
     else:
         btn_secuencia_off.config(text="Secuencia_OFF", bg="#20bdec")
@@ -758,6 +893,7 @@ parpadeo_var = tk.BooleanVar(value=False)
 
 def toggle_parpadeo():
     if parpadeo_var.get():
+        params = effect_param_vars["parpadeo"]
         btn_parpadeo.config(text="Detener", bg="#ef5350")
         parpadeo(
             LAMP_IPS,
@@ -765,10 +901,10 @@ def toggle_parpadeo():
             selected_devices,
             lamp_status,
             parpadeo_var,
-            brillo_on=230,
-            brillo_off=0,
-            tiempo_on_ms=20,
-            tiempo_off_ms=20,
+            brillo_on=clamp_int(params["brillo_on"].get(), 1, 255),
+            brillo_off=clamp_int(params["brillo_off"].get(), 0, 255),
+            tiempo_on_ms=clamp_int(params["tiempo_on_ms"].get(), 10, 60000),
+            tiempo_off_ms=clamp_int(params["tiempo_off_ms"].get(), 10, 60000),
             
         )
     else:
@@ -789,6 +925,7 @@ estrobo_var = tk.BooleanVar(value=False)
 
 def toggle_estrobo():
     if estrobo_var.get():
+        params = effect_param_vars["estrobo"]
         btn_estrobo.config(text="Detener", bg="#ef5350")
         efecto_estrobo(
             send_lamp_color_safe,
@@ -798,10 +935,10 @@ def toggle_estrobo():
             selected_devices,
             estrobo_var,
             root,
-            brillo_on=255,
-            brillo_off=0,
-            on_ms=70,
-            off_ms=70
+            brillo_on=clamp_int(params["brillo_on"].get(), 1, 255),
+            brillo_off=clamp_int(params["brillo_off"].get(), 0, 255),
+            on_ms=clamp_int(params["on_ms"].get(), 10, 60000),
+            off_ms=clamp_int(params["off_ms"].get(), 10, 60000)
             
         )
     else:
@@ -823,14 +960,15 @@ estrobo_udp_var = tk.BooleanVar(value=False)
 
 def toggle_estrobo_udp():
     if estrobo_udp_var.get():
+        params = effect_param_vars["estrobo_udp"]
         estrobo_udp(
             LAMP_IPS,
             selected_devices,
             lamp_status,
             estrobo_udp_var,
             root,
-            on_ms=50,
-            off_ms=50,
+            on_ms=clamp_int(params["on_ms"].get(), 10, 60000),
+            off_ms=clamp_int(params["off_ms"].get(), 10, 60000),
             solo_seleccionadas=False
         )
     else:
@@ -854,6 +992,7 @@ fuego_var = tk.BooleanVar(value=False)
 
 def toggle_fuego():
     if fuego_var.get():
+        params = effect_param_vars["fuego"]
         btn_fuego.config(text="Detener", bg="#ef5350")
         efecto_fuego_wiz(
             send_lamp_color_safe,
@@ -861,7 +1000,9 @@ def toggle_fuego():
             panels,
             selected_devices,
             fuego_var,
-            root
+            root,
+            brillo_min=clamp_int(params["brillo_min"].get(), 1, 255),
+            brillo_max=clamp_int(params["brillo_max"].get(), 1, 255),
         )
     else:
         btn_fuego.config(text="Fuego", bg="#20bdec")
@@ -935,6 +1076,7 @@ vela_var = tk.BooleanVar(value=False)
 
 def toggle_vela():
     if vela_var.get():
+        params = effect_param_vars["vela"]
         btn_vela.config(text="Detener", bg="#ef5350")
         efecto_vela_wiz(
             send_lamp_color_safe,
@@ -942,7 +1084,8 @@ def toggle_vela():
             panels,
             selected_devices,
             vela_var,
-            root
+            root,
+            brillo_base=clamp_int(params["brillo_base"].get(), 1, 255),
         )
     else:
         btn_vela.config(text="Vela", bg="#20bdec")
@@ -1046,6 +1189,7 @@ intercambio_var = tk.BooleanVar(value=False)
 
 def toggle_intercambio():
     if intercambio_var.get():
+        params = effect_param_vars["Intercambio"]
         btn_intercambio.config(text="Detener", bg="#ef5350")
         efecto_intercambio_colores(
             send_lamp_color_safe,
@@ -1055,11 +1199,11 @@ def toggle_intercambio():
             lamp_status,
             intercambio_var,
             root,
-            color_a=(0, 1),       # rojo
-            color_b=(220, 1),     # azul
-            brillo=220,
-            duracion_ms=10000,
-            pasos=100,
+            color_a=(clamp_int(params["hue_a"].get(), 0, 359), 1),
+            color_b=(clamp_int(params["hue_b"].get(), 0, 359), 1),
+            brillo=clamp_int(params["brillo"].get(), 1, 255),
+            duracion_ms=clamp_int(params["duracion_ms"].get(), 100, 120000),
+            pasos=clamp_int(params["pasos"].get(), 2, 500),
         )
     else:
         btn_intercambio.config(text="Intercambio", bg="#20bdec")
@@ -1112,9 +1256,499 @@ effect_toggles = {
     "Intercambio":toggle_intercambio
 }
 
+effect_display_names = {
+    "respiracion": "Respiracion",
+    "secuencia": "Secuencia",
+    "secuencia_on": "Secuencia ON",
+    "secuencia_off": "Secuencia OFF",
+    "parpadeo": "Parpadeo",
+    "estrobo": "Estrobo",
+    "estrobo_udp": "Estrobo UDP",
+    "fuego": "Fuego",
+    "mar": "Mar / Oceanico",
+    "arcoiris": "Arcoiris",
+    "vela": "Vela",
+    "atardecer": "Atardecer",
+    "desfase": "Desfase",
+    "latido": "Latido",
+    "Intercambio": "Intercambio",
+}
 
-#__________________________________________________FIN EFECTOS_____________________________________
+effect_param_labels = {
+    "brillo_min": "Brillo minimo",
+    "brillo_max": "Brillo maximo",
+    "brillo_on": "Brillo encendido",
+    "brillo_off": "Brillo apagado",
+    "brillo": "Brillo",
+    "brillo_base": "Brillo base",
+    "tiempo_on_ms": "Tiempo encendido (ms)",
+    "tiempo_off_ms": "Tiempo apagado (ms)",
+    "fade_ms": "Fade (ms)",
+    "pasos_fade": "Pasos fade",
+    "on_ms": "On (ms)",
+    "off_ms": "Off (ms)",
+    "hue_a": "Color A Hue",
+    "hue_b": "Color B Hue",
+    "duracion_ms": "Duracion (ms)",
+    "pasos": "Pasos",
+}
 
+effect_target_var = tk.StringVar(value="seleccion")
+effects_panel_window = None
+lamp_config_window = None
+effects_panel_status_var = tk.StringVar(value="Selecciona un efecto")
+
+
+def start_effect_from_panel(effect_name):
+    target = effect_target_var.get()
+    apply_effect_target_selection(target)
+
+    var = effect_vars.get(effect_name)
+    toggle = effect_toggles.get(effect_name)
+    if var is None or toggle is None:
+        return
+
+    if var.get():
+        var.set(False)
+        toggle()
+
+    var.set(True)
+    toggle()
+    effects_panel_status_var.set(f"Activo: {effect_display_names.get(effect_name, effect_name)}")
+
+
+def stop_effect_from_panel(effect_name):
+    var = effect_vars.get(effect_name)
+    toggle = effect_toggles.get(effect_name)
+    if var is None or toggle is None:
+        return
+    if var.get():
+        var.set(False)
+        toggle()
+    effects_panel_status_var.set(f"Detenido: {effect_display_names.get(effect_name, effect_name)}")
+
+
+def open_lamp_config_panel():
+    global lamp_config_window
+
+    if lamp_config_window and lamp_config_window.winfo_exists():
+        lamp_config_window.lift()
+        lamp_config_window.focus_force()
+        return
+
+    win = tk.Toplevel(root)
+    lamp_config_window = win
+    win.title("Configuracion de lamparas")
+    win.configure(bg="#181b1e")
+    win.geometry("820x520")
+    win.minsize(720, 420)
+
+    def on_close():
+        global lamp_config_window
+        lamp_config_window = None
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", on_close)
+
+    config = load_lamps_config() or {"version": 1, "lamparas": []}
+
+    frame = tk.Frame(win, bg="#181b1e")
+    frame.pack(fill="both", expand=True, padx=10, pady=10)
+    frame.grid_columnconfigure(0, weight=1)
+    frame.grid_rowconfigure(1, weight=1)
+
+    header = tk.Frame(frame, bg="#181b1e")
+    header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+    header.grid_columnconfigure(0, weight=1)
+
+    tk.Label(header, text="Lamparas y grupos", bg="#181b1e", fg="#20bdec",
+             font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w")
+
+    status_var = tk.StringVar(value="Edita una fila o agrega una lampara nueva")
+    tk.Label(header, textvariable=status_var, bg="#181b1e", fg="#b9e3f7",
+             font=("Segoe UI", 9)).grid(row=0, column=1, sticky="e")
+
+    columns = ("id", "alias", "ip", "grupo", "orden", "activa")
+    tree = ttk.Treeview(frame, columns=columns, show="headings", height=12)
+    headings = {"id": "ID", "alias": "Nombre", "ip": "IP", "grupo": "Grupo", "orden": "Orden", "activa": "Activa"}
+    widths = {"id": 80, "alias": 120, "ip": 130, "grupo": 110, "orden": 70, "activa": 70}
+    for col in columns:
+        tree.heading(col, text=headings[col])
+        tree.column(col, width=widths[col], anchor="w")
+    tree.grid(row=1, column=0, sticky="nsew")
+    scroll = tk.Scrollbar(frame, orient="vertical", command=tree.yview)
+    scroll.grid(row=1, column=1, sticky="ns")
+    tree.configure(yscrollcommand=scroll.set)
+
+    def sorted_lamps():
+        return sorted(config.get("lamparas", []), key=lambda item: int(item.get("orden", 9999)))
+
+    def refresh_tree():
+        tree.delete(*tree.get_children())
+        for lamp in sorted_lamps():
+            tree.insert("", "end", values=(
+                lamp.get("id_escenico", ""),
+                lamp.get("alias", lamp.get("id_escenico", "")),
+                lamp.get("ip", ""),
+                lamp.get("grupo_default", "sin_grupo"),
+                lamp.get("orden", 0),
+                "si" if lamp.get("activa", True) else "no",
+            ))
+
+    form = tk.LabelFrame(frame, text="Edicion", bg="#181b1e", fg="#20bdec",
+                         font=("Segoe UI", 10, "bold"), padx=8, pady=8)
+    form.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+
+    id_var = tk.StringVar()
+    alias_var = tk.StringVar()
+    ip_var = tk.StringVar()
+    group_var = tk.StringVar(value="efectos")
+    order_var = tk.IntVar(value=1)
+    active_var = tk.BooleanVar(value=True)
+
+    for label, var, row, col, width in (
+        ("ID", id_var, 0, 0, 10),
+        ("Nombre", alias_var, 0, 2, 14),
+        ("IP", ip_var, 0, 4, 15),
+    ):
+        tk.Label(form, text=label, bg="#181b1e", fg="#b9e3f7").grid(row=row, column=col, sticky="w", padx=(0, 4))
+        tk.Entry(form, textvariable=var, width=width, bg="#111519", fg="#fff").grid(row=row, column=col + 1, sticky="w", padx=(0, 10))
+
+    tk.Label(form, text="Grupo", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=0, sticky="w", padx=(0, 4), pady=(8, 0))
+    ttk.Combobox(form, textvariable=group_var, values=("efectos", "atmosfera", "sin_grupo"),
+                 width=12, state="readonly").grid(row=1, column=1, sticky="w", padx=(0, 10), pady=(8, 0))
+
+    tk.Label(form, text="Orden", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=2, sticky="w", padx=(0, 4), pady=(8, 0))
+    tk.Spinbox(form, from_=1, to=200, textvariable=order_var, width=6, bg="#111519", fg="#fff").grid(row=1, column=3, sticky="w", padx=(0, 10), pady=(8, 0))
+
+    tk.Checkbutton(form, text="Activa", variable=active_var, bg="#181b1e", fg="#b9e3f7",
+                   selectcolor="#212529").grid(row=1, column=4, sticky="w", pady=(8, 0))
+
+    def next_lamp_id():
+        used = []
+        for lamp in config.get("lamparas", []):
+            scenic_id = str(lamp.get("id_escenico", ""))
+            if scenic_id.upper().startswith("L") and scenic_id[1:].isdigit():
+                used.append(int(scenic_id[1:]))
+        return f"L{(max(used) + 1) if used else 1}"
+
+    def next_order():
+        values = []
+        for lamp in config.get("lamparas", []):
+            try:
+                values.append(int(lamp.get("orden", 0)))
+            except Exception:
+                pass
+        return (max(values) + 1) if values else 1
+
+    def load_selected(event=None):
+        selected = tree.selection()
+        if not selected:
+            return
+        values = tree.item(selected[0], "values")
+        id_var.set(values[0])
+        alias_var.set(values[1])
+        ip_var.set(values[2])
+        group_var.set(values[3])
+        order_var.set(int(values[4]))
+        active_var.set(values[5] == "si")
+
+    tree.bind("<<TreeviewSelect>>", load_selected)
+
+    def clear_form():
+        id_var.set(next_lamp_id())
+        alias_var.set(id_var.get())
+        ip_var.set("")
+        group_var.set("sin_grupo")
+        order_var.set(next_order())
+        active_var.set(True)
+        tree.selection_remove(tree.selection())
+
+    def upsert_from_form():
+        scenic_id = id_var.get().strip()
+        alias = alias_var.get().strip() or scenic_id
+        ip = ip_var.get().strip()
+        group = group_var.get().strip() or "sin_grupo"
+        if not scenic_id or not ip:
+            messagebox.showwarning("Datos incompletos", "ID e IP son obligatorios.")
+            return False
+        for lamp in config.get("lamparas", []):
+            if lamp.get("id_escenico") != scenic_id and lamp.get("ip") == ip:
+                messagebox.showerror("IP duplicada", f"La IP {ip} ya esta asignada.")
+                return False
+
+        found = None
+        for lamp in config.get("lamparas", []):
+            if lamp.get("id_escenico") == scenic_id:
+                found = lamp
+                break
+        if found is None:
+            found = {}
+            config.setdefault("lamparas", []).append(found)
+        found.update({
+            "id_escenico": scenic_id,
+            "alias": alias,
+            "ip": ip,
+            "grupo_default": group,
+            "activa": bool(active_var.get()),
+            "orden": clamp_int(order_var.get(), 1, 200),
+        })
+        refresh_tree()
+        status_var.set(f"Fila lista: {scenic_id}")
+        return True
+
+    def delete_selected():
+        selected = tree.selection()
+        if not selected:
+            return
+        scenic_id = tree.item(selected[0], "values")[0]
+        if not messagebox.askyesno("Eliminar lampara", f"Quitar {scenic_id} de la configuracion?"):
+            return
+        config["lamparas"] = [lamp for lamp in config.get("lamparas", []) if lamp.get("id_escenico") != scenic_id]
+        refresh_tree()
+        clear_form()
+
+    def save_config_from_panel():
+        if ip_var.get().strip() and not upsert_from_form():
+            return
+        save_lamps_config({"version": config.get("version", 1), "lamparas": sorted_lamps()})
+        status_var.set("Configuracion guardada")
+        messagebox.showinfo(
+            "Configuracion guardada",
+            "Se guardo lamps_config.json.\nReinicia la aplicacion para reconstruir los paneles con los nuevos grupos.",
+        )
+
+    def add_discovered_ip(ip):
+        if not ip:
+            return False
+        for lamp in config.get("lamparas", []):
+            if lamp.get("ip") == ip:
+                return False
+        scenic_id = next_lamp_id()
+        config.setdefault("lamparas", []).append({
+            "id_escenico": scenic_id,
+            "alias": scenic_id,
+            "ip": ip,
+            "grupo_default": "sin_grupo",
+            "activa": True,
+            "orden": next_order(),
+        })
+        return True
+
+    def discover_lamps():
+        status_var.set("Buscando lamparas en red...")
+
+        def worker():
+            found_ips = []
+            try:
+                from pywizlight.discovery import discover_lights
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                bulbs = loop.run_until_complete(discover_lights(broadcast_space="192.168.0.255", wait_time=4.0))
+                loop.close()
+                for bulb in bulbs:
+                    ip = str(getattr(bulb, "ip", "") or getattr(bulb, "_ip", "") or getattr(bulb, "ip_address", "")).strip()
+                    if ip:
+                        found_ips.append(ip)
+            except Exception as exc:
+                root.after(0, lambda: messagebox.showerror("Busqueda fallida", str(exc)))
+                root.after(0, lambda: status_var.set("No se pudo completar la busqueda"))
+                return
+
+            def finish():
+                added = 0
+                for ip in sorted(set(found_ips)):
+                    if add_discovered_ip(ip):
+                        added += 1
+                refresh_tree()
+                status_var.set(f"Detectadas: {len(set(found_ips))}. Nuevas: {added}.")
+
+            root.after(0, finish)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    buttons = tk.Frame(frame, bg="#181b1e")
+    buttons.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+    tk.Button(buttons, text="Nueva", command=clear_form, bg="#2b343b", fg="#fff", width=10).pack(side="left", padx=(0, 6))
+    tk.Button(buttons, text="Agregar / actualizar", command=upsert_from_form, bg="#20bdec", fg="#fff", width=16).pack(side="left", padx=(0, 6))
+    tk.Button(buttons, text="Buscar en red", command=discover_lamps, bg="#27ae60", fg="#fff", width=12).pack(side="left", padx=(0, 6))
+    tk.Button(buttons, text="Eliminar", command=delete_selected, bg="#ef5350", fg="#fff", width=10).pack(side="left", padx=(0, 6))
+    tk.Button(buttons, text="Guardar", command=save_config_from_panel, bg="#4fc3f7", fg="#000", width=10).pack(side="right")
+
+    refresh_tree()
+    clear_form()
+
+
+def open_effects_config_panel():
+    global effects_panel_window
+
+    if effects_panel_window and effects_panel_window.winfo_exists():
+        effects_panel_window.lift()
+        effects_panel_window.focus_force()
+        return
+
+    win = tk.Toplevel(root)
+    effects_panel_window = win
+    win.title("Panel de efectos")
+    win.configure(bg="#181b1e")
+    win.geometry("760x520")
+    win.minsize(680, 440)
+
+    def on_close():
+        global effects_panel_window
+        effects_panel_window = None
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", on_close)
+
+    header = tk.Frame(win, bg="#181b1e")
+    header.pack(fill="x", padx=12, pady=(10, 6))
+    tk.Label(
+        header,
+        text="Efectos configurables",
+        bg="#181b1e",
+        fg="#20bdec",
+        font=("Segoe UI", 15, "bold")
+    ).pack(side="left")
+
+    main = tk.Frame(win, bg="#181b1e")
+    main.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+    main.grid_columnconfigure(1, weight=1)
+    main.grid_rowconfigure(0, weight=1)
+
+    left = tk.Frame(main, bg="#181b1e", width=245)
+    left.grid(row=0, column=0, sticky="nsw", padx=(0, 10))
+    left.grid_propagate(False)
+
+    tk.Label(left, text="Lista de efectos", bg="#181b1e", fg="#b9e3f7",
+             font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 4))
+    list_frame = tk.Frame(left, bg="#181b1e")
+    list_frame.pack(fill="both", expand=True)
+    effect_list = tk.Listbox(
+        list_frame,
+        bg="#111519",
+        fg="#fff",
+        selectbackground="#20bdec",
+        activestyle="dotbox",
+        font=("Segoe UI", 10),
+        height=15,
+        exportselection=False
+    )
+    effect_scroll = tk.Scrollbar(list_frame, orient="vertical", command=effect_list.yview)
+    effect_list.configure(yscrollcommand=effect_scroll.set)
+    effect_scroll.pack(side="right", fill="y")
+    effect_list.pack(side="left", fill="both", expand=True)
+
+    ordered_effects = [
+        "respiracion", "secuencia", "secuencia_on", "secuencia_off",
+        "parpadeo", "estrobo", "estrobo_udp", "fuego", "mar",
+        "arcoiris", "vela", "atardecer", "desfase", "latido", "Intercambio",
+    ]
+    ordered_effects = [name for name in ordered_effects if name in effect_vars]
+    for name in ordered_effects:
+        effect_list.insert(tk.END, effect_display_names.get(name, name))
+
+    right = tk.Frame(main, bg="#202428")
+    right.grid(row=0, column=1, sticky="nsew")
+    right.grid_columnconfigure(0, weight=1)
+
+    selected_effect_var = tk.StringVar(value="")
+    title_var = tk.StringVar(value="Selecciona un efecto")
+
+    tk.Label(right, textvariable=title_var, bg="#202428", fg="#20bdec",
+             font=("Segoe UI", 13, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
+
+    scope = tk.LabelFrame(right, text="Aplicar a", bg="#202428", fg="#20bdec",
+                          font=("Segoe UI", 10, "bold"), padx=8, pady=6)
+    scope.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+    for label, value in (
+        ("Seleccion actual", "seleccion"),
+        ("Efectos", "efectos"),
+        ("Atmosfera", "atmosfera"),
+        ("Todas", "todas"),
+    ):
+        tk.Radiobutton(scope, text=label, variable=effect_target_var, value=value,
+                       bg="#202428", fg="#d9f3ff", selectcolor="#202428",
+                       activebackground="#202428", activeforeground="#20bdec",
+                       font=("Segoe UI", 9)).pack(side="left", padx=(0, 10))
+
+    params_frame = tk.LabelFrame(right, text="Parametros", bg="#202428", fg="#20bdec",
+                                 font=("Segoe UI", 10, "bold"), padx=8, pady=8)
+    params_frame.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 8))
+    params_frame.grid_columnconfigure(1, weight=1)
+    right.grid_rowconfigure(2, weight=1)
+
+    actions = tk.Frame(right, bg="#202428")
+    actions.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 8))
+    actions.grid_columnconfigure(0, weight=1)
+    actions.grid_columnconfigure(1, weight=1)
+
+    def current_effect():
+        return selected_effect_var.get()
+
+    def render_params(effect_name):
+        for child in params_frame.winfo_children():
+            child.destroy()
+
+        selected_effect_var.set(effect_name)
+        title_var.set(effect_display_names.get(effect_name, effect_name))
+        params = effect_param_vars.get(effect_name, {})
+        if not params:
+            tk.Label(params_frame, text="Este efecto no tiene parametros configurables.",
+                     bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w")
+            return
+
+        for row, (param, var) in enumerate(params.items()):
+            tk.Label(params_frame, text=effect_param_labels.get(param, param),
+                     bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=row, column=0, sticky="w", pady=4)
+            tk.Spinbox(params_frame, from_=0, to=120000, increment=1, textvariable=var,
+                       width=10, bg="#111519", fg="#e6e6e6",
+                       buttonbackground="#30363d", relief="flat",
+                       font=("Segoe UI", 10)).grid(row=row, column=1, sticky="e", pady=4)
+
+    def on_select(event=None):
+        sel = effect_list.curselection()
+        if not sel:
+            return
+        render_params(ordered_effects[sel[0]])
+
+    effect_list.bind("<<ListboxSelect>>", on_select)
+    if ordered_effects:
+        effect_list.selection_set(0)
+        render_params(ordered_effects[0])
+
+    tk.Button(actions, text="Iniciar", command=lambda: start_effect_from_panel(current_effect()),
+              bg="#20bdec", fg="#001018", relief="flat",
+              font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+    tk.Button(actions, text="Detener", command=lambda: stop_effect_from_panel(current_effect()),
+              bg="#ef5350", fg="#fff", relief="flat",
+              font=("Segoe UI", 10, "bold")).grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+    tk.Label(
+        win,
+        textvariable=effects_panel_status_var,
+        bg="#181b1e",
+        fg="#8dfa9f",
+        font=("Segoe UI", 10, "italic")
+    ).pack(fill="x", padx=12, pady=(0, 8))
+
+
+frame_efectos.pack_forget()
+
+app_menu = tk.Menu(root)
+file_menu = tk.Menu(app_menu, tearoff=0)
+file_menu.add_command(label="Salir", command=root.quit)
+app_menu.add_cascade(label="Archivo", menu=file_menu)
+
+config_menu = tk.Menu(app_menu, tearoff=0)
+config_menu.add_command(label="Lamparas y grupos", command=open_lamp_config_panel)
+config_menu.add_command(label="Refrescar estado de lamparas", command=refresh_lamp_status)
+app_menu.add_cascade(label="Configuracion", menu=config_menu)
+
+effects_menu = tk.Menu(app_menu, tearoff=0)
+effects_menu.add_command(label="Panel de efectos", command=open_effects_config_panel)
+app_menu.add_cascade(label="Efectos", menu=effects_menu)
+root.config(menu=app_menu)
 
 maestro_hsv = {"h": 0, "s": 1}
 maestro_brillo = tk.IntVar(value=1)
@@ -1545,13 +2179,411 @@ for idx, ip in enumerate(LAMP_IPS):
         bg="#22292f", fg="#f1c40f", selectcolor="#161a1d", font=("Segoe UI", 11)
     ).pack(side="left", padx=2)
 
-    send_off(ip)
+    # No apagamos lamparas al construir la interfaz.
     panels[ip] = panel
 #___________________________________________________________________________________
 
+# ================== INTEGRACION UI: MAESTRO + GRUPOS ==================
+try:
+    frame_maestro.destroy()
+except Exception:
+    pass
+try:
+    frame_center.destroy()
+except Exception:
+    pass
+
+panels.clear()
+
+frame_maestro = tk.LabelFrame(
+    frame_left,
+    text="Control Maestro",
+    bg="#181b1e",
+    fg="#20bdec",
+    font=("Segoe UI", 14, "bold"),
+    padx=4,
+    pady=4,
+    width=185,
+    height=330
+)
+frame_maestro.pack(side="top", fill="x", expand=False, pady=(0, 12))
+frame_maestro.pack_propagate(False)
+
+maestro_hsv = {"h": 0, "s": 1}
+maestro_brillo = tk.IntVar(value=180)
+maestro_temp = tk.IntVar(value=128)
+maestro_mode = tk.StringVar(value="colour")
+maestro_scope_effects = tk.BooleanVar(value=True)
+maestro_scope_atmos = tk.BooleanVar(value=True)
+
+
+def get_ips_by_scope(include_offline=False):
+    ips = []
+    for ip in LAMP_IPS:
+        group = get_lamp_group(ip)
+        in_scope = (
+            (group == "efectos" and maestro_scope_effects.get()) or
+            (group == "atmosfera" and maestro_scope_atmos.get()) or
+            (group not in ("efectos", "atmosfera") and maestro_scope_effects.get() and maestro_scope_atmos.get())
+        )
+        if in_scope and (include_offline or lamp_status.get(ip, True)):
+            ips.append(ip)
+    return ips
+
+
+def update_panel_visual(panel):
+    try:
+        color = "#03A125" if selected_devices[panel.ip].get() else "#252e36"
+        panel.config(highlightbackground=color, highlightcolor=color)
+    except Exception:
+        pass
+
+
+def set_panel_mode(panel, mode, send=True):
+    panel.mode_var.set(mode)
+    panel.last_mode = mode
+    if mode == "colour":
+        panel.whitewheel_lamp.pack_forget()
+        panel.colorwheel_lamp.pack()
+        if send and selected_devices[panel.ip].get():
+            send_lamp_color_safe(panel.ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+    else:
+        panel.colorwheel_lamp.pack_forget()
+        panel.whitewheel_lamp.pack()
+        if send and selected_devices[panel.ip].get():
+            send_lamp_white(panel.ip, panel.last_brillo, panel.last_temp)
+
+
+def apply_master_to_ips(ips):
+    modo = maestro_mode.get()
+    h = maestro_hsv["h"]
+    s = maestro_hsv["s"]
+    brillo = safe_brightness(maestro_brillo.get())
+    temp = int(maestro_temp.get())
+
+    for ip in ips:
+        panel = panels.get(ip)
+        if panel is None:
+            continue
+        selected_devices[ip].set(brillo > 0)
+        panel.last_brillo = brillo
+        panel.brillo_var.set(brillo)
+        panel.last_mode = modo
+        panel.mode_var.set(modo)
+        if modo == "colour":
+            panel.last_hue = h
+            panel.last_sat = s
+            panel.colorwheel_lamp.set_color(h, s, max(0.01, brillo / 255))
+        else:
+            panel.last_temp = temp
+            panel.temp_var.set(temp)
+            panel.whitewheel_lamp.set_temp_value(temp)
+        set_panel_mode(panel, modo, send=False)
+        update_panel_visual(panel)
+
+    if not ips:
+        return
+    if brillo <= 0:
+        for ip in ips:
+            send_off(ip)
+        return
+    if modo == "colour":
+        send_color_to_lamps(ips, h, s, brillo)
+    else:
+        send_white_to_lamps(ips, brillo, map_slider_to_wiz_temperature(temp))
+
+
+def maestro_on_color(h, s, v):
+    maestro_hsv["h"] = h
+    maestro_hsv["s"] = s
+    set_master_mode("colour")
+
+
+def maestro_on_temp(value):
+    maestro_temp.set(int(float(value)))
+    set_master_mode("white")
+
+
+def maestro_on_brillo(value):
+    maestro_brillo.set(safe_brightness(value))
+
+
+def set_master_mode(mode):
+    maestro_mode.set(mode)
+    try:
+        colorwheel_maestro.pack_forget()
+        whitewheel_maestro.pack_forget()
+        if mode == "white":
+            whitewheel_maestro.pack()
+        else:
+            colorwheel_maestro.pack()
+    except Exception:
+        pass
+
+
+def aplicar_maestro():
+    apply_master_to_ips(get_ips_by_scope())
+
+
+def apagar_todo():
+    ips = get_ips_by_scope()
+    for ip in ips:
+        selected_devices[ip].set(False)
+        if ip in panels:
+            panels[ip].last_brillo = 0
+            panels[ip].brillo_var.set(0)
+            update_panel_visual(panels[ip])
+        send_off(ip)
+
+
+def encender_todo():
+    apply_master_to_ips(get_ips_by_scope())
+
+
+maestro_top = tk.Frame(frame_maestro, bg="#181b1e")
+maestro_top.pack(fill="x", pady=(0, 3))
+tk.Radiobutton(maestro_top, text="C", variable=maestro_mode, value="colour",
+               command=lambda: set_master_mode("colour"),
+               bg="#181b1e", fg="#20bdec", selectcolor="#181b1e",
+               font=("Segoe UI", 8, "bold")).pack(side="left", padx=(22, 2))
+tk.Radiobutton(maestro_top, text="B", variable=maestro_mode, value="white",
+               command=lambda: set_master_mode("white"),
+               bg="#181b1e", fg="#f1c40f", selectcolor="#181b1e",
+               font=("Segoe UI", 8, "bold")).pack(side="left", padx=2)
+
+scope_row = tk.Frame(frame_maestro, bg="#181b1e")
+scope_row.pack(fill="x", pady=(0, 3))
+tk.Checkbutton(scope_row, text="Efectos", variable=maestro_scope_effects,
+               bg="#181b1e", fg="#20bdec", selectcolor="#181b1e",
+               font=("Segoe UI", 8)).pack(side="left", padx=(12, 2))
+tk.Checkbutton(scope_row, text="Atmos.", variable=maestro_scope_atmos,
+               bg="#181b1e", fg="#f1c40f", selectcolor="#181b1e",
+               font=("Segoe UI", 8)).pack(side="left", padx=2)
+
+maestro_body = tk.Frame(frame_maestro, bg="#181b1e")
+maestro_body.pack(fill="x")
+maestro_wheel_slot = tk.Frame(maestro_body, bg="#181b1e", width=136, height=136)
+maestro_wheel_slot.pack(side="left", padx=(6, 4))
+maestro_wheel_slot.pack_propagate(False)
+colorwheel_maestro = RealColorWheel(maestro_wheel_slot, radius=63, callback=maestro_on_color, bg="#181b1e", bd=0, highlightthickness=0)
+whitewheel_maestro = WhiteTempWheel(maestro_wheel_slot, radius=63, callback=maestro_on_temp, bg="#181b1e", bd=0, highlightthickness=0)
+colorwheel_maestro.pack()
+
+maestro_sliders = tk.Frame(maestro_body, bg="#181b1e")
+maestro_sliders.pack(side="left")
+tk.Label(maestro_sliders, text="I", bg="#181b1e", fg="#20bdec", font=("Segoe UI", 8, "bold")).grid(row=0, column=0)
+tk.Label(maestro_sliders, text="T", bg="#181b1e", fg="#f1c40f", font=("Segoe UI", 8, "bold")).grid(row=0, column=1)
+tk.Scale(maestro_sliders, from_=255, to=0, orient="vertical", variable=maestro_brillo,
+         length=92, width=4, sliderlength=10, showvalue=False, bg="#181b1e", fg="#20bdec",
+         highlightthickness=0, command=maestro_on_brillo).grid(row=1, column=0, padx=1)
+tk.Scale(maestro_sliders, from_=255, to=0, orient="vertical", variable=maestro_temp,
+         length=92, width=4, sliderlength=10, showvalue=False, bg="#181b1e", fg="#f1c40f",
+         highlightthickness=0, command=maestro_on_temp).grid(row=1, column=1, padx=1)
+
+master_actions = tk.Frame(frame_maestro, bg="#181b1e")
+master_actions.pack(fill="x", pady=(7, 0), padx=6)
+for col in range(2):
+    master_actions.grid_columnconfigure(col, weight=1)
+tk.Button(master_actions, text="Aplicar", command=aplicar_maestro,
+          bg="#20bdec", fg="#fff", relief="flat",
+          font=("Segoe UI", 9, "bold")).grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+tk.Button(master_actions, text="On", command=encender_todo,
+          bg="#20bdec", fg="#fff", relief="flat",
+          font=("Segoe UI", 9, "bold")).grid(row=1, column=0, sticky="ew", padx=(0, 3))
+tk.Button(master_actions, text="Off", command=apagar_todo,
+          bg="#807D7D", fg="#fff", relief="flat",
+          font=("Segoe UI", 9, "bold")).grid(row=1, column=1, sticky="ew", padx=(3, 0))
+tk.Button(master_actions, text="Refrescar", command=refresh_lamp_status,
+          bg="#27ae60", fg="#fff", relief="flat",
+          font=("Segoe UI", 8)).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+
+
+frame_center = tk.Frame(frame_main, bg="#181b1e")
+frame_center.pack(side="left", fill="both", expand=True, padx=(0, 8), pady=15)
+canvas_lamps = tk.Canvas(frame_center, bg="#181b1e", highlightthickness=0, bd=0)
+canvas_lamps.pack(side="left", fill="both", expand=True)
+scroll_lamps = tk.Scrollbar(frame_center, orient="vertical", command=canvas_lamps.yview)
+scroll_lamps.pack(side="right", fill="y")
+canvas_lamps.configure(yscrollcommand=scroll_lamps.set)
+
+frame_lamps = tk.Frame(canvas_lamps, bg="#181b1e")
+canvas_lamps.create_window((0, 0), window=frame_lamps, anchor="nw")
+frame_lamps.bind("<Configure>", lambda event: canvas_lamps.configure(scrollregion=canvas_lamps.bbox("all")))
+
+group_sections = {
+    "efectos": {
+        "frame": tk.LabelFrame(frame_lamps, text="Lamparas de efectos", bg="#212529", fg="#20bdec",
+                               font=("Segoe UI", 12, "bold"), padx=8, pady=8),
+        "items": [],
+    },
+    "atmosfera": {
+        "frame": tk.LabelFrame(frame_lamps, text="Lamparas de atmosfera", bg="#212529", fg="#20bdec",
+                               font=("Segoe UI", 12, "bold"), padx=8, pady=8),
+        "items": [],
+    },
+    "sin_grupo": {
+        "frame": tk.LabelFrame(frame_lamps, text="Sin grupo", bg="#212529", fg="#20bdec",
+                               font=("Segoe UI", 12, "bold"), padx=8, pady=8),
+        "items": [],
+    },
+}
+
+for ip in LAMP_IPS:
+    group = get_lamp_group(ip)
+    if group not in group_sections:
+        group = "sin_grupo"
+    group_sections[group]["items"].append(ip)
+
+row_section = 0
+for key in ("efectos", "atmosfera", "sin_grupo"):
+    if not group_sections[key]["items"]:
+        continue
+    section = group_sections[key]["frame"]
+    section.grid(row=row_section, column=0, sticky="ew", padx=4, pady=(0, 10))
+    for col in range(5):
+        section.grid_columnconfigure(col, weight=0, minsize=160)
+    row_section += 1
+
+
+def toggle_lamp_power(ip):
+    panel = panels[ip]
+    update_panel_visual(panel)
+    if selected_devices[ip].get():
+        if panel.last_mode == "colour":
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+        else:
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+    else:
+        send_off(ip)
+
+
+def build_lamp_panel(parent, ip, idx):
+    panel = tk.LabelFrame(
+        parent,
+        bg="#17291c",
+        fg="#20bdec",
+        font=("Segoe UI", 9, "bold"),
+        padx=5,
+        pady=4,
+        bd=2,
+        highlightthickness=2,
+        highlightbackground="#03A125",
+        highlightcolor="#03A125"
+    )
+    panel.ip = ip
+    panel.grid(row=idx // 5, column=idx % 5, padx=5, pady=5, sticky="nw")
+    panels[ip] = panel
+
+    top = tk.Frame(panel, bg="#17291c")
+    top.pack(fill="x")
+    entry = tk.Entry(top, font=("Segoe UI", 8), width=15, bg="#111519", fg="#b9e3f7", relief="flat")
+    entry.insert(0, lamp_names.get(ip, f"Lampara {ip}"))
+    entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+    entry.bind("<FocusOut>", lambda e, ip=ip, entry=entry: update_name(ip, entry))
+
+    tk.Checkbutton(top, text="On", variable=selected_devices[ip],
+                   command=lambda ip=ip: toggle_lamp_power(ip),
+                   bg="#17291c", fg="#20bdec", selectcolor="#17291c",
+                   activebackground="#17291c", activeforeground="#20bdec",
+                   font=("Segoe UI", 8, "bold")).pack(side="right")
+
+    mode_row = tk.Frame(panel, bg="#17291c")
+    mode_row.pack(fill="x", pady=(3, 2))
+    modo_var = tk.StringVar(value="colour")
+    panel.mode_var = modo_var
+    panel.last_mode = "colour"
+
+    tk.Radiobutton(mode_row, text="C", variable=modo_var, value="colour",
+                   command=lambda p=panel: set_panel_mode(p, "colour"),
+                   bg="#17291c", fg="#20bdec", selectcolor="#17291c",
+                   font=("Segoe UI", 8, "bold")).pack(side="left", padx=(38, 2))
+    tk.Radiobutton(mode_row, text="B", variable=modo_var, value="white",
+                   command=lambda p=panel: set_panel_mode(p, "white"),
+                   bg="#17291c", fg="#f1c40f", selectcolor="#17291c",
+                   font=("Segoe UI", 8, "bold")).pack(side="left", padx=2)
+
+    body = tk.Frame(panel, bg="#17291c")
+    body.pack(fill="x")
+    brillo_var = tk.IntVar(value=180)
+    temp_var = tk.IntVar(value=128)
+    panel.brillo_var = brillo_var
+    panel.temp_var = temp_var
+    panel.last_hue = 0
+    panel.last_sat = 1
+    panel.last_brillo = brillo_var.get()
+    panel.last_temp = temp_var.get()
+
+    def on_color(h, s, v, ip=ip, panel=panel):
+        panel.last_hue = h
+        panel.last_sat = s
+        panel.last_brillo = panel.brillo_var.get()
+        set_panel_mode(panel, "colour", send=False)
+        if selected_devices[ip].get():
+            send_lamp_color_safe(ip, h, s, panel.last_brillo)
+
+    def on_white(value, ip=ip, panel=panel):
+        panel.last_temp = int(value)
+        panel.temp_var.set(panel.last_temp)
+        set_panel_mode(panel, "white", send=False)
+        if selected_devices[ip].get():
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+
+    wheel_slot = tk.Frame(body, bg="#17291c", width=118, height=118)
+    wheel_slot.pack(side="left", padx=(0, 5))
+    wheel_slot.pack_propagate(False)
+
+    colorwheel = RealColorWheel(wheel_slot, radius=55, callback=on_color, bg="#111519", bd=0, highlightthickness=0)
+    whitewheel = WhiteTempWheel(wheel_slot, radius=55, callback=on_white, bg="#111519", bd=0, highlightthickness=0)
+    panel.colorwheel_lamp = colorwheel
+    panel.whitewheel_lamp = whitewheel
+    colorwheel.pack()
+
+    sliders = tk.Frame(body, bg="#17291c")
+    sliders.pack(side="left")
+    tk.Label(sliders, text="I", bg="#17291c", fg="#20bdec", font=("Segoe UI", 7, "bold")).grid(row=0, column=0)
+    tk.Label(sliders, text="T", bg="#17291c", fg="#f1c40f", font=("Segoe UI", 7, "bold")).grid(row=0, column=1)
+
+    def on_brillo_change(value, ip=ip, panel=panel):
+        panel.last_brillo = safe_brightness(value)
+        if selected_devices[ip].get():
+            if panel.last_brillo <= 0:
+                send_off(ip)
+            elif panel.last_mode == "colour":
+                send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+            else:
+                send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+
+    def on_temp_panel(value, ip=ip, panel=panel):
+        panel.last_temp = int(float(value))
+        if panel.last_mode == "white" and selected_devices[ip].get():
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+
+    tk.Scale(sliders, from_=255, to=0, orient="vertical", variable=brillo_var,
+             length=72, width=4, sliderlength=10, showvalue=False, bg="#17291c", fg="#20bdec",
+             highlightthickness=0, command=on_brillo_change).grid(row=1, column=0, padx=1)
+    tk.Scale(sliders, from_=255, to=0, orient="vertical", variable=temp_var,
+             length=72, width=4, sliderlength=10, showvalue=False, bg="#17291c", fg="#f1c40f",
+             highlightthickness=0, command=on_temp_panel).grid(row=1, column=1, padx=1)
+
+    update_panel_visual(panel)
+
+
+for key in ("efectos", "atmosfera", "sin_grupo"):
+    section = group_sections[key]["frame"]
+    for idx, ip in enumerate(group_sections[key]["items"]):
+        build_lamp_panel(section, ip, idx)
+
+for ip in LAMP_IPS:
+    selected_devices[ip].set(False)
+    if ip in panels:
+        panels[ip].last_brillo = 0
+        panels[ip].brillo_var.set(0)
+        update_panel_visual(panels[ip])
+    send_off(ip)
+
 # ----- 3. FRAME DERECHO (escenas) -----
-frame_right = tk.Frame(frame_main, bg="#202428",width=280)
-frame_right.pack(side="right", fill="y", padx=(10), pady=10)
+frame_right = tk.Frame(frame_main, bg="#202428", width=330)
+frame_right.pack(side="right", fill="both", padx=(10), pady=10)
 frame_right.pack_propagate(False)
 # Panel de Escenas (tu panel de siempre, a la derecha del de efectos)
 frame_lateral = tk.Frame(frame_main, bg="#181b1e", width=280)
@@ -1587,7 +2619,7 @@ def on_guardar_escena():
     fade_out_val = fade_out_var.get()
 
     # 4) Estado de efectos (respiración, estrobo, fuego, etc.)
-    effects_state = get_effects_state(effect_vars)
+    effects_state = get_effects_state(effect_vars, effect_param_vars)
 
     # 5) Llamar al módulo para que arme y guarde todo
     ok = guardar_escena(
@@ -2124,7 +3156,7 @@ def fade_to(ip, tiempo, from_brillo, to_brillo, modo, h=0, s=1, temp=4000, token
             if modo == "colour":
                 send_lamp_color_safe(ip, h, s, to_b)
             else:
-                send_lamp_white(ip, to_b, temp)
+                send_lamp_white_scene(ip, to_b, temp)
 
         # Actualiza estado
         if panel:
@@ -2135,14 +3167,15 @@ def fade_to(ip, tiempo, from_brillo, to_brillo, modo, h=0, s=1, temp=4000, token
                 panel.last_sat = s
             else:
                 panel.last_temp = temp
+        update_lamp_state(ip, modo, h, s, temp, to_b)
         return
 
     # ==========================================
     #  FADE REAL
     # ==========================================
     apagando = (to_b == 0)
-    fps = 30
-    steps = max(1, int(tiempo * fps))
+    fps = 8
+    steps = max(1, min(80, int(tiempo * fps)))
     dt = tiempo / steps
 
     # Estado REAL al inicio
@@ -2169,14 +3202,14 @@ def fade_to(ip, tiempo, from_brillo, to_brillo, modo, h=0, s=1, temp=4000, token
             if modo == "colour":
                 send_lamp_color_safe(ip, h_real, s_real, brillo)
             else:
-                send_lamp_white(ip, brillo, temp_real)
+                send_lamp_white_scene(ip, brillo, temp_real)
 
         else:
             # caso de encendido/cambio color
             if modo == "colour":
                 send_lamp_color_safe(ip, h, s, brillo)
             else:
-                send_lamp_white(ip, brillo, temp)
+                send_lamp_white_scene(ip, brillo, temp)
 
         time.sleep(dt)
 
@@ -2187,7 +3220,7 @@ def fade_to(ip, tiempo, from_brillo, to_brillo, modo, h=0, s=1, temp=4000, token
         if modo == "colour":
             send_lamp_color_safe(ip, h, s, to_b)
         else:
-            send_lamp_white(ip, to_b, temp)
+            send_lamp_white_scene(ip, to_b, temp)
 
     # guardar estado final
     if panel:
@@ -2225,6 +3258,7 @@ def finalizar_escena(token, nombre):
     # Mensaje de estado
     try:
         set_estado_escena(f"Escena '{nombre}' terminada", "#28a745")
+        scene_progress_var.set(100)
     except:
         pass
 
@@ -2306,6 +3340,10 @@ def aplicar_escena(nombre_escena):
         set_estado_escena(f"Ejecutando escena: {nombre_escena}…", "#ff4d4d")
     except:
         pass
+    try:
+        start_scene_progress(nuevo_token, max(fade_in_val, fade_out_val))
+    except:
+        pass
 
     # -----------------------------------------------------
     # 🚨 DETECCIÓN DE ACCIONES DINÁMICAS
@@ -2333,7 +3371,7 @@ def aplicar_escena(nombre_escena):
             panel.last_brillo = estado.get("brillo", 1)
 
         # Aplicar efectos (solo si realmente hay efectos)
-        root.after(10, lambda c=effects: apply_effects_state(c, effect_vars, effect_toggles))
+        root.after(10, lambda c=effects: apply_effects_state(c, effect_vars, effect_toggles, effect_param_vars))
 
         escena_en_ejecucion = False
         try: btn_cargar.config(state="normal")
@@ -2367,7 +3405,19 @@ def aplicar_escena(nombre_escena):
 
             destino_on = (estado_destino.get("state", "off") == "on" and to_brillo > 0)
 
-            if from_brillo == to_brillo and from_mode == to_mode and from_h == to_h and from_s == to_s:
+            sin_cambios = (
+                from_brillo == to_brillo and
+                from_mode == to_mode and
+                (
+                    (to_mode == "colour" and from_h == to_h and from_s == to_s) or
+                    (
+                        to_mode == "white" and
+                        int(normalize_scene_colortemp(from_temp)) == int(normalize_scene_colortemp(to_temp))
+                    )
+                )
+            )
+
+            if sin_cambios:
                 print(f"[SKIP] {ip}: sin cambios reales")
                 continue
 
@@ -2402,56 +3452,26 @@ def aplicar_escena(nombre_escena):
             t.start()
             threads.append(t)
 
+        for t in threads:
+            t.join()
+
+        root.after(0, lambda: finalizar_escena(nuevo_token, nombre_escena))
+
     threading.Thread(target=worker, daemon=True).start()
-
-    tiempo_total = max(fade_in_val, fade_out_val)
-
-    root.after(
-        int(tiempo_total * 1200),
-        lambda: finalizar_escena(nuevo_token, nombre_escena)
-    )
 
     if "effects" in escena:
         root.after(
             0,
-            lambda c=escena["effects"]: apply_effects_state(c, effect_vars, effect_toggles)
+            lambda c=escena["effects"]: apply_effects_state(c, effect_vars, effect_toggles, effect_param_vars)
         )
-
-
-    # -------------------------------
-    # FINALIZAR EN TIEMPO (con leve margen)
-    # -------------------------------
-    tiempo_total = max(fade_in_val, fade_out_val)
-
-    root.after(
-        int(tiempo_total * 1200),  # 20% de margen para desfases de red/threads
-        lambda: finalizar_escena(nuevo_token, nombre_escena)
-    )
-
-    # Efectos (respiración, estrobo, etc.)
-    try:
-        cfg = datos[nombre_escena]
-        effects_cfg = cfg.get("effects", None)
-    except:
-        effects_cfg = None
-
-    if effects_cfg:
-        root.after(
-            0,
-            lambda c=effects_cfg: apply_effects_state(c, effect_vars, effect_toggles)
-        )
-
 
 def marcar_escena_terminada():
     global escena_en_ejecucion
     escena_en_ejecucion = False
 
-    # Cambiar mensaje en la UI (si existe)
     try:
-        lbl_estado_escena.config(
-            text="ESCENA FINALIZADA",
-            fg="#03fc7f"   # verde
-        )
+        set_estado_escena("Escena finalizada", "#03fc7f")
+        scene_progress_var.set(100)
     except:
         pass
 
@@ -2508,7 +3528,7 @@ def guardar():
         fade_out_val = 0.0
 
     # 👉 NUEVO: leer estado de efectos (respiración, estrobo, etc.)
-    effects_state = get_effects_state(effect_vars)
+    effects_state = get_effects_state(effect_vars, effect_param_vars)
 
     # 👉 NUEVO: delegar en escenas_proyectos.guardar_escena(...)
     exito = guardar_escena(
@@ -2534,7 +3554,7 @@ def on_actualizar_escena():
 
     fade_in_val = fade_in_var.get()
     fade_out_val = fade_out_var.get()
-    effects_state = get_effects_state(effect_vars)
+    effects_state = get_effects_state(effect_vars, effect_param_vars)
 
     if actualizar_escena_completa(
         escena,
@@ -2636,17 +3656,18 @@ def on_fade_scroll(event, var):
     
 # ==== UI ====
 tk.Label(frame_right, text="ESCENAS", bg="#202428", fg="#20bdec",
-         font=("Segoe UI", 16, "bold")).pack(pady=(6, 12))
+         font=("Segoe UI", 16, "bold")).pack(pady=(6, 8))
 
-tk.Label(frame_right, text="Nombre:", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 11)).pack(anchor="n")
-entry_escena = tk.Entry(frame_right, font=("Segoe UI", 12), width=30, bg="#181b1e", fg="#b9e3f7")
-entry_escena.pack(pady=(0,6))
+tk.Label(frame_right, text="Nombre", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).pack(anchor="w", padx=16)
+entry_escena = tk.Entry(frame_right, font=("Segoe UI", 11), width=30, bg="#181b1e", fg="#b9e3f7")
+entry_escena.pack(fill="x", padx=16, pady=(2, 8))
 entry_escena.config(insertbackground="#20bdec")  # ¡Color del cursor!
 
 from tkinter import ttk
 
 
 estado_escena_var = tk.StringVar(value="Sin escenas en ejecución")
+scene_progress_var = tk.DoubleVar(value=0.0)
 lbl_estado_escena = tk.Label(
     frame_right,
     textvariable=estado_escena_var,
@@ -2655,6 +3676,15 @@ lbl_estado_escena = tk.Label(
     font=("Segoe UI", 10, "italic")
 )
 lbl_estado_escena.pack(pady=(0, 6))
+
+scene_progress = ttk.Progressbar(
+    frame_right,
+    variable=scene_progress_var,
+    maximum=100,
+    mode="determinate",
+    length=230
+)
+scene_progress.pack(fill="x", padx=16, pady=(0, 8))
 
 def actualizar_escena():
     escena = escena_seleccionada_en_listbox()
@@ -2679,7 +3709,7 @@ def actualizar_escena():
         fade_out_val = 0.0
 
     # Obtener efectos
-    effects_state = get_effects_state(effect_vars)
+    effects_state = get_effects_state(effect_vars, effect_param_vars)
 
     # Llamar al módulo escenas_proyectos
     ok = actualizar_escena_completa(
@@ -2700,35 +3730,69 @@ def set_estado_escena(texto, color):
     estado_escena_var.set(texto)
     lbl_estado_escena.config(fg=color)
 
+
+def start_scene_progress(token, total_seconds):
+    scene_progress_var.set(0)
+    total_seconds = max(0.0, float(total_seconds or 0.0))
+    if total_seconds <= 0:
+        scene_progress_var.set(100)
+        return
+
+    start_time = time.monotonic()
+
+    def tick():
+        if fade_token[0] != token or not escena_en_ejecucion:
+            return
+        elapsed = time.monotonic() - start_time
+        percent = min(100, (elapsed / total_seconds) * 100)
+        scene_progress_var.set(percent)
+        if percent < 100:
+            root.after(100, tick)
+
+    tick()
+
 # Evento opcional para enganchar lógica al final de una escena
 def on_escena_terminada(event):
     print("[INFO] Escena finalizada.")  # aquí puedes reproducir un sonido, loguear, etc.
 root.bind("<<EscenaTerminada>>", on_escena_terminada)
 
 # --- Sliders/entries de fade
-frame_fades = tk.Frame(frame_right, bg="#202428")
-frame_fades.pack(pady=(0,8))
-tk.Label(frame_fades, text="Fade In (seg):", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="e")
+frame_fades = tk.LabelFrame(
+    frame_right,
+    text="Transiciones",
+    bg="#202428",
+    fg="#20bdec",
+    font=("Segoe UI", 10, "bold"),
+    padx=8,
+    pady=6
+)
+frame_fades.pack(fill="x", padx=16, pady=(0, 8))
+frame_fades.grid_columnconfigure(1, weight=1)
+tk.Label(frame_fades, text="Entrada", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w", padx=(0, 8))
 fade_in_var = tk.DoubleVar(value=0.0)
-tk.Label(frame_fades, text="Fade Out (seg):", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="e")
+tk.Label(frame_fades, text="Salida", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(4, 0))
 fade_out_var = tk.DoubleVar(value=0.0)    
 
 # Para Windows (tkinter usa event.delta), para otros sistemas puede ser diferente.
-fade_in_entry = tk.Entry(frame_fades, textvariable=fade_in_var, width=6, font=("Segoe UI", 11), bg="#1e2224", fg="#e6e6e6")
-fade_in_entry.grid(row=0, column=1)
+fade_in_entry = tk.Spinbox(frame_fades, from_=0, to=120, increment=0.1, textvariable=fade_in_var, width=6, font=("Segoe UI", 10), bg="#1e2224", fg="#e6e6e6", buttonbackground="#30363d", relief="flat")
+fade_in_entry.grid(row=0, column=1, sticky="e")
 fade_in_entry.bind("<MouseWheel>", lambda e: on_fade_scroll(e, fade_in_var))
+tk.Label(frame_fades, text="seg", bg="#202428", fg="#8fb8c9", font=("Segoe UI", 9)).grid(row=0, column=2, sticky="w", padx=(6, 0))
 
-fade_out_entry = tk.Entry(frame_fades, textvariable=fade_out_var, width=6, font=("Segoe UI", 11), bg="#1e2224", fg="#e6e6e6")
-fade_out_entry.grid(row=1, column=1)
+fade_out_entry = tk.Spinbox(frame_fades, from_=0, to=120, increment=0.1, textvariable=fade_out_var, width=6, font=("Segoe UI", 10), bg="#1e2224", fg="#e6e6e6", buttonbackground="#30363d", relief="flat")
+fade_out_entry.grid(row=1, column=1, sticky="e", pady=(4, 0))
 fade_out_entry.bind("<MouseWheel>", lambda e: on_fade_scroll(e, fade_out_var))
+tk.Label(frame_fades, text="seg", bg="#202428", fg="#8fb8c9", font=("Segoe UI", 9)).grid(row=1, column=2, sticky="w", padx=(6, 0), pady=(4, 0))
             
 # ---- UI Panel derecho ----
 frame_escenas_bar = tk.Frame(frame_right, bg="#202428")
-frame_escenas_bar.pack(fill="x", pady=(4, 8))
+frame_escenas_bar.pack(fill="x", padx=16, pady=(2, 10))
+for i in range(4):
+    frame_escenas_bar.grid_columnconfigure(i, weight=1)
 
 ############ EJECUTAR ESCENA ###############
 
-tk.Label(frame_right, text="listado Escenas guardadas:", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 11)).pack(anchor="w", pady=(8,2))
+tk.Label(frame_right, text="Escenas guardadas", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=16, pady=(0, 4))
 lista_escenas = tk.StringVar(value=[])
 
 btn_cargar = tk.Button(
@@ -2739,7 +3803,8 @@ btn_cargar = tk.Button(
     bg="#4fc3f7", fg="#000",
     font=("Segoe UI", 10, "bold"),
 )
-btn_cargar.grid(row=0, column=0, padx=3)
+btn_cargar.config(text="Play", width=7)
+btn_cargar.grid(row=0, column=0, padx=(0, 4), sticky="ew")
 
 Tooltip(btn_cargar, "Ejecutar escena seleccionada")
 
@@ -2753,7 +3818,8 @@ btn_guardar_escena = tk.Button(
     bg="#4fc3f7", fg="#000",
     font=("Segoe UI", 10, "bold"),
 )
-btn_guardar_escena.grid(row=0, column=1, padx=3)
+btn_guardar_escena.config(text="Guardar", width=7)
+btn_guardar_escena.grid(row=0, column=1, padx=4, sticky="ew")
 
 Tooltip(btn_guardar_escena, "Guardar escena")
 
@@ -2767,7 +3833,8 @@ btn_actualizar_escena = tk.Button(
     bg="#4fc3f7", fg="#000",
     font=("Segoe UI", 10, "bold"),
 )
-btn_actualizar_escena.grid(row=0, column=2, padx=3)
+btn_actualizar_escena.config(text="Act.", width=5)
+btn_actualizar_escena.grid(row=0, column=2, padx=4, sticky="ew")
 
 Tooltip(btn_actualizar_escena, "Actualizar escena seleccionada")
 
@@ -2780,7 +3847,8 @@ btn_borrar = tk.Button(
     bg="#e53935", fg="#fff",
     font=("Segoe UI", 10, "bold"),
 )
-btn_borrar.grid(row=0, column=3, padx=3)
+btn_borrar.config(text="Borrar", width=6)
+btn_borrar.grid(row=0, column=3, padx=(4, 0), sticky="ew")
 
 Tooltip(btn_borrar, "Borrar escena seleccionada")
 
@@ -2792,11 +3860,13 @@ Tooltip(btn_borrar, "Borrar escena seleccionada")
 # --- LISTA DE ESCENAS + SCROLLBAR + BOTONES ↑ ↓ EN LA MISMA FILA ---
 
 frame_lista_escenas = tk.Frame(frame_right, bg="#202428")
-frame_lista_escenas.pack(fill="both", pady=(4, 8))
+frame_lista_escenas.pack(fill="both", expand=True, pady=(4, 8))
+frame_lista_escenas.grid_rowconfigure(0, weight=1)
+frame_lista_escenas.grid_columnconfigure(0, weight=1)
 
 # Listbox + scrollbar en un sub-frame
 frame_listbox = tk.Frame(frame_lista_escenas, bg="#202428")
-frame_listbox.grid(row=0, column=0, sticky="nsw")
+frame_listbox.grid(row=0, column=0, sticky="nsew")
 
 scroll_esc = tk.Scrollbar(frame_listbox, orient="vertical")
 scroll_esc.pack(side="right", fill="y")
@@ -2806,14 +3876,14 @@ from tablero.helpers_wiz import bloquear_enter
 listbox_escenas = tk.Listbox(
     frame_listbox,
     listvariable=lista_escenas,
-    width=25, height=10,
+    width=25, height=12,
     font=("Segoe UI", 11),
     bg="#17191c", fg="#fff",
     selectbackground="#20bdec",
     activestyle="dotbox",
     yscrollcommand=scroll_esc.set
 )
-listbox_escenas.pack(side="left", fill="both")
+listbox_escenas.pack(side="left", fill="both", expand=True)
 
 listbox_escenas.bind("<Return>", bloquear_enter)
 scroll_esc.config(command=listbox_escenas.yview)
@@ -2829,6 +3899,7 @@ btn_up = tk.Button(
     bg="#81d4fa", fg="#000",
     font=("Segoe UI", 10, "bold")
 )
+btn_up.config(text="Subir", width=6)
 btn_up.pack(pady=4)
 Tooltip(btn_up, "Subir escena seleccionada")
 
@@ -2839,6 +3910,7 @@ btn_down = tk.Button(
     bg="#4fc3f7", fg="#000",
     font=("Segoe UI", 10, "bold")
 )
+btn_down.config(text="Bajar", width=6)
 btn_down.pack(pady=4)
 Tooltip(btn_down, "Bajar escena seleccionada")
 

@@ -7,8 +7,12 @@
     "2-INTRO_BRILO_BAJO",
     "3-INTRO_TRANSICION",
     "3.1-PIELES",
-    "inicio",
-    "dfgsfgsd"
+    "wwwww",
+    "fdfsfadsfads",
+    "dfadfadsf",
+    "sdfasdfa",
+    "asdfasdfsa",
+    "fasdfadsf"
   ],
   "datos": {
     "u": {
@@ -800,6 +804,650 @@
         "brillo": 255,
         "h": 293.96248897457815,
         "s": 0.9848857801796105
+      }
+    },
+    "wwwww": {
+      "fade_in": 10.0,
+      "fade_out": 10.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 500
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "hue_b": 220,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "192.168.0.109": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 0,
+        "s": 1
+      },
+      "192.168.0.110": {
+        "state": "off"
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      },
+      "192.168.0.118": {
+        "state": "off"
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
+      }
+    },
+    "fdfsfadsfads": {
+      "fade_in": 10.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 500
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "hue_b": 220,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "192.168.0.109": {
+        "state": "on",
+        "modo": "colour",
+        "brillo": 255,
+        "h": 58.671307132195864,
+        "s": 0.96163657270259
+      },
+      "192.168.0.110": {
+        "state": "off"
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      },
+      "192.168.0.118": {
+        "state": "off"
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
+      }
+    },
+    "dfadfadsf": {
+      "fade_in": 3.0,
+      "fade_out": 10.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 500
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "hue_b": 220,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "192.168.0.109": {
+        "state": "off"
+      },
+      "192.168.0.110": {
+        "state": "off"
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      },
+      "192.168.0.118": {
+        "state": "off"
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
+      }
+    },
+    "sdfasdfa": {
+      "fade_in": 3.0,
+      "fade_out": 10.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 500
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "hue_b": 220,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "192.168.0.109": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 255,
+        "temp": 255
+      },
+      "192.168.0.110": {
+        "state": "off"
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      },
+      "192.168.0.118": {
+        "state": "off"
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
+      }
+    },
+    "asdfasdfsa": {
+      "fade_in": 0.0,
+      "fade_out": 10.0,
+      "effects": {
+        "respiracion": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 500
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "hue_b": 220,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "192.168.0.109": {
+        "state": "off"
+      },
+      "192.168.0.110": {
+        "state": "off"
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      },
+      "192.168.0.118": {
+        "state": "off"
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
+      }
+    },
+    "fasdfadsf": {
+      "fade_in": 5.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": true,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_off": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 500
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "hue_b": 220,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "192.168.0.109": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 122,
+        "temp": 255
+      },
+      "192.168.0.110": {
+        "state": "off"
+      },
+      "192.168.0.111": {
+        "state": "off"
+      },
+      "192.168.0.112": {
+        "state": "off"
+      },
+      "192.168.0.113": {
+        "state": "off"
+      },
+      "192.168.0.114": {
+        "state": "off"
+      },
+      "192.168.0.115": {
+        "state": "off"
+      },
+      "192.168.0.116": {
+        "state": "off"
+      },
+      "192.168.0.117": {
+        "state": "off"
+      },
+      "192.168.0.118": {
+        "state": "off"
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
       }
     }
   }
