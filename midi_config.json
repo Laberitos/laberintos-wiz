@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "actions": {
+    "scene_prev": 15,
+    "scene_go": 63,
+    "scene_next": 7,
+    "show_stop": 5,
+    "drum_hit": 2,
+    "refresh": 3,
+    "all_on": 0,
+    "all_off": 1,
+    "effect_strobe": 16,
+    "effect_blink": 24,
+    "effect_sequence_off": 32,
+    "effect_sequence_on": 40,
+    "effect_sequence": 48,
+    "effect_breathe": 56,
+    "effect_sunset": null
+  },
+  "colors": {
+    "scene_prev": 37,
+    "scene_go": 13,
+    "scene_next": 37,
+    "show_stop": 13,
+    "drum_hit": 53,
+    "refresh": 5,
+    "all_on": 12,
+    "all_off": 3,
+    "effect_strobe": 5,
+    "effect_blink": 5,
+    "effect_sequence_off": 5,
+    "effect_sequence_on": 5,
+    "effect_sequence": 5,
+    "effect_breathe": 5,
+    "effect_sunset": 45
+  }
+}
