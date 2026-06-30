@@ -3,6 +3,19 @@ import colorsys
 from pywizlight import PilotBuilder
 
 
+SEQUENCE_ON_FALLBACK_BRIGHTNESS = 180
+
+
+def _sequence_on_brightness(value):
+    try:
+        value = int(value)
+    except Exception:
+        value = SEQUENCE_ON_FALLBACK_BRIGHTNESS
+    if value <= 0:
+        return SEQUENCE_ON_FALLBACK_BRIGHTNESS
+    return max(1, min(255, value))
+
+
 def _panel_mode(panel):
     # Effects must use the live lamp state, not preview-only UI controls.
     return getattr(panel, "last_mode", "colour")
@@ -182,8 +195,74 @@ def efecto_secuencia(
     tiempo_on_ms,
     chase_var,
     root,
-    send_lamp_white=None
+    send_lamp_white=None,
+    cambio_ms=10,
+    cola_lamparas=0,
+    brillo_cola_pct=35,
+    brillo_fondo_pct=0,
 ):
+    estado_actual = {}
+    preparado = {"done": False}
+
+    def brillo_para_distancia(distancia):
+        cola_cfg = max(0, int(cola_lamparas))
+        cola_pct = max(0, min(100, int(brillo_cola_pct)))
+        fondo_pct = max(0, min(100, int(brillo_fondo_pct)))
+
+        if distancia == 0:
+            return brillo_on
+        if 0 < distancia <= cola_cfg:
+            factor = (cola_cfg - distancia + 1) / max(1, cola_cfg)
+            return int(brillo_on * (cola_pct / 100.0) * factor)
+        return int(brillo_on * (fondo_pct / 100.0))
+
+    def ciclo_rapido(idx):
+        if not chase_var.get():
+            for ip in list(estado_actual.keys()):
+                apagar_lampara(ip)
+            estado_actual.clear()
+            return
+
+        activos = [
+            ip for ip in LAMP_IPS
+            if selected_devices[ip].get() and lamp_status.get(ip, False)
+        ]
+
+        if not activos:
+            root.after(60, ciclo_rapido, idx)
+            return
+
+        if idx >= len(activos):
+            idx = 0
+
+        activos_set = set(activos)
+        deseado = {}
+        for lamp_idx, ip in enumerate(activos):
+            brillo = brillo_para_distancia(idx - lamp_idx)
+            if brillo > 0:
+                deseado[ip] = brillo
+
+        if not preparado["done"]:
+            for ip in activos:
+                if ip not in deseado:
+                    apagar_lampara(ip)
+            preparado["done"] = True
+
+        for ip in list(estado_actual.keys()):
+            if ip not in deseado or ip not in activos_set:
+                apagar_lampara(ip)
+                estado_actual.pop(ip, None)
+
+        for ip, brillo in deseado.items():
+            if estado_actual.get(ip) != brillo:
+                _send_panel_brightness(send_lamp_color, send_lamp_white, ip, panels[ip], brillo)
+                estado_actual[ip] = brillo
+
+        root.after(max(1, tiempo_on_ms + cambio_ms), ciclo_rapido, idx + 1)
+
+    ciclo_rapido(0)
+    return
+
     def ciclo(idx):
         # Si apagaste el efecto, apagamos todo y salimos
         if not chase_var.get():
@@ -208,6 +287,31 @@ def efecto_secuencia(
         if idx >= len(activos):
             idx = 0
 
+        cola_lamparas_cfg = max(0, int(cola_lamparas))
+        brillo_cola_cfg = max(0, min(100, int(brillo_cola_pct)))
+        brillo_fondo_cfg = max(0, min(100, int(brillo_fondo_pct)))
+        brillo_fondo = int(brillo_on * (brillo_fondo_cfg / 100.0))
+        brillo_cola_base = int(brillo_on * (brillo_cola_cfg / 100.0))
+
+        if cola_lamparas_cfg > 0 or brillo_fondo > 0:
+            for lamp_idx, ip in enumerate(activos):
+                distancia = idx - lamp_idx
+                if distancia == 0:
+                    brillo = brillo_on
+                elif 0 < distancia <= cola_lamparas_cfg:
+                    factor = (cola_lamparas_cfg - distancia + 1) / max(1, cola_lamparas_cfg)
+                    brillo = int(brillo_cola_base * factor)
+                else:
+                    brillo = brillo_fondo
+
+                if brillo <= 0:
+                    apagar_lampara(ip)
+                else:
+                    _send_panel_brightness(send_lamp_color, send_lamp_white, ip, panels[ip], brillo)
+
+            root.after(tiempo_on_ms + cambio_ms, ciclo, idx + 1)
+            return
+
         ip_on = activos[idx]
 
         # Apagar todos menos la activa
@@ -221,7 +325,7 @@ def efecto_secuencia(
         # Programar apagado y siguiente paso
         def apagar_y_seguir():
             apagar_lampara(ip_on)
-            root.after(10, ciclo, idx + 1)
+            root.after(cambio_ms, ciclo, idx + 1)
 
         root.after(tiempo_on_ms, apagar_y_seguir)
 
@@ -242,8 +346,9 @@ def secuencia_on(
     secuencia_var,
     root,
     nombre_escena=None,
-    btn_secuencia_on=None,     # ← AÑADIDO
-    on_finish_cb=None    # ← NUEVO
+    btn_secuencia_on=None,
+    on_finish_cb=None,
+    target_ips=None
 
 ):
     """
@@ -252,15 +357,39 @@ def secuencia_on(
     - finaliza automáticamente al terminar
     """
 
-    activos = [
-        ip for ip in LAMP_IPS
-        if lamp_status.get(ip, False) and ip in valores_destino
-    ]
+    source_ips = target_ips if target_ips is not None else LAMP_IPS
+    activos = []
+    for ip in source_ips:
+        if not lamp_status.get(ip, False) or ip not in valores_destino:
+            continue
+        estado = valores_destino[ip]
+        legacy_target = target_ips is not None and "modo" in estado and "brillo" in estado
+        if estado.get("state", "on") != "on" and not legacy_target:
+            continue
+        activos.append(ip)
     if not activos:
         print("[SECUENCIA ON] No hay lámparas activas.")
+        secuencia_var.set(False)
+        if btn_secuencia_on:
+            try:
+                btn_secuencia_on.config(text="Secuencia_ON", bg="#20bdec")
+            except Exception:
+                pass
+        if on_finish_cb:
+            try:
+                on_finish_cb(nombre_escena)
+            except Exception:
+                pass
         return
 
     total = len(activos)
+
+    for ip in activos:
+        apagar_lampara(ip)
+        if ip in selected_devices:
+            selected_devices[ip].set(False)
+        if ip in panels:
+            panels[ip].last_brillo = 0
 
     def ciclo(idx):
         # si usuario apagó el check, detener
@@ -301,17 +430,22 @@ def secuencia_on(
         # valores de escena
         estado = valores_destino[ip_on]
         modo = estado.get("modo", "colour")
-        brillo_on = int(estado.get("brillo", 1))
-        brillo_on = max(1, brillo_on)
+        brillo_on = _sequence_on_brightness(estado.get("brillo", SEQUENCE_ON_FALLBACK_BRIGHTNESS))
 
         # actualizar UI local
         selected_devices[ip_on].set(True)
         panels[ip_on].last_mode = modo
         panels[ip_on].last_brillo = brillo_on
+        if hasattr(panels[ip_on], "mode_var"):
+            panels[ip_on].mode_var.set(modo)
+        if hasattr(panels[ip_on], "brillo_var"):
+            panels[ip_on].brillo_var.set(brillo_on)
 
         if modo == "white":
             temp = estado.get("temp", getattr(panels[ip_on], "last_temp", 4000))
             panels[ip_on].last_temp = temp
+            if hasattr(panels[ip_on], "temp_var"):
+                panels[ip_on].temp_var.set(temp)
             target = helper_send_lamp_white
             args = (ip_on, brillo_on, _normalize_wiz_colortemp(temp))
         else:
@@ -327,10 +461,103 @@ def secuencia_on(
         # siguiente lámpara
         root.after(tiempo_on_ms, ciclo, idx + 1)
 
-    ciclo(0)
+    root.after(100, ciclo, 0)
 
 
 
+
+
+def secuencia_on_overlay(
+    LAMP_IPS,
+    panels,
+    selected_devices,
+    lamp_status,
+    tiempo_on_ms,
+    secuencia_var,
+    root,
+    target_ips=None,
+    valores_destino=None,
+    send_lamp_color=None,
+    send_lamp_white=None,
+    on_lamp_on_cb=None,
+    on_finish_cb=None
+):
+    source_ips = target_ips if target_ips is not None else LAMP_IPS
+    valores_destino = valores_destino or {}
+    activos = []
+    for ip in source_ips:
+        if not lamp_status.get(ip, False) or ip not in panels:
+            continue
+        if valores_destino:
+            estado = valores_destino.get(ip)
+            if not estado:
+                continue
+            if estado.get("state", "on") != "on":
+                continue
+        activos.append(ip)
+
+    if not activos:
+        secuencia_var.set(False)
+        if on_finish_cb:
+            on_finish_cb()
+        return
+
+    for ip in activos:
+        apagar_lampara(ip)
+        selected_devices[ip].set(False)
+        panels[ip].last_brillo = 0
+
+    def finish():
+        secuencia_var.set(False)
+        if on_finish_cb:
+            on_finish_cb()
+
+    def ciclo(idx):
+        if not secuencia_var.get():
+            return
+        if idx >= len(activos):
+            finish()
+            return
+
+        ip_on = activos[idx]
+        panel = panels[ip_on]
+        selected_devices[ip_on].set(True)
+        estado = valores_destino.get(ip_on, {})
+
+        if estado:
+            modo = estado.get("modo", "colour")
+            brillo_on = _sequence_on_brightness(estado.get("brillo", SEQUENCE_ON_FALLBACK_BRIGHTNESS))
+            panel.last_mode = modo
+            panel.last_brillo = brillo_on
+            if hasattr(panel, "mode_var"):
+                panel.mode_var.set(modo)
+            if hasattr(panel, "brillo_var"):
+                panel.brillo_var.set(brillo_on)
+
+            if modo == "white":
+                temp = estado.get("temp", getattr(panel, "last_temp", 4000))
+                panel.last_temp = temp
+                if hasattr(panel, "temp_var"):
+                    panel.temp_var.set(temp)
+                target = send_lamp_white or helper_send_lamp_white
+                args = (ip_on, brillo_on, _normalize_wiz_colortemp(temp))
+            else:
+                h = estado.get("h", getattr(panel, "last_hue", 0))
+                s = estado.get("s", getattr(panel, "last_sat", 1))
+                panel.last_hue = h
+                panel.last_sat = s
+                target = send_lamp_color
+                args = (ip_on, h, s, brillo_on)
+
+            if target:
+                threading.Thread(target=target, args=args, daemon=True).start()
+
+        if on_lamp_on_cb:
+            on_lamp_on_cb(ip_on)
+
+        root.after(tiempo_on_ms, ciclo, idx + 1)
+
+    root.after(100, ciclo, 0)
 
 #EFECTO SECUENCIA_OFF
 import threading
@@ -348,7 +575,8 @@ def secuencia_off(
     fade_ms,
     pasos_fade,
     send_lamp_white=None,
-    on_finish_cb=None
+    on_finish_cb=None,
+    target_ips=None
 ):
     """
     Apaga, una por una, las lámparas online, con una transición de brillo.
@@ -415,6 +643,89 @@ def secuencia_off(
         fade_step(0)
 
         # y programamos la siguiente lámpara
+        root.after(tiempo_off_ms, ciclo, idx + 1)
+
+    ciclo(0)
+
+
+def secuencia_off_overlay(
+    send_lamp_color,
+    LAMP_IPS,
+    panels,
+    selected_devices,
+    lamp_status,
+    tiempo_off_ms,
+    secuencia_off_var,
+    root,
+    fade_ms,
+    pasos_fade,
+    send_lamp_white=None,
+    on_finish_cb=None,
+    target_ips=None,
+    on_lamp_off_cb=None
+):
+    """
+    Apagado secuencial para efectos activos: retira cada lampara del efecto
+    antes de hacer el fade, conservando el color/temperatura vivo del panel.
+    """
+    source_ips = target_ips if target_ips is not None else LAMP_IPS
+    activos = []
+    for ip in source_ips:
+        if not lamp_status.get(ip, False):
+            continue
+        if target_ips is None and not selected_devices[ip].get():
+            continue
+        if ip in panels:
+            activos.append(ip)
+    if not activos:
+        secuencia_off_var.set(False)
+        if on_finish_cb:
+            on_finish_cb()
+        return
+
+    activos = list(reversed(activos))
+
+    def finish():
+        secuencia_off_var.set(False)
+        if on_finish_cb:
+            on_finish_cb()
+
+    def ciclo(idx):
+        if not secuencia_off_var.get():
+            return
+        if idx >= len(activos):
+            return
+
+        ip_off = activos[idx]
+        panel = panels[ip_off]
+        brillo_inicial = getattr(panel, "last_brillo", 255)
+        brillo_inicial = _safe_effect_brightness(brillo_inicial)
+
+        # Retirar del efecto activo antes del fade para que no vuelva a escribir.
+        if ip_off in selected_devices:
+            selected_devices[ip_off].set(False)
+
+        def fade_step(step):
+            if not secuencia_off_var.get():
+                return
+
+            if step >= pasos_fade:
+                apagar_lampara(ip_off)
+                panel.last_brillo = 0
+                if on_lamp_off_cb:
+                    on_lamp_off_cb(ip_off)
+                if idx == len(activos) - 1:
+                    finish()
+                return
+
+            factor = 1 - (step / pasos_fade)
+            brillo_actual = max(1, int(brillo_inicial * factor))
+            _send_panel_brightness(send_lamp_color, send_lamp_white, ip_off, panel, brillo_actual)
+
+            intervalo = int(fade_ms / pasos_fade) if pasos_fade else fade_ms
+            root.after(intervalo, fade_step, step + 1)
+
+        fade_step(0)
         root.after(tiempo_off_ms, ciclo, idx + 1)
 
     ciclo(0)
@@ -898,6 +1209,7 @@ def  efecto_atardecer_wiz(
     selected_devices,
     efecto_var,
     root,
+    excluded_ips=None,
     _i=[0],
 ):
     """
@@ -943,8 +1255,14 @@ def  efecto_atardecer_wiz(
     h, s, brillo = paleta[i]
 
     # Aplicar a lámparas activas
-    activos = [ip for ip in LAMP_IPS if selected_devices[ip].get()]
+    excluded_ips = excluded_ips or set()
+    activos = [ip for ip in LAMP_IPS if selected_devices[ip].get() and ip not in excluded_ips]
     for ip in activos:
+        if ip in panels:
+            panels[ip].last_mode = "colour"
+            panels[ip].last_hue = h
+            panels[ip].last_sat = s
+            panels[ip].last_brillo = brillo
         send_lamp_color(ip, h, s, brillo)
 
     # Avanzar
@@ -955,7 +1273,7 @@ def  efecto_atardecer_wiz(
         delay,
         efecto_atardecer_wiz,
         send_lamp_color, LAMP_IPS, panels, selected_devices,
-        efecto_var, root, _i
+        efecto_var, root, excluded_ips, _i
     )
 
 
@@ -969,9 +1287,11 @@ def efecto_intercambio_colores(
     root,
     color_a=(0, 1),        # rojo: h=0, s=1
     color_b=(220, 1),      # azul: h=220, s=1
+    brillo_min=20,
     brillo=220,
     duracion_ms=8000,
     pasos=80,
+    on_finish_cb=None,
 ):
     """
     Mitad de lámparas arranca en color A y mitad en color B.
@@ -984,51 +1304,169 @@ def efecto_intercambio_colores(
     ]
 
     if len(activos) < 2:
+        efecto_var.set(False)
+        if on_finish_cb:
+            on_finish_cb()
         return
 
-    mitad = len(activos) // 2
-    grupo_a = activos[:mitad]
-    grupo_b = activos[mitad:]
+    grupo_a = activos[::2]
+    grupo_b = activos[1::2]
+    if not grupo_b and len(grupo_a) > 1:
+        grupo_b = [grupo_a.pop()]
 
     h_a, s_a = color_a
     h_b, s_b = color_b
+    h_a = float(h_a) % 360
+    h_b = float(h_b) % 360
+    s_a = max(0.0, min(1.0, float(s_a)))
+    s_b = max(0.0, min(1.0, float(s_b)))
+    brillo_min = max(0, min(255, int(brillo_min)))
+    brillo = max(1, min(255, int(brillo)))
+    pasos = max(2, int(pasos))
 
-    intervalo = max(1, int(duracion_ms / pasos))
+    intervalo = max(20, int(duracion_ms / pasos))
 
     def interpolar(v1, v2, t):
         return v1 + (v2 - v1) * t
+
+    def aplicar_grupo(ips, h, s, nivel):
+        for ip in ips:
+            panel = panels[ip]
+            panel.last_hue = h
+            panel.last_sat = s
+            panel.last_brillo = nivel
+            panel.last_mode = "colour"
+            try:
+                if hasattr(panel, "mode_var"):
+                    panel.mode_var.set("colour")
+                if hasattr(panel, "brillo_var"):
+                    panel.brillo_var.set(nivel)
+            except Exception:
+                pass
+            send_lamp_color(ip, h, s, nivel)
 
     def paso(i):
         if not efecto_var.get():
             return
 
-        t = i / pasos
+        t = max(0.0, min(1.0, i / pasos))
+        if t <= 0.5:
+            fase = t / 0.5
+            nivel = int(interpolar(brillo, brillo_min, fase))
+            h1, s1 = h_a, s_a
+            h2, s2 = h_b, s_b
+        else:
+            fase = (t - 0.5) / 0.5
+            nivel = int(interpolar(brillo_min, brillo, fase))
+            h1, s1 = h_b, s_b
+            h2, s2 = h_a, s_a
 
         # grupo A: color A → color B
-        h1 = interpolar(h_a, h_b, t)
-        s1 = interpolar(s_a, s_b, t)
 
         # grupo B: color B → color A
-        h2 = interpolar(h_b, h_a, t)
-        s2 = interpolar(s_b, s_a, t)
 
-        for ip in grupo_a:
-            panels[ip].last_hue = h1
-            panels[ip].last_sat = s1
-            panels[ip].last_brillo = brillo
-            panels[ip].last_mode = "colour"
-            send_lamp_color(ip, h1, s1, brillo)
-
-        for ip in grupo_b:
-            panels[ip].last_hue = h2
-            panels[ip].last_sat = s2
-            panels[ip].last_brillo = brillo
-            panels[ip].last_mode = "colour"
-            send_lamp_color(ip, h2, s2, brillo)
+        aplicar_grupo(grupo_a, h1, s1, nivel)
+        aplicar_grupo(grupo_b, h2, s2, nivel)
 
         if i < pasos:
             root.after(intervalo, paso, i + 1)
         else:
             efecto_var.set(False)
+            if on_finish_cb:
+                on_finish_cb()
 
     paso(0)
+
+
+def efecto_transicion_color(
+    send_lamp_color,
+    LAMP_IPS,
+    panels,
+    selected_devices,
+    lamp_status,
+    efecto_var,
+    root,
+    hue_destino=280,
+    sat_destino=1.0,
+    duracion_ms=180000,
+    pasos=240,
+    on_step_cb=None,
+    on_finish_cb=None,
+):
+    """
+    Transicion muy suave desde el color actual de cada lampara hacia un color destino.
+    Mantiene el brillo actual para que el cambio sea cromatico y no de intensidad.
+    """
+    activos = [
+        ip for ip in LAMP_IPS
+        if selected_devices[ip].get() and lamp_status.get(ip, True) and ip in panels
+    ]
+
+    if not activos:
+        efecto_var.set(False)
+        if on_finish_cb:
+            on_finish_cb()
+        return
+
+    pasos = max(1, int(pasos))
+    intervalo = max(20, int(duracion_ms / pasos))
+    hue_destino = float(hue_destino) % 360
+    sat_destino = max(0.0, min(1.0, float(sat_destino)))
+    run_id = getattr(efecto_var, "_transicion_color_run_id", 0) + 1
+    setattr(efecto_var, "_transicion_color_run_id", run_id)
+
+    origenes = {}
+    for ip in activos:
+        panel = panels[ip]
+        mode = getattr(panel, "last_mode", "colour")
+        start_h = float(getattr(panel, "last_hue", 0)) % 360
+        start_s = float(getattr(panel, "last_sat", 1))
+        if mode == "white":
+            start_s = 0.0
+
+        brillo = getattr(panel, "last_brillo", 180)
+        try:
+            brillo = int(brillo)
+        except Exception:
+            brillo = 180
+        brillo = max(1, min(255, brillo))
+
+        origenes[ip] = {
+            "h": start_h,
+            "s": max(0.0, min(1.0, start_s)),
+            "brillo": brillo,
+        }
+
+    def lerp_hue(start_h, end_h, t):
+        diff = ((end_h - start_h + 180) % 360) - 180
+        return (start_h + diff * t) % 360
+
+    def paso(i):
+        if not efecto_var.get() or getattr(efecto_var, "_transicion_color_run_id", None) != run_id:
+            return
+
+        t = min(1.0, i / pasos)
+        for ip, origen in origenes.items():
+            h = lerp_hue(origen["h"], hue_destino, t)
+            s = origen["s"] + (sat_destino - origen["s"]) * t
+            brillo = origen["brillo"]
+
+            panel = panels[ip]
+            panel.last_mode = "colour"
+            panel.last_hue = h
+            panel.last_sat = s
+            panel.last_brillo = brillo
+            send_lamp_color(ip, h, s, brillo)
+
+            if on_step_cb:
+                on_step_cb(ip)
+
+        if i < pasos:
+            root.after(intervalo, paso, i + 1)
+        else:
+            efecto_var.set(False)
+            if on_finish_cb:
+                on_finish_cb()
+
+    paso(0)
+

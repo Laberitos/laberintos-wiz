@@ -18,7 +18,9 @@ from tablero.config import (
 import time
 import threading
 import uuid
+import random
 import screeninfo
+from concurrent.futures import wait
 from tablero.midi_listener import (
     start_midi_thread,
     stop_midi,
@@ -69,6 +71,13 @@ def _actualizar_historial(ip, estado):
 lamp_state = {}
 escena_en_ejecucion = False
 ultima_idx_escena = None   # índice de la escena ejecutada con ENTER
+active_scene_runtime = {
+    "name": None,
+    "data": None,
+    "target_ips": set(),
+    "effects": set(),
+}
+espacio_midi_effect_ips = set()
 
 # ===== CONTROLADORES WIZ PERSISTENTES =====
 WIZ = {}
@@ -104,6 +113,102 @@ try:
 except:
     root.attributes('-zoomed', True)
 
+
+def mostrar_ventana_inicio():
+    try:
+        root.deiconify()
+        root.lift()
+        root.attributes("-topmost", True)
+        root.after(500, lambda: root.attributes("-topmost", False))
+        root.focus_force()
+    except Exception as exc:
+        print(f"[WARN] No se pudo traer la ventana al frente: {exc}")
+
+
+root.after(100, mostrar_ventana_inicio)
+
+
+def bind_mousewheel_scroll(scroll_target, *hover_widgets, horizontal=False, skip_form_controls=True):
+    hover_widgets = hover_widgets or (scroll_target,)
+
+    def pointer_inside(widget):
+        try:
+            x = widget.winfo_pointerx()
+            y = widget.winfo_pointery()
+            left = widget.winfo_rootx()
+            top = widget.winfo_rooty()
+            right = left + widget.winfo_width()
+            bottom = top + widget.winfo_height()
+            return left <= x <= right and top <= y <= bottom
+        except Exception:
+            return False
+
+    def pointer_inside_any():
+        return any(pointer_inside(widget) for widget in hover_widgets)
+
+    def should_skip(event):
+        if not pointer_inside_any():
+            return True
+        if not skip_form_controls:
+            return False
+        try:
+            widget_class = event.widget.winfo_class()
+        except Exception:
+            return False
+        return widget_class in {"Scale", "TScale", "Spinbox", "TSpinbox", "Entry", "TEntry", "Combobox", "TCombobox"}
+
+    def scroll_units(delta):
+        if delta == 0:
+            return 0
+        return -1 if delta > 0 else 1
+
+    def on_mousewheel(event):
+        if should_skip(event):
+            return None
+        units = scroll_units(getattr(event, "delta", 0))
+        if units:
+            try:
+                if horizontal:
+                    scroll_target.xview_scroll(units, "units")
+                else:
+                    scroll_target.yview_scroll(units, "units")
+                return "break"
+            except Exception:
+                return None
+        return None
+
+    def on_button4(event):
+        if should_skip(event):
+            return None
+        try:
+            if horizontal:
+                scroll_target.xview_scroll(-1, "units")
+            else:
+                scroll_target.yview_scroll(-1, "units")
+            return "break"
+        except Exception:
+            return None
+
+    def on_button5(event):
+        if should_skip(event):
+            return None
+        try:
+            if horizontal:
+                scroll_target.xview_scroll(1, "units")
+            else:
+                scroll_target.yview_scroll(1, "units")
+            return "break"
+        except Exception:
+            return None
+
+    try:
+        root.bind_all("<MouseWheel>", on_mousewheel, add="+")
+        root.bind_all("<Button-4>", on_button4, add="+")
+        root.bind_all("<Button-5>", on_button5, add="+")
+    except Exception:
+        pass
+
+
 selected_devices = {ip: tk.BooleanVar(value=False) for ip in LAMP_IPS}
 panels = {}
 
@@ -123,6 +228,102 @@ def get_lamp_group(ip):
 
 def get_lamp_id(ip):
     return get_lamp_config(ip).get("id_escenico", ip)
+
+
+def get_lamp_numeric_id(ip):
+    text = str(get_lamp_id(ip))
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if digits:
+        return int(digits)
+    return 999999
+
+
+def get_sequence_ordered_lamp_ips():
+    return sorted(
+        LAMP_IPS,
+        key=lambda ip: (get_lamp_numeric_id(ip), str(get_lamp_id(ip)), ip)
+    )
+
+
+ESPACIO_LABERINTOS_FILE = "espacio_laberintos.json"
+ESPACIO_DEFAULT_ROWS = 4
+ESPACIO_DEFAULT_COLS = 6
+ESPACIO_MAX_ROWS = 4
+ESPACIO_MAX_COLS = 6
+APC_ESPACIO_ROWS = (
+    tuple(range(57, 63)),
+    tuple(range(49, 55)),
+    tuple(range(41, 47)),
+    tuple(range(33, 39)),
+)
+APC_ESPACIO_NOTES = {note for row in APC_ESPACIO_ROWS for note in row}
+APC_ESPACIO_LED_CONNECTED = 21
+APC_ESPACIO_LED_DISCONNECTED = 5
+APC_ESPACIO_LED_EMPTY = 0
+
+
+def load_espacio_laberintos():
+    default_data = {
+        "version": 1,
+        "rows": ESPACIO_DEFAULT_ROWS,
+        "cols": ESPACIO_DEFAULT_COLS,
+        "placements": {},
+    }
+    if not os.path.exists(ESPACIO_LABERINTOS_FILE):
+        return default_data
+    try:
+        with open(ESPACIO_LABERINTOS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        rows = int(data.get("rows", ESPACIO_DEFAULT_ROWS))
+        cols = int(data.get("cols", ESPACIO_DEFAULT_COLS))
+        placements = data.get("placements", {})
+        if not isinstance(placements, dict):
+            placements = {}
+        return {
+            "version": 1,
+            "rows": max(1, min(ESPACIO_MAX_ROWS, rows)),
+            "cols": max(1, min(ESPACIO_MAX_COLS, cols)),
+            "placements": placements,
+        }
+    except Exception as e:
+        print(f"No se pudo cargar ESPACIO LABERINTOS: {e}")
+        return default_data
+
+
+def save_espacio_laberintos(data):
+    try:
+        with open(ESPACIO_LABERINTOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        messagebox.showerror("ESPACIO LABERINTOS", f"No se pudo guardar el espacio:\n{e}")
+        return False
+
+
+def get_lamp_ip_by_id(lamp_id):
+    lamp_id = str(lamp_id)
+    for ip in LAMP_IPS:
+        if str(get_lamp_id(ip)) == lamp_id:
+            return ip
+    return None
+
+
+def get_apc_espacio_note(row, col):
+    try:
+        row = int(row)
+        col = int(col)
+    except Exception:
+        return None
+    if row < 0 or col < 0 or row >= len(APC_ESPACIO_ROWS) or col >= len(APC_ESPACIO_ROWS[row]):
+        return None
+    return APC_ESPACIO_ROWS[row][col]
+
+
+def is_apc_espacio_note(note):
+    try:
+        return int(note) in APC_ESPACIO_NOTES
+    except Exception:
+        return False
 
 
 
@@ -254,7 +455,6 @@ def refresh_lamp_status():
         # UI: LÁMPARA ONLINE (verde)
         # ---------------------------------------
         if ahora_filtrado:
-            panel.config(bg="#172d1f")  # verde
             try:
                 info = get_lamp_info(ip)
             except:
@@ -269,17 +469,10 @@ def refresh_lamp_status():
                     "temp": info.get("temp", 4000)
                 }
 
-            # borde verde
-            panel.config(
-                highlightbackground="#03A125",
-                highlightcolor="#03A125"
-            )
-
         # ---------------------------------------
         # UI: LÁMPARA OFFLINE (rojo)
         # ---------------------------------------
         else:
-            panel.config(bg="#321c1c")   # rojo apagado
             lamp_state[ip] = {
                 "brightness": 0,
                 "mode": "colour",
@@ -287,10 +480,14 @@ def refresh_lamp_status():
                 "sat": 1,
                 "temp": 4000
             }
-            panel.config(
-                highlightbackground="#252e36",
-                highlightcolor="#252e36"
-            )
+
+        apply_visual = globals().get("apply_lamp_visual_state")
+        if callable(apply_visual):
+            apply_visual(panel)
+
+    refresh_espacio = globals().get("refresh_espacio_laberintos_visual")
+    if callable(refresh_espacio):
+        refresh_espacio()
 
 
 
@@ -481,15 +678,20 @@ def get_online_ips():
     Retorna SOLO aquellas que respondieron correctamente.
     """
     loop = get_or_create_event_loop()
-    futures = [
-        asyncio.run_coroutine_threadsafe(_check_online_async(ip), loop)
+    future_by_ip = {
+        asyncio.run_coroutine_threadsafe(_check_online_async(ip), loop): ip
         for ip in LAMP_IPS
-    ]
+    }
+
+    done, pending = wait(future_by_ip, timeout=1.2)
+    for fut in pending:
+        fut.cancel()
 
     online = []
-    for ip, fut in zip(LAMP_IPS, futures):
+    for fut in done:
         try:
-            if fut.result(timeout=1.2):
+            if fut.result():
+                ip = future_by_ip[fut]
                 online.append(ip)
         except:
             pass
@@ -716,7 +918,9 @@ from acciones.acciones import (
     efecto_respiracion,
     efecto_secuencia,
     secuencia_on,
+    secuencia_on_overlay,
     secuencia_off,
+    secuencia_off_overlay,
     parpadeo,
     efecto_estrobo,
     estrobo_udp,
@@ -729,6 +933,7 @@ from acciones.acciones import (
     efecto_desfasado_wiz,
     efecto_latido_wiz,
     efecto_intercambio_colores,
+    efecto_transicion_color,
 )
 
 # ======================================================================
@@ -768,14 +973,32 @@ effect_param_vars = {
         "brillo_min": tk.IntVar(value=1),
         "brillo_max": tk.IntVar(value=255),
     },
+    "transicion_color": {
+        "hue_destino": tk.IntVar(value=280),
+        "sat_destino_pct": tk.IntVar(value=100),
+        "duracion_ms": tk.IntVar(value=180000),
+        "pasos": tk.IntVar(value=240),
+    },
     "secuencia": {
         "brillo_on": tk.IntVar(value=255),
-        "tiempo_on_ms": tk.IntVar(value=500),
+        "tiempo_on_ms": tk.IntVar(value=70),
+        "cambio_ms": tk.IntVar(value=0),
+        "cola_lamparas": tk.IntVar(value=1),
+        "brillo_cola_pct": tk.IntVar(value=18),
+        "brillo_fondo_pct": tk.IntVar(value=0),
     },
     "secuencia_on": {
         "tiempo_on_ms": tk.IntVar(value=4000),
     },
+    "secuencia_on_overlay": {
+        "tiempo_on_ms": tk.IntVar(value=4000),
+    },
     "secuencia_off": {
+        "tiempo_off_ms": tk.IntVar(value=20000),
+        "fade_ms": tk.IntVar(value=20000),
+        "pasos_fade": tk.IntVar(value=20),
+    },
+    "secuencia_off_overlay": {
         "tiempo_off_ms": tk.IntVar(value=20000),
         "fade_ms": tk.IntVar(value=20000),
         "pasos_fade": tk.IntVar(value=20),
@@ -805,7 +1028,10 @@ effect_param_vars = {
     },
     "Intercambio": {
         "hue_a": tk.IntVar(value=0),
+        "sat_a_pct": tk.IntVar(value=100),
         "hue_b": tk.IntVar(value=220),
+        "sat_b_pct": tk.IntVar(value=100),
+        "brillo_min": tk.IntVar(value=20),
         "brillo": tk.IntVar(value=220),
         "duracion_ms": tk.IntVar(value=10000),
         "pasos": tk.IntVar(value=100),
@@ -874,6 +1100,55 @@ btn_respiracion = tk.Checkbutton(
 btn_respiracion.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
 
 
+transicion_color_var = tk.BooleanVar(value=False)
+transicion_color_runtime = {"on_finish": None}
+
+
+def toggle_transicion_color():
+    if transicion_color_var.get():
+        params = effect_param_vars["transicion_color"]
+        finish_cb = transicion_color_runtime.get("on_finish")
+        transicion_color_runtime["on_finish"] = None
+        btn_transicion_color.config(text="Detener", bg="#ef5350")
+
+        def finish_transition():
+            btn_transicion_color.config(text="Transicion color", bg="#20bdec")
+            if finish_cb:
+                finish_cb()
+            else:
+                effects_panel_status_var.set("Transicion a color finalizada")
+
+        efecto_transicion_color(
+            send_lamp_color_safe,
+            LAMP_IPS,
+            panels,
+            selected_devices,
+            lamp_status,
+            transicion_color_var,
+            root,
+            hue_destino=clamp_int(params["hue_destino"].get(), 0, 359),
+            sat_destino=clamp_int(params["sat_destino_pct"].get(), 0, 100) / 100.0,
+            duracion_ms=clamp_int(params["duracion_ms"].get(), 100, 600000),
+            pasos=clamp_int(params["pasos"].get(), 1, 2000),
+            on_step_cb=lambda ip: update_panel_visual(panels[ip]) if ip in panels else None,
+            on_finish_cb=finish_transition,
+        )
+    else:
+        transicion_color_runtime["on_finish"] = None
+        btn_transicion_color.config(text="Transicion color", bg="#20bdec")
+
+
+btn_transicion_color = tk.Checkbutton(
+    frame_suaves,
+    text="Transicion color",
+    variable=transicion_color_var,
+    font=("Segoe UI", 12, "bold"),
+    bg="#20bdec", fg="#fff", selectcolor="#232b32",
+    command=toggle_transicion_color
+)
+btn_transicion_color.grid(row=0, column=1, padx=2, pady=2, sticky="ew")
+
+
 # =========================== SECUENCIAS ==============================
 secuencia_var = tk.BooleanVar(value=False)
 
@@ -883,7 +1158,7 @@ def toggle_secuencia():
         btn_secuencia.config(text="Detener", bg="#ef5350")
         efecto_secuencia(
             send_lamp_color_safe,
-            LAMP_IPS,
+            get_sequence_ordered_lamp_ips(),
             panels,
             selected_devices,
             lamp_status,
@@ -891,7 +1166,11 @@ def toggle_secuencia():
             clamp_int(params["tiempo_on_ms"].get(), 20, 60000),
             secuencia_var,
             root,
-            send_lamp_white=send_lamp_white
+            send_lamp_white=send_lamp_white,
+            cambio_ms=clamp_int(params["cambio_ms"].get(), 0, 60000),
+            cola_lamparas=clamp_int(params["cola_lamparas"].get(), 0, 50),
+            brillo_cola_pct=clamp_int(params["brillo_cola_pct"].get(), 0, 100),
+            brillo_fondo_pct=clamp_int(params["brillo_fondo_pct"].get(), 0, 100),
         )
     else:
         btn_secuencia.config(text="Secuencia", bg="#20bdec")
@@ -908,31 +1187,49 @@ btn_secuencia.grid(row=0, column=0, padx=3, pady=3, sticky="ew")
 
 
 secuencia_on_var = tk.BooleanVar(value=False)
+secuencia_on_runtime = {"ips": None, "scene_data": None, "on_finish": None}
+
+
+def build_sequence_destination_values(scene_data):
+    valores_destino = {}
+    for ip in LAMP_IPS:
+        if ip not in scene_data:
+            continue
+
+        estado = scene_data[ip]
+        panel = panels.get(ip)
+        valores_destino[ip] = {
+            "h": estado.get("h", getattr(panel, "last_hue", 0) if panel else 0),
+            "s": estado.get("s", getattr(panel, "last_sat", 1) if panel else 1),
+            "brillo": estado.get("brillo", getattr(panel, "last_brillo", 1) if panel else 1),
+            "modo": estado.get("modo", getattr(panel, "last_mode", "colour") if panel else "colour"),
+            "temp": estado.get("temp", getattr(panel, "last_temp", 4000) if panel else 4000),
+            "state": estado.get("state", "on"),
+        }
+    return valores_destino
 
 
 def toggle_secuencia_on():
     if secuencia_on_var.get():
         btn_secuencia_on.config(text="Detener", bg="#ef5350")
 
-        # cargar escena seleccionada
-        escena = escena_seleccionada_en_listbox()
-        escenas = load_escenas()
-        datos = escenas["datos"].get(escena, {})
+        runtime_scene_data = secuencia_on_runtime.get("scene_data")
+        target_ips = secuencia_on_runtime.get("ips")
+        finish_cb = secuencia_on_runtime.get("on_finish") or escena_finalizada_callback
+        secuencia_on_runtime["scene_data"] = None
+        secuencia_on_runtime["ips"] = None
+        secuencia_on_runtime["on_finish"] = None
 
-        # preparar dict destino
-        valores_destino = {}
-        for ip in LAMP_IPS:
-            if ip in datos:
-                estado = datos[ip]
-                valores_destino[ip] = {
-                        "h": estado.get("h", 0),
-                        "s": estado.get("s", 1),
-                        "brillo": estado.get("brillo", 1),
-                        "modo": estado.get("modo", "colour"),
-                        "temp": estado.get("temp", getattr(panels[ip], "last_temp", 4000))
-                    }
+        if runtime_scene_data is not None:
+            escena = None
+            datos = runtime_scene_data
+        else:
+            escena = escena_seleccionada_en_listbox()
+            escenas = load_escenas()
+            datos = escenas["datos"].get(escena, {})
 
-        # llamar a la secuencia usando valores reales de la escena
+        valores_destino = build_sequence_destination_values(datos)
+
         secuencia_on(
             send_lamp_color=send_lamp_color_safe,
             LAMP_IPS=LAMP_IPS,
@@ -944,14 +1241,16 @@ def toggle_secuencia_on():
             secuencia_var=secuencia_on_var,
             root=root,
             nombre_escena=escena,
-            btn_secuencia_on=btn_secuencia_on,   # ← AÑADIR ESTA LÍNEA
-            on_finish_cb=escena_finalizada_callback    # ← NUEVO
+            btn_secuencia_on=btn_secuencia_on,
+            on_finish_cb=finish_cb,
+            target_ips=target_ips,
         )
 
-
     else:
+        secuencia_on_runtime["scene_data"] = None
+        secuencia_on_runtime["ips"] = None
+        secuencia_on_runtime["on_finish"] = None
         btn_secuencia_on.config(text="Secuencia_ON", bg="#20bdec")
-
 
 btn_secuencia_on = tk.Checkbutton(
     frame_secuencias,
@@ -962,6 +1261,101 @@ btn_secuencia_on = tk.Checkbutton(
     command=toggle_secuencia_on
 )
 btn_secuencia_on.grid(row=0, column=1, padx=3, pady=3, sticky="ew")
+
+
+secuencia_on_overlay_var = tk.BooleanVar(value=False)
+secuencia_on_overlay_target_override = {"ips": None, "scene_data": None, "on_finish": None}
+
+
+def add_lamp_to_atardecer(ip):
+    effect_retired_ips["atardecer"].discard(ip)
+    panel = panels.get(ip)
+    if panel is None:
+        return
+
+    reference = None
+    for ref_ip in LAMP_IPS:
+        if ref_ip == ip:
+            continue
+        if selected_devices[ref_ip].get() and ref_ip not in effect_retired_ips["atardecer"]:
+            reference = panels.get(ref_ip)
+            break
+
+    if reference is not None:
+        panel.last_mode = getattr(reference, "last_mode", "colour")
+        panel.last_hue = getattr(reference, "last_hue", getattr(panel, "last_hue", 0))
+        panel.last_sat = getattr(reference, "last_sat", getattr(panel, "last_sat", 1))
+        panel.last_brillo = max(80, safe_brightness(getattr(reference, "last_brillo", 180)))
+        if panel.last_mode == "colour":
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+        else:
+            panel.last_temp = getattr(reference, "last_temp", getattr(panel, "last_temp", 4000))
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+    else:
+        panel.last_brillo = max(80, safe_brightness(getattr(panel, "last_brillo", 180)))
+        if panel.last_mode == "colour":
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+        else:
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+    update_panel_visual(panel)
+
+
+def toggle_secuencia_on_overlay():
+    if secuencia_on_overlay_var.get():
+        params = effect_param_vars["secuencia_on_overlay"]
+        target_ips = secuencia_on_overlay_target_override.get("ips")
+        runtime_scene_data = secuencia_on_overlay_target_override.get("scene_data")
+        finish_cb = secuencia_on_overlay_target_override.get("on_finish")
+        secuencia_on_overlay_target_override["ips"] = None
+        secuencia_on_overlay_target_override["scene_data"] = None
+        secuencia_on_overlay_target_override["on_finish"] = None
+        btn_secuencia_on_overlay.config(text="Detener", bg="#ef5350")
+
+        if runtime_scene_data is not None:
+            datos = runtime_scene_data
+        else:
+            escena = escena_seleccionada_en_listbox()
+            escenas = load_escenas()
+            datos = escenas["datos"].get(escena, {})
+
+        valores_destino = build_sequence_destination_values(datos)
+
+        def finish_overlay():
+            btn_secuencia_on_overlay.config(text="Secuencia_ON FX", bg="#20bdec")
+            if finish_cb:
+                finish_cb()
+
+        secuencia_on_overlay(
+            LAMP_IPS,
+            panels,
+            selected_devices,
+            lamp_status,
+            clamp_int(params["tiempo_on_ms"].get(), 20, 60000),
+            secuencia_on_overlay_var,
+            root,
+            target_ips=target_ips,
+            valores_destino=valores_destino,
+            send_lamp_color=send_lamp_color_safe,
+            send_lamp_white=send_lamp_white_scene,
+            on_lamp_on_cb=lambda ip: update_panel_visual(panels[ip]) if ip in panels else None,
+            on_finish_cb=finish_overlay,
+        )
+    else:
+        secuencia_on_overlay_target_override["ips"] = None
+        secuencia_on_overlay_target_override["scene_data"] = None
+        secuencia_on_overlay_target_override["on_finish"] = None
+        btn_secuencia_on_overlay.config(text="Secuencia_ON FX", bg="#20bdec")
+
+
+btn_secuencia_on_overlay = tk.Checkbutton(
+    frame_secuencias,
+    text="Secuencia_ON FX",
+    variable=secuencia_on_overlay_var,
+    font=("Segoe UI", 12, "bold"),
+    bg="#20bdec", fg="#fff", selectcolor="#232b32",
+    command=toggle_secuencia_on_overlay
+)
+btn_secuencia_on_overlay.grid(row=2, column=1, padx=3, pady=3, sticky="ew")
 
 
 secuencia_off_var = tk.BooleanVar(value=False)
@@ -997,6 +1391,80 @@ btn_secuencia_off = tk.Checkbutton(
 )
 # segunda fila
 btn_secuencia_off.grid(row=1, column=0, padx=3, pady=3, sticky="ew")
+
+
+secuencia_off_overlay_var = tk.BooleanVar(value=False)
+secuencia_off_overlay_target_override = {"ips": None, "on_finish": None}
+
+
+def toggle_secuencia_off_overlay():
+    if secuencia_off_overlay_var.get():
+        params = effect_param_vars["secuencia_off_overlay"]
+        target_ips = secuencia_off_overlay_target_override.get("ips")
+        finish_cb = secuencia_off_overlay_target_override.get("on_finish")
+        secuencia_off_overlay_target_override["ips"] = None
+        secuencia_off_overlay_target_override["on_finish"] = None
+        btn_secuencia_off_overlay.config(text="Detener", bg="#ef5350")
+
+        def finish_overlay():
+            btn_secuencia_off_overlay.config(text="Secuencia_OFF FX", bg="#20bdec")
+            if target_ips:
+                for finished_ip in target_ips:
+                    panel = panels.get(finished_ip)
+                    if panel is not None:
+                        selected_devices[finished_ip].set(False)
+                        panel.last_brillo = 0
+                        try:
+                            panel.brillo_var.set(0)
+                        except Exception:
+                            pass
+                        try:
+                            update_lamp_state(
+                                finished_ip,
+                                getattr(panel, "last_mode", "colour"),
+                                getattr(panel, "last_hue", 0),
+                                getattr(panel, "last_sat", 1),
+                                getattr(panel, "last_temp", 4000),
+                                0,
+                            )
+                        except Exception:
+                            pass
+                        update_panel_visual(panel)
+            stop_all_active_effects("fin Secuencia OFF FX")
+            if finish_cb:
+                finish_cb()
+
+        secuencia_off_overlay(
+            send_lamp_color_safe,
+            LAMP_IPS,
+            panels,
+            selected_devices,
+            lamp_status,
+            clamp_int(params["tiempo_off_ms"].get(), 20, 60000),
+            secuencia_off_overlay_var,
+            root,
+            fade_ms=clamp_int(params["fade_ms"].get(), 20, 60000),
+            pasos_fade=clamp_int(params["pasos_fade"].get(), 1, 200),
+            send_lamp_white=send_lamp_white,
+            on_finish_cb=finish_overlay,
+            target_ips=target_ips,
+            on_lamp_off_cb=retire_lamp_from_atardecer,
+        )
+    else:
+        secuencia_off_overlay_target_override["ips"] = None
+        secuencia_off_overlay_target_override["on_finish"] = None
+        btn_secuencia_off_overlay.config(text="Secuencia_OFF FX", bg="#20bdec")
+
+
+btn_secuencia_off_overlay = tk.Checkbutton(
+    frame_secuencias,
+    text="Secuencia_OFF FX",
+    variable=secuencia_off_overlay_var,
+    font=("Segoe UI", 12, "bold"),
+    bg="#20bdec", fg="#fff", selectcolor="#232b32",
+    command=toggle_secuencia_off_overlay
+)
+btn_secuencia_off_overlay.grid(row=1, column=1, padx=3, pady=3, sticky="ew")
 
 
 # =========================== FX / RÁPIDOS ============================
@@ -1214,9 +1682,50 @@ btn_vela.grid(row=1, column=1, padx=3, pady=3, sticky="ew")
 
 
 atardecer_var = tk.BooleanVar(value=False)
+effect_retired_ips = {"atardecer": set()}
+
+
+def claim_lamps_for_manual_control(ips):
+    if isinstance(ips, str):
+        ips = [ips]
+
+    claimed_ips = [ip for ip in ips if ip in panels]
+    if not claimed_ips:
+        return
+
+    active_effects = [
+        name for name, var in globals().get("effect_vars", {}).items()
+        if getattr(var, "get", lambda: False)()
+    ]
+    if active_effects and "stop_all_active_effects" in globals():
+        stop_all_active_effects("control manual")
+
+    effect_retired_ips["atardecer"].clear()
+    for ip in claimed_ips:
+        panel = panels.get(ip)
+        if panel is not None:
+            panel.scene_involved = False
+            apply_visual = globals().get("apply_lamp_visual_state")
+            if callable(apply_visual):
+                apply_visual(panel)
+
+
+def retire_lamp_from_atardecer(ip):
+    effect_retired_ips["atardecer"].add(ip)
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    try:
+        panel.last_brillo = max(80, safe_brightness(panel.brillo_var.get()))
+    except Exception:
+        panel.last_brillo = 180
+    selected_devices[ip].set(False)
+    update_panel_visual(panel)
+
 
 def toggle_atardecer():
     if atardecer_var.get():
+        effect_retired_ips["atardecer"].clear()
         btn_atardecer.config(text="Detener", bg="#ef5350")
         efecto_atardecer_wiz(
             send_lamp_color_safe,
@@ -1224,7 +1733,8 @@ def toggle_atardecer():
             panels,
             selected_devices,
             atardecer_var,
-            root
+            root,
+            effect_retired_ips["atardecer"],
         )
     else:
         btn_atardecer.config(text="Atardecer", bg="#20bdec")
@@ -1298,11 +1808,20 @@ btn_latido.grid(row=3, column=0, padx=3, pady=3, sticky="ew")
 
 
 intercambio_var = tk.BooleanVar(value=False)
+intercambio_runtime = {"on_finish": None}
 
 def toggle_intercambio():
     if intercambio_var.get():
         params = effect_param_vars["Intercambio"]
+        finish_cb = intercambio_runtime.get("on_finish")
+        intercambio_runtime["on_finish"] = None
         btn_intercambio.config(text="Detener", bg="#ef5350")
+
+        def finish_intercambio():
+            btn_intercambio.config(text="Intercambio", bg="#20bdec")
+            if finish_cb:
+                finish_cb()
+
         efecto_intercambio_colores(
             send_lamp_color_safe,
             LAMP_IPS,
@@ -1311,13 +1830,22 @@ def toggle_intercambio():
             lamp_status,
             intercambio_var,
             root,
-            color_a=(clamp_int(params["hue_a"].get(), 0, 359), 1),
-            color_b=(clamp_int(params["hue_b"].get(), 0, 359), 1),
+            color_a=(
+                clamp_int(params["hue_a"].get(), 0, 359),
+                clamp_int(params["sat_a_pct"].get(), 0, 100) / 100.0,
+            ),
+            color_b=(
+                clamp_int(params["hue_b"].get(), 0, 359),
+                clamp_int(params["sat_b_pct"].get(), 0, 100) / 100.0,
+            ),
+            brillo_min=clamp_int(params["brillo_min"].get(), 0, 255),
             brillo=clamp_int(params["brillo"].get(), 1, 255),
             duracion_ms=clamp_int(params["duracion_ms"].get(), 100, 120000),
             pasos=clamp_int(params["pasos"].get(), 2, 500),
+            on_finish_cb=finish_intercambio,
         )
     else:
+        intercambio_runtime["on_finish"] = None
         btn_intercambio.config(text="Intercambio", bg="#20bdec")
 
 btn_intercambio = tk.Checkbutton(
@@ -1334,9 +1862,12 @@ btn_intercambio.grid(row=1, column=0, padx=3, pady=3, sticky="ew")
 
 effect_vars = {
     "respiracion": respirando,
+    "transicion_color": transicion_color_var,
     "secuencia": secuencia_var,
     "secuencia_on": secuencia_on_var,
+    "secuencia_on_overlay": secuencia_on_overlay_var,
     "secuencia_off": secuencia_off_var,
+    "secuencia_off_overlay": secuencia_off_overlay_var,
     "parpadeo": parpadeo_var,
     "estrobo": estrobo_var,
     "estrobo_udp": estrobo_udp_var,
@@ -1352,9 +1883,12 @@ effect_vars = {
 
 effect_toggles = {
     "respiracion": toggle_respiracion,
+    "transicion_color": toggle_transicion_color,
     "secuencia": toggle_secuencia,
     "secuencia_on": toggle_secuencia_on,
+    "secuencia_on_overlay": toggle_secuencia_on_overlay,
     "secuencia_off": toggle_secuencia_off,
+    "secuencia_off_overlay": toggle_secuencia_off_overlay,
     "parpadeo": toggle_parpadeo,
     "estrobo": toggle_estrobo,
     "estrobo_udp": toggle_estrobo_udp,
@@ -1370,9 +1904,12 @@ effect_toggles = {
 
 effect_display_names = {
     "respiracion": "Respiracion",
+    "transicion_color": "Transicion a color",
     "secuencia": "Secuencia",
     "secuencia_on": "Secuencia ON",
+    "secuencia_on_overlay": "Secuencia ON FX",
     "secuencia_off": "Secuencia OFF",
+    "secuencia_off_overlay": "Secuencia OFF FX",
     "parpadeo": "Parpadeo",
     "estrobo": "Estrobo",
     "estrobo_udp": "Estrobo UDP",
@@ -1386,12 +1923,36 @@ effect_display_names = {
     "Intercambio": "Intercambio",
 }
 
+effect_descriptions = {
+    "respiracion": "Pulso suave de brillo sobre las lamparas seleccionadas. Mantiene el color actual y genera una atmosfera viva.",
+    "transicion_color": "Mueve las lamparas desde su color actual hacia un color destino de forma gradual.",
+    "secuencia": "Recorre las lamparas una a una como una persecucion luminica, con opcion de cola y fondo.",
+    "secuencia_on": "Enciende las lamparas una por una hasta llegar al estado de color configurado para la escena.",
+    "secuencia_on_overlay": "Prueba o ejecuta un encendido progresivo sobre una escena o grupo, ideal para revelar una atmosfera por capas.",
+    "secuencia_off": "Apaga las lamparas una por una usando el estado seleccionado como punto de salida.",
+    "secuencia_off_overlay": "Retira lamparas de un efecto activo una por una, conservando la imagen viva hasta apagarlas.",
+    "parpadeo": "Alterna brillo alto y bajo rapidamente para generar pulso ritmico o alerta visual.",
+    "estrobo": "Flash rapido de alta intensidad para impactos cortos y momentos de tension.",
+    "estrobo_udp": "Version tecnica de estrobo con envio UDP rapido para pruebas de respuesta.",
+    "fuego": "Variacion calida e irregular de brillo y color, pensada para sensacion de llama.",
+    "mar": "Movimiento frio y ondulante de azules y cianes para atmosfera acuosa.",
+    "arcoiris": "Recorrido continuo por distintos tonos de color.",
+    "vela": "Parpadeo sutil y calido, similar a una vela o luz fragil.",
+    "atardecer": "Transicion atmosferica hacia tonos calidos, suave y envolvente.",
+    "desfase": "Variacion entre lamparas con tiempos desplazados para dar profundidad y movimiento.",
+    "latido": "Pulso marcado de brillo, pensado como golpe organico o tension escenica.",
+    "Intercambio": "Divide las lamparas en dos grupos: bajan al brillo minimo, cambian al color opuesto y vuelven a subir.",
+}
+
 effect_categories = {
     "Escena / color configurable": [
         "respiracion",
+        "transicion_color",
         "secuencia",
         "secuencia_on",
+        "secuencia_on_overlay",
         "secuencia_off",
+        "secuencia_off_overlay",
         "Intercambio",
     ],
     "Predefinidos atmosfericos": [
@@ -1438,12 +1999,20 @@ effect_param_labels = {
     "brillo_base": "Brillo base",
     "tiempo_on_ms": "Tiempo encendido (ms)",
     "tiempo_off_ms": "Tiempo apagado (ms)",
+    "cambio_ms": "Cambio entre lamparas (ms)",
+    "cola_lamparas": "Cola (lamparas)",
+    "brillo_cola_pct": "Brillo cola (%)",
+    "brillo_fondo_pct": "Brillo fondo (%)",
     "fade_ms": "Fade (ms)",
     "pasos_fade": "Pasos fade",
     "on_ms": "On (ms)",
     "off_ms": "Off (ms)",
+    "hue_destino": "Color destino Hue",
+    "sat_destino_pct": "Saturacion destino (%)",
     "hue_a": "Color A Hue",
+    "sat_a_pct": "Saturacion A (%)",
     "hue_b": "Color B Hue",
+    "sat_b_pct": "Saturacion B (%)",
     "duracion_ms": "Duracion (ms)",
     "pasos": "Pasos",
 }
@@ -1452,27 +2021,203 @@ effect_target_var = tk.StringVar(value="seleccion")
 effects_panel_window = None
 lamp_config_window = None
 effects_panel_status_var = tk.StringVar(value="Selecciona un efecto")
+effects_panel_countdown_var = tk.StringVar(value="Sin prueba activa")
+effects_panel_test_state = {"effect": None, "after_id": None}
+
+
+def cancel_effect_test_timer():
+    after_id = effects_panel_test_state.get("after_id")
+    if after_id:
+        try:
+            root.after_cancel(after_id)
+        except Exception:
+            pass
+    effects_panel_test_state["after_id"] = None
+
+
+def finish_effect_test(effect_name=None, message=None):
+    cancel_effect_test_timer()
+    effects_panel_test_state["effect"] = None
+    effects_panel_countdown_var.set("Sin prueba activa")
+    if message:
+        effects_panel_status_var.set(message)
+    elif effect_name:
+        effects_panel_status_var.set(f"Prueba finalizada: {effect_display_names.get(effect_name, effect_name)}")
+
+
+def start_effect_test_timer(effect_name, seconds):
+    cancel_effect_test_timer()
+    effect_label = effect_display_names.get(effect_name, effect_name)
+    if seconds is None or seconds <= 0:
+        effects_panel_countdown_var.set(f"{effect_label}\nPrueba sin tiempo fijo")
+        return
+
+    end_time = time.time() + float(seconds)
+
+    def tick():
+        remaining = max(0, int(round(end_time - time.time())))
+        minutes = remaining // 60
+        secs = remaining % 60
+        effects_panel_countdown_var.set(f"{effect_label}\nTiempo de prueba: {minutes:02d}:{secs:02d}")
+        if remaining <= 0:
+            effects_panel_test_state["after_id"] = None
+            effects_panel_test_state["effect"] = None
+            effects_panel_countdown_var.set(f"{effect_label}\nPrueba finalizada")
+            effects_panel_status_var.set(f"Prueba finalizada: {effect_label}")
+            return
+        effects_panel_test_state["after_id"] = root.after(250, tick)
+
+    tick()
+
+
+def selected_effect_target_ips():
+    target = effect_target_var.get()
+    if target == "todas":
+        return [ip for ip in LAMP_IPS]
+    if target in ("efectos", "atmosfera"):
+        return [ip for ip in LAMP_IPS if get_lamp_group(ip) == target]
+    return [ip for ip in LAMP_IPS if selected_devices[ip].get()]
+
+
+def panel_state_for_sequence_test(ip):
+    panel = panels.get(ip)
+    if panel is None:
+        return {"state": "off"}
+
+    try:
+        brillo = safe_brightness(getattr(panel, "last_brillo", 0))
+    except Exception:
+        brillo = 0
+    if brillo <= 0:
+        try:
+            brillo = safe_brightness(panel.brillo_var.get())
+        except Exception:
+            brillo = 0
+    if brillo <= 0:
+        brillo = 180
+
+    estado = {
+        "state": "on",
+        "initial_state": "off",
+        "modo": getattr(panel, "last_mode", "colour"),
+        "brillo": brillo,
+    }
+    if estado["modo"] == "white":
+        estado["temp"] = getattr(panel, "last_temp", 4000)
+    else:
+        estado["h"] = getattr(panel, "last_hue", 0)
+        estado["s"] = getattr(panel, "last_sat", 1)
+    return estado
+
+
+def build_panel_sequence_test_scene_data(effect_name, target_ips):
+    effects = {
+        name: False
+        for name in effect_vars
+    }
+    effects["_params"] = {
+        name: {
+            param: var.get()
+            for param, var in params.items()
+        }
+        for name, params in effect_param_vars.items()
+    }
+    for name in effect_vars:
+        effects[name] = False
+    effects[effect_name] = True
+
+    data = {
+        "effects": effects,
+        "effects_layers": [{
+            "name": effect_name,
+            "display_name": effect_display_names.get(effect_name, effect_name),
+            "enabled": True,
+            "category": effect_to_category.get(effect_name, "Sin categoria"),
+            "type": effect_category_types.get(effect_to_category.get(effect_name, ""), "custom"),
+            "target": build_effect_target_snapshot(effect_target_var.get()),
+            "params": effects.get("_params", {}).get(effect_name, {}),
+        }],
+    }
+    target_set = set(target_ips or [])
+    for ip in LAMP_IPS:
+        data[ip] = panel_state_for_sequence_test(ip) if ip in target_set else {"state": "off"}
+    return data
+
+
+def estimate_effect_test_seconds(effect_name, target_ips):
+    count = max(1, sum(1 for ip in target_ips if lamp_status.get(ip, True)))
+    params = effect_param_vars.get(effect_name, {})
+    if effect_name in ("secuencia_on", "secuencia_on_overlay"):
+        tiempo = clamp_int(params["tiempo_on_ms"].get(), 20, 60000)
+        return max(0.5, count * tiempo / 1000.0)
+    if effect_name == "secuencia_off":
+        tiempo = clamp_int(params["tiempo_off_ms"].get(), 20, 60000)
+        return max(0.5, count * tiempo / 1000.0)
+    if effect_name == "secuencia_off_overlay":
+        tiempo = clamp_int(params["tiempo_off_ms"].get(), 20, 60000)
+        fade = clamp_int(params["fade_ms"].get(), 20, 60000)
+        return max(0.5, (((count - 1) * tiempo) + fade) / 1000.0)
+    if effect_name == "transicion_color":
+        return max(0.5, clamp_int(params["duracion_ms"].get(), 100, 600000) / 1000.0)
+    if effect_name == "Intercambio":
+        return max(0.5, clamp_int(params["duracion_ms"].get(), 100, 120000) / 1000.0)
+    return None
 
 
 def start_effect_from_panel(effect_name):
+    if not effect_name:
+        effects_panel_status_var.set("Selecciona un efecto para probar")
+        return
+
+    finish_effect_test()
+    stop_all_active_effects("nueva prueba")
+
     target = effect_target_var.get()
     apply_effect_target_selection(target)
+    target_ips = selected_effect_target_ips()
+    if not target_ips:
+        effects_panel_status_var.set("No hay lamparas seleccionadas para la prueba")
+        return
 
     var = effect_vars.get(effect_name)
     toggle = effect_toggles.get(effect_name)
     if var is None or toggle is None:
         return
 
-    if var.get():
-        var.set(False)
-        toggle()
+    test_duration = estimate_effect_test_seconds(effect_name, target_ips)
+    finish_cb = lambda name=effect_name: finish_effect_test(
+        name,
+        f"Prueba finalizada: {effect_display_names.get(name, name)}"
+    )
+
+    if effect_name == "secuencia_on":
+        scene_data = build_panel_sequence_test_scene_data(effect_name, target_ips)
+        secuencia_on_runtime["ips"] = set(target_ips)
+        secuencia_on_runtime["scene_data"] = scene_data
+        secuencia_on_runtime["on_finish"] = lambda _name=None: finish_cb()
+    elif effect_name == "secuencia_on_overlay":
+        scene_data = build_panel_sequence_test_scene_data(effect_name, target_ips)
+        secuencia_on_overlay_target_override["ips"] = set(target_ips)
+        secuencia_on_overlay_target_override["scene_data"] = scene_data
+        secuencia_on_overlay_target_override["on_finish"] = finish_cb
+    elif effect_name == "secuencia_off_overlay":
+        secuencia_off_overlay_target_override["ips"] = set(target_ips)
+        secuencia_off_overlay_target_override["on_finish"] = finish_cb
+    elif effect_name == "transicion_color":
+        transicion_color_runtime["on_finish"] = finish_cb
+    elif effect_name == "Intercambio":
+        intercambio_runtime["on_finish"] = finish_cb
 
     var.set(True)
     toggle()
-    effects_panel_status_var.set(f"Activo: {effect_display_names.get(effect_name, effect_name)}")
+    effects_panel_test_state["effect"] = effect_name
+    start_effect_test_timer(effect_name, test_duration)
+    effects_panel_status_var.set(f"Probando: {effect_display_names.get(effect_name, effect_name)}")
 
 
 def stop_effect_from_panel(effect_name):
+    if not effect_name:
+        return
     var = effect_vars.get(effect_name)
     toggle = effect_toggles.get(effect_name)
     if var is None or toggle is None:
@@ -1480,7 +2225,7 @@ def stop_effect_from_panel(effect_name):
     if var.get():
         var.set(False)
         toggle()
-    effects_panel_status_var.set(f"Detenido: {effect_display_names.get(effect_name, effect_name)}")
+    finish_effect_test(effect_name, f"Prueba finalizada: {effect_display_names.get(effect_name, effect_name)}")
 
 
 def stop_all_active_effects(reason=""):
@@ -1623,10 +2368,134 @@ def apply_scene_effect_target(scene_data):
             selected_devices[ip].set(get_lamp_id(ip) in lamp_ids)
 
 
-def apply_scene_effects_for_execution(scene_data):
+def estimate_sequence_effect_seconds(scene_data, effect_name, target_ips):
+    params = scene_data.get("effects", {}).get("_params", {}).get(effect_name, {})
+    if target_ips is None:
+        ips = [ip for ip in LAMP_IPS if selected_devices[ip].get()]
+    else:
+        ips = list(target_ips)
+    count = sum(1 for ip in ips if lamp_status.get(ip, True))
+
+    if effect_name == "secuencia_off_overlay":
+        tiempo = clamp_int(params.get("tiempo_off_ms", effect_param_vars[effect_name]["tiempo_off_ms"].get()), 20, 60000)
+        fade = clamp_int(params.get("fade_ms", effect_param_vars[effect_name]["fade_ms"].get()), 20, 60000)
+        return max(0.5, (((max(1, count) - 1) * tiempo) + fade) / 1000.0)
+
+    if effect_name == "secuencia_on":
+        tiempo = clamp_int(params.get("tiempo_on_ms", effect_param_vars[effect_name]["tiempo_on_ms"].get()), 20, 60000)
+        return max(0.5, max(1, count) * tiempo / 1000.0)
+
+    if effect_name == "secuencia_on_overlay":
+        tiempo = clamp_int(params.get("tiempo_on_ms", effect_param_vars[effect_name]["tiempo_on_ms"].get()), 20, 60000)
+        return max(0.5, max(1, count) * tiempo / 1000.0)
+
+    return 0.5
+
+
+def finish_scene_sequence_execution(scene_token, scene_name):
+    if scene_token and scene_name:
+        finalizar_escena(scene_token, scene_name)
+    else:
+        marcar_escena_terminada()
+
+
+def apply_scene_effects_for_execution(scene_data, scene_token=None, scene_name=None):
+    effects = scene_data.get("effects", {})
+    if effects.get("secuencia_off_overlay"):
+        params_state = effects.get("_params", {}).get("secuencia_off_overlay", {})
+        for param, value in params_state.items():
+            var = effect_param_vars.get("secuencia_off_overlay", {}).get(param)
+            if var is not None:
+                var.set(value)
+
+        if secuencia_off_overlay_var.get():
+            secuencia_off_overlay_var.set(False)
+            toggle_secuencia_off_overlay()
+
+        secuencia_off_overlay_target_override["ips"] = resolve_scene_effect_target_ips(scene_data)
+        secuencia_off_overlay_target_override["on_finish"] = (
+            lambda token=scene_token, name=scene_name: finish_scene_sequence_execution(token, name)
+        )
+        secuencia_off_overlay_var.set(True)
+        toggle_secuencia_off_overlay()
+        return
+
+    if effects.get("secuencia_on_overlay"):
+        params_state = effects.get("_params", {}).get("secuencia_on_overlay", {})
+        for param, value in params_state.items():
+            var = effect_param_vars.get("secuencia_on_overlay", {}).get(param)
+            if var is not None:
+                var.set(value)
+
+        if secuencia_on_overlay_var.get():
+            secuencia_on_overlay_var.set(False)
+            toggle_secuencia_on_overlay()
+
+        secuencia_on_overlay_target_override["ips"] = resolve_scene_effect_target_ips(scene_data)
+        secuencia_on_overlay_target_override["scene_data"] = scene_data
+        secuencia_on_overlay_target_override["on_finish"] = (
+            lambda token=scene_token, name=scene_name: finish_scene_sequence_execution(token, name)
+        )
+        secuencia_on_overlay_var.set(True)
+        toggle_secuencia_on_overlay()
+        return
+
+    effect_retired_ips["atardecer"].clear()
+
+    if effects.get("secuencia_on"):
+        params_state = effects.get("_params", {}).get("secuencia_on", {})
+        for param, value in params_state.items():
+            var = effect_param_vars.get("secuencia_on", {}).get(param)
+            if var is not None:
+                var.set(value)
+
+        if secuencia_on_var.get():
+            secuencia_on_var.set(False)
+            toggle_secuencia_on()
+
+        secuencia_on_runtime["ips"] = resolve_scene_effect_target_ips(scene_data)
+        secuencia_on_runtime["scene_data"] = scene_data
+        secuencia_on_runtime["on_finish"] = (
+            lambda _name=None, token=scene_token, name=scene_name: finish_scene_sequence_execution(token, name)
+        )
+        secuencia_on_var.set(True)
+        toggle_secuencia_on()
+        return
+
+    if effects.get("transicion_color"):
+        params_state = effects.get("_params", {}).get("transicion_color", {})
+        for param, value in params_state.items():
+            var = effect_param_vars.get("transicion_color", {}).get(param)
+            if var is not None:
+                var.set(value)
+
+        if transicion_color_var.get():
+            transicion_color_var.set(False)
+            toggle_transicion_color()
+
+        apply_scene_effect_target(scene_data)
+
+        duration_ms = clamp_int(
+            effect_param_vars["transicion_color"]["duracion_ms"].get(),
+            100,
+            600000,
+        )
+        if scene_token:
+            try:
+                start_scene_progress(scene_token, max(0.5, duration_ms / 1000.0))
+            except Exception:
+                pass
+
+        transicion_color_runtime["on_finish"] = (
+            lambda token=scene_token, name=scene_name: finish_scene_sequence_execution(token, name)
+        )
+        transicion_color_var.set(True)
+        toggle_transicion_color()
+        return
+
     apply_scene_effect_target(scene_data)
     apply_effects_state(
-        scene_data.get("effects", {}),
+        effects,
         effect_vars,
         effect_toggles,
         effect_param_vars,
@@ -1684,9 +2553,20 @@ def open_lamp_config_panel():
     scroll = tk.Scrollbar(frame, orient="vertical", command=tree.yview)
     scroll.grid(row=1, column=1, sticky="ns")
     tree.configure(yscrollcommand=scroll.set)
+    bind_mousewheel_scroll(tree, tree, skip_form_controls=False)
 
     def sorted_lamps():
         return sorted(config.get("lamparas", []), key=lambda item: int(item.get("orden", 9999)))
+
+    def group_key_to_label(group):
+        if group == "efectos":
+            return "bichos"
+        return group
+
+    def group_label_to_key(label):
+        if label == "bichos":
+            return "efectos"
+        return label
 
     def refresh_tree():
         tree.delete(*tree.get_children())
@@ -1695,7 +2575,7 @@ def open_lamp_config_panel():
                 lamp.get("id_escenico", ""),
                 lamp.get("alias", lamp.get("id_escenico", "")),
                 lamp.get("ip", ""),
-                lamp.get("grupo_default", "sin_grupo"),
+                group_key_to_label(lamp.get("grupo_default", "sin_grupo")),
                 lamp.get("orden", 0),
                 "si" if lamp.get("activa", True) else "no",
             ))
@@ -1707,7 +2587,7 @@ def open_lamp_config_panel():
     id_var = tk.StringVar()
     alias_var = tk.StringVar()
     ip_var = tk.StringVar()
-    group_var = tk.StringVar(value="efectos")
+    group_var = tk.StringVar(value="bichos")
     order_var = tk.IntVar(value=1)
     active_var = tk.BooleanVar(value=True)
 
@@ -1720,7 +2600,7 @@ def open_lamp_config_panel():
         tk.Entry(form, textvariable=var, width=width, bg="#111519", fg="#fff").grid(row=row, column=col + 1, sticky="w", padx=(0, 10))
 
     tk.Label(form, text="Grupo", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=0, sticky="w", padx=(0, 4), pady=(8, 0))
-    ttk.Combobox(form, textvariable=group_var, values=("efectos", "atmosfera", "sin_grupo"),
+    ttk.Combobox(form, textvariable=group_var, values=("bichos", "atmosfera", "sin_grupo"),
                  width=12, state="readonly").grid(row=1, column=1, sticky="w", padx=(0, 10), pady=(8, 0))
 
     tk.Label(form, text="Orden", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=2, sticky="w", padx=(0, 4), pady=(8, 0))
@@ -1773,7 +2653,7 @@ def open_lamp_config_panel():
         scenic_id = id_var.get().strip()
         alias = alias_var.get().strip() or scenic_id
         ip = ip_var.get().strip()
-        group = group_var.get().strip() or "sin_grupo"
+        group = group_label_to_key(group_var.get().strip() or "sin_grupo")
         if not scenic_id or not ip:
             messagebox.showwarning("Datos incompletos", "ID e IP son obligatorios.")
             return False
@@ -1897,16 +2777,17 @@ def open_effects_config_panel():
     win.title("Panel de efectos")
     win.configure(bg="#181b1e")
     win.transient(root)
-    win.geometry("520x520")
-    win.minsize(460, 420)
+    win.geometry("720x680")
+    win.minsize(620, 560)
 
     def dock_to_workspace(event=None):
         try:
             root.update_idletasks()
-            width = min(540, max(460, frame_right.winfo_rootx() - frame_center.winfo_rootx() - 40))
-            height = min(560, max(420, root.winfo_height() - 90))
+            available_width = max(620, frame_right.winfo_rootx() - frame_center.winfo_rootx() - 34)
+            width = min(760, available_width)
+            height = min(720, max(560, root.winfo_height() - 80))
             x = max(frame_center.winfo_rootx() + 10, frame_right.winfo_rootx() - width - 14)
-            y = root.winfo_rooty() + 48
+            y = root.winfo_rooty() + 44
             win.geometry(f"{int(width)}x{int(height)}+{int(x)}+{int(y)}")
         except Exception:
             pass
@@ -1939,7 +2820,7 @@ def open_effects_config_panel():
     main.grid_columnconfigure(1, weight=1)
     main.grid_rowconfigure(0, weight=1)
 
-    left = tk.Frame(main, bg="#181b1e", width=245)
+    left = tk.Frame(main, bg="#181b1e", width=230)
     left.grid(row=0, column=0, sticky="nsw", padx=(0, 10))
     left.grid_propagate(False)
 
@@ -1951,7 +2832,7 @@ def open_effects_config_panel():
         textvariable=category_var,
         values=list(effect_categories.keys()),
         state="readonly",
-        width=26
+        width=24
     )
     category_combo.pack(fill="x", pady=(0, 6))
 
@@ -1962,7 +2843,7 @@ def open_effects_config_panel():
         bg="#181b1e",
         fg="#8fb8c9",
         font=("Segoe UI", 8),
-        wraplength=210,
+        wraplength=205,
         justify="left"
     ).pack(fill="x", pady=(0, 8))
 
@@ -1982,6 +2863,7 @@ def open_effects_config_panel():
     )
     effect_scroll = tk.Scrollbar(list_frame, orient="vertical", command=effect_list.yview)
     effect_list.configure(yscrollcommand=effect_scroll.set)
+    bind_mousewheel_scroll(effect_list, effect_list, skip_form_controls=False)
     effect_scroll.pack(side="right", fill="y")
     effect_list.pack(side="left", fill="both", expand=True)
 
@@ -2006,16 +2888,30 @@ def open_effects_config_panel():
 
     selected_effect_var = tk.StringVar(value="")
     title_var = tk.StringVar(value="Selecciona un efecto")
+    effect_help_var = tk.StringVar(value="")
 
     tk.Label(right, textvariable=title_var, bg="#202428", fg="#20bdec",
              font=("Segoe UI", 13, "bold")).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
 
+    help_box = tk.Frame(right, bg="#182024", padx=8, pady=6)
+    help_box.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+    tk.Label(
+        help_box,
+        textvariable=effect_help_var,
+        bg="#182024",
+        fg="#d9f3ff",
+        font=("Segoe UI", 9),
+        wraplength=260,
+        justify="left",
+        anchor="w"
+    ).pack(fill="x")
+
     scope = tk.LabelFrame(right, text="Aplicar a", bg="#202428", fg="#20bdec",
                           font=("Segoe UI", 10, "bold"), padx=8, pady=6)
-    scope.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+    scope.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 8))
     for label, value in (
         ("Seleccion actual", "seleccion"),
-        ("Efectos", "efectos"),
+        ("Bichos", "efectos"),
         ("Atmosfera", "atmosfera"),
         ("Todas", "todas"),
     ):
@@ -2026,34 +2922,262 @@ def open_effects_config_panel():
 
     params_frame = tk.LabelFrame(right, text="Parametros", bg="#202428", fg="#20bdec",
                                  font=("Segoe UI", 10, "bold"), padx=8, pady=8)
-    params_frame.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 8))
-    params_frame.grid_columnconfigure(1, weight=1)
-    right.grid_rowconfigure(2, weight=1)
+    params_frame.grid(row=3, column=0, sticky="nsew", padx=12, pady=(0, 8))
+    params_frame.grid_columnconfigure(0, weight=1)
+    params_frame.grid_rowconfigure(0, weight=1)
+    params_canvas = tk.Canvas(params_frame, bg="#202428", highlightthickness=0, bd=0)
+    params_scroll = tk.Scrollbar(params_frame, orient="vertical", command=params_canvas.yview)
+    params_body = tk.Frame(params_canvas, bg="#202428")
+    params_window = params_canvas.create_window((0, 0), window=params_body, anchor="nw")
+    params_body.bind("<Configure>", lambda event: params_canvas.configure(scrollregion=params_canvas.bbox("all")))
+    params_canvas.bind("<Configure>", lambda event: params_canvas.itemconfigure(params_window, width=event.width))
+    params_canvas.configure(yscrollcommand=params_scroll.set)
+
+    bind_mousewheel_scroll(params_canvas, params_canvas, params_body)
+    params_canvas.grid(row=0, column=0, sticky="nsew")
+    params_scroll.grid(row=0, column=1, sticky="ns")
+    params_body.grid_columnconfigure(1, weight=1)
+    right.grid_rowconfigure(3, weight=1)
 
     actions = tk.Frame(right, bg="#202428")
-    actions.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 8))
+    actions.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 8))
     actions.grid_columnconfigure(0, weight=1)
     actions.grid_columnconfigure(1, weight=1)
+
+    countdown_box = tk.Frame(
+        right,
+        bg="#111519",
+        highlightthickness=1,
+        highlightbackground="#20bdec",
+        padx=8,
+        pady=6
+    )
+    countdown_box.grid(row=5, column=0, sticky="ew", padx=12, pady=(0, 8))
+    tk.Label(
+        countdown_box,
+        textvariable=effects_panel_countdown_var,
+        bg="#111519",
+        fg="#d9f3ff",
+        font=("Segoe UI", 12, "bold"),
+        anchor="center"
+    ).pack(fill="x")
 
     def current_effect():
         return selected_effect_var.get()
 
     def render_params(effect_name):
-        for child in params_frame.winfo_children():
+        for child in params_body.winfo_children():
             child.destroy()
 
         selected_effect_var.set(effect_name)
         title_var.set(effect_display_names.get(effect_name, effect_name))
+        effect_help_var.set(effect_descriptions.get(effect_name, "Sin descripcion disponible."))
         params = effect_param_vars.get(effect_name, {})
         if not params:
-            tk.Label(params_frame, text="Este efecto no tiene parametros configurables.",
+            tk.Label(params_body, text="Este efecto no tiene parametros configurables.",
                      bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w")
             return
 
+        if effect_name == "transicion_color":
+            color_box = tk.Frame(params_body, bg="#202428")
+            color_box.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            color_box.grid_columnconfigure(1, weight=1)
+
+            hue_var = params["hue_destino"]
+            sat_var = params["sat_destino_pct"]
+
+            def preview_hex():
+                h = clamp_int(hue_var.get(), 0, 359)
+                s = clamp_int(sat_var.get(), 0, 100) / 100.0
+                r, g, b = colorsys.hsv_to_rgb(h / 360.0, s, 1.0)
+                return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+
+            preview = tk.Frame(
+                color_box,
+                bg=preview_hex(),
+                width=52,
+                height=52,
+                highlightthickness=1,
+                highlightbackground="#d9f3ff"
+            )
+            preview.grid(row=0, column=1, sticky="nw", padx=(12, 0), pady=(10, 2))
+            preview.grid_propagate(False)
+
+            color_label = tk.StringVar()
+
+            def sync_color_widgets():
+                h = clamp_int(hue_var.get(), 0, 359)
+                s_pct = clamp_int(sat_var.get(), 0, 100)
+                hue_var.set(h)
+                sat_var.set(s_pct)
+                preview.config(bg=preview_hex())
+                color_label.set(f"Hue {h} / Sat {s_pct}%")
+                try:
+                    wheel.set_color(h, s_pct / 100.0, 1.0)
+                except Exception:
+                    pass
+
+            def on_color_pick(h, s, _v):
+                hue_var.set(int(round(h)) % 360)
+                sat_var.set(int(round(max(0.0, min(1.0, s)) * 100)))
+                sync_color_widgets()
+
+            wheel = RealColorWheel(
+                color_box,
+                radius=62,
+                callback=on_color_pick,
+                bg="#202428",
+                bd=0,
+                highlightthickness=0
+            )
+            wheel.grid(row=0, column=0, rowspan=2, sticky="w")
+
+            tk.Label(
+                color_box,
+                textvariable=color_label,
+                bg="#202428",
+                fg="#b9e3f7",
+                font=("Segoe UI", 9, "bold")
+            ).grid(row=1, column=1, sticky="nw", padx=(12, 0))
+
+            sync_color_widgets()
+
+            row = 1
+            for param, var in params.items():
+                tk.Label(params_body, text=effect_param_labels.get(param, param),
+                         bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=row, column=0, sticky="w", pady=4)
+                spin = tk.Spinbox(params_body, from_=0, to=600000, increment=1, textvariable=var,
+                                  width=10, bg="#111519", fg="#e6e6e6",
+                                  buttonbackground="#30363d", relief="flat",
+                                  font=("Segoe UI", 10), command=sync_color_widgets)
+                spin.grid(row=row, column=1, sticky="e", pady=4)
+                if param in ("hue_destino", "sat_destino_pct"):
+                    spin.bind("<KeyRelease>", lambda _event: sync_color_widgets())
+                    spin.bind("<FocusOut>", lambda _event: sync_color_widgets())
+                row += 1
+            return
+
+        if effect_name == "Intercambio":
+            timing_box = tk.LabelFrame(
+                params_body,
+                text="Tiempo y brillo",
+                bg="#202428",
+                fg="#20bdec",
+                font=("Segoe UI", 9, "bold"),
+                padx=8,
+                pady=6
+            )
+            timing_box.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            timing_box.grid_columnconfigure(1, weight=1)
+            timing_params = ("duracion_ms", "brillo_min", "brillo", "pasos")
+            timing_labels = {
+                "duracion_ms": "Duracion total (ms)",
+                "brillo_min": "Brillo minimo",
+                "brillo": "Brillo maximo",
+                "pasos": "Suavidad / pasos",
+            }
+            for row_index, param in enumerate(timing_params):
+                tk.Label(
+                    timing_box,
+                    text=timing_labels.get(param, effect_param_labels.get(param, param)),
+                    bg="#202428",
+                    fg="#b9e3f7",
+                    font=("Segoe UI", 10)
+                ).grid(row=row_index, column=0, sticky="w", pady=3)
+                spin_to = 120000 if param == "duracion_ms" else 500 if param == "pasos" else 255
+                spin_from = 100 if param == "duracion_ms" else 2 if param == "pasos" else 0
+                tk.Spinbox(
+                    timing_box,
+                    from_=spin_from,
+                    to=spin_to,
+                    increment=1,
+                    textvariable=params[param],
+                    width=10,
+                    bg="#111519",
+                    fg="#e6e6e6",
+                    buttonbackground="#30363d",
+                    relief="flat",
+                    font=("Segoe UI", 10)
+                ).grid(row=row_index, column=1, sticky="e", pady=3)
+
+            color_box = tk.Frame(params_body, bg="#202428")
+            color_box.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            color_box.grid_columnconfigure(0, weight=1)
+            color_box.grid_columnconfigure(1, weight=1)
+
+            def make_intercambio_color_picker(parent, col, title, hue_var, sat_var):
+                holder = tk.Frame(parent, bg="#202428")
+                holder.grid(row=0, column=col, sticky="nsew", padx=(0, 8) if col == 0 else (8, 0))
+                label_var = tk.StringVar()
+                preview = tk.Frame(
+                    holder,
+                    width=46,
+                    height=24,
+                    highlightthickness=1,
+                    highlightbackground="#d9f3ff"
+                )
+
+                def preview_hex():
+                    h = clamp_int(hue_var.get(), 0, 359)
+                    s = clamp_int(sat_var.get(), 0, 100) / 100.0
+                    r, g, b = colorsys.hsv_to_rgb(h / 360.0, s, 1.0)
+                    return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+
+                def sync_widgets():
+                    h = clamp_int(hue_var.get(), 0, 359)
+                    s_pct = clamp_int(sat_var.get(), 0, 100)
+                    hue_var.set(h)
+                    sat_var.set(s_pct)
+                    preview.config(bg=preview_hex())
+                    label_var.set(f"{title}: H {h} / S {s_pct}%")
+                    try:
+                        wheel.set_color(h, s_pct / 100.0, 1.0)
+                    except Exception:
+                        pass
+
+                def on_pick(h, s, _v):
+                    hue_var.set(int(round(h)) % 360)
+                    sat_var.set(int(round(max(0.0, min(1.0, s)) * 100)))
+                    sync_widgets()
+
+                tk.Label(holder, text=title, bg="#202428", fg="#b9e3f7",
+                         font=("Segoe UI", 9, "bold")).pack(anchor="w")
+                wheel = RealColorWheel(
+                    holder,
+                    radius=44,
+                    callback=on_pick,
+                    bg="#202428",
+                    bd=0,
+                    highlightthickness=0
+                )
+                wheel.pack(anchor="w", pady=(2, 4))
+                preview.pack(anchor="w", pady=(0, 3))
+                tk.Label(holder, textvariable=label_var, bg="#202428", fg="#8fb8c9",
+                         font=("Segoe UI", 8)).pack(anchor="w")
+                sync_widgets()
+                return sync_widgets
+
+            sync_a = make_intercambio_color_picker(
+                color_box,
+                0,
+                "Color A",
+                params["hue_a"],
+                params["sat_a_pct"],
+            )
+            sync_b = make_intercambio_color_picker(
+                color_box,
+                1,
+                "Color B",
+                params["hue_b"],
+                params["sat_b_pct"],
+            )
+
+            return
+
         for row, (param, var) in enumerate(params.items()):
-            tk.Label(params_frame, text=effect_param_labels.get(param, param),
+            tk.Label(params_body, text=effect_param_labels.get(param, param),
                      bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10)).grid(row=row, column=0, sticky="w", pady=4)
-            tk.Spinbox(params_frame, from_=0, to=120000, increment=1, textvariable=var,
+            tk.Spinbox(params_body, from_=0, to=120000, increment=1, textvariable=var,
                        width=10, bg="#111519", fg="#e6e6e6",
                        buttonbackground="#30363d", relief="flat",
                        font=("Segoe UI", 10)).grid(row=row, column=1, sticky="e", pady=4)
@@ -2067,10 +3191,12 @@ def open_effects_config_panel():
     effect_list.bind("<<ListboxSelect>>", on_select)
     category_combo.bind("<<ComboboxSelected>>", lambda event: load_category())
 
-    tk.Button(actions, text="Iniciar", command=lambda: start_effect_from_panel(current_effect()),
+    tk.Button(actions, text="Probar", command=lambda: start_effect_from_panel(current_effect()),
               bg="#20bdec", fg="#001018", relief="flat",
               font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="ew", padx=(0, 5))
-    tk.Button(actions, text="Detener", command=lambda: stop_effect_from_panel(current_effect()),
+    tk.Button(actions, text="Finalizar prueba", command=lambda: stop_effect_from_panel(
+        effects_panel_test_state.get("effect") or current_effect()
+    ),
               bg="#ef5350", fg="#fff", relief="flat",
               font=("Segoe UI", 10, "bold")).grid(row=0, column=1, sticky="ew", padx=(5, 0))
 
@@ -2107,6 +3233,33 @@ MIDI_ACTION_LABELS = {
     "effect_sequence": "Secuencia",
     "effect_breathe": "Respiracion",
     "effect_sunset": "Atardecer",
+    "trigger_white_impact": "Disparador - Destello de portal",
+    "trigger_warm_hit": "Disparador - Pulso de antorcha",
+    "trigger_fast_chase": "Disparador - Cometa ascendente",
+    "trigger_reverse_chase": "Disparador - Cometa descendente",
+    "trigger_blackout_snap": "Disparador - Sombra instantanea",
+    "trigger_red_pulse": "Disparador - Latido rojo",
+    "trigger_blue_wave": "Disparador - Ola fria",
+    "trigger_short_strobe": "Disparador - Relampago corto",
+    "trigger_magenta_heartbeat": "Disparador - Latido magenta",
+    "trigger_center_open": "Disparador - Apertura solar",
+    "trigger_star_twinkle": "Disparador - Rocio de estrellas",
+    "trigger_firefly_field": "Disparador - Luciernagas",
+    "trigger_ghost_breath": "Disparador - Respiracion fantasma",
+    "trigger_curtain_close": "Disparador - Cierre de telon",
+    "trigger_northern_glow": "Disparador - Aurora lateral",
+    "trigger_scene_crescendo": "Disparador escena - Crescendo",
+    "trigger_scene_echo": "Disparador escena - Eco de color",
+    "trigger_scene_water_echo": "Disparador escena - Eco de agua",
+    "trigger_scene_wave": "Disparador escena - Marea de escena",
+    "trigger_scene_constellation": "Disparador escena - Constelacion viva",
+    "trigger_scene_suspense": "Disparador escena - Suspenso tenue",
+    "trigger_scene_floor": "Disparador escena - Piso de escena",
+    "trigger_scene_full": "Disparador escena - Pleno de escena",
+    "trigger_slow_blackout": "Disparador escena - Blackout lento",
+    "trigger_hold_scene_rise": "Disparador presion - Crecer escena",
+    "trigger_hold_scene_shadow": "Disparador presion - Sombra sostenida",
+    "trigger_hold_scene_shimmer": "Disparador presion - Titileo sostenido",
 }
 
 MIDI_ACTION_DEFAULT_NOTES = {
@@ -2125,6 +3278,33 @@ MIDI_ACTION_DEFAULT_NOTES = {
     "effect_sequence": 48,
     "effect_breathe": 56,
     "effect_sunset": 58,
+    "trigger_white_impact": 8,
+    "trigger_warm_hit": 9,
+    "trigger_fast_chase": 10,
+    "trigger_reverse_chase": 11,
+    "trigger_blackout_snap": 12,
+    "trigger_red_pulse": 13,
+    "trigger_blue_wave": 14,
+    "trigger_short_strobe": 15,
+    "trigger_magenta_heartbeat": 17,
+    "trigger_center_open": 18,
+    "trigger_star_twinkle": 19,
+    "trigger_firefly_field": 20,
+    "trigger_ghost_breath": 21,
+    "trigger_curtain_close": 22,
+    "trigger_northern_glow": 23,
+    "trigger_scene_crescendo": 25,
+    "trigger_scene_echo": 26,
+    "trigger_scene_wave": 27,
+    "trigger_scene_constellation": 28,
+    "trigger_scene_suspense": 29,
+    "trigger_scene_floor": 30,
+    "trigger_scene_full": 31,
+    "trigger_scene_water_echo": 36,
+    "trigger_slow_blackout": None,
+    "trigger_hold_scene_rise": 33,
+    "trigger_hold_scene_shadow": 34,
+    "trigger_hold_scene_shimmer": 35,
 }
 
 MIDI_LED_COLOR_OPTIONS = {
@@ -2157,6 +3337,33 @@ MIDI_ACTION_DEFAULT_LED_COLORS = {
     "effect_sequence": 5,
     "effect_breathe": 5,
     "effect_sunset": 45,
+    "trigger_white_impact": 63,
+    "trigger_warm_hit": 13,
+    "trigger_fast_chase": 37,
+    "trigger_reverse_chase": 37,
+    "trigger_blackout_snap": 5,
+    "trigger_red_pulse": 47,
+    "trigger_blue_wave": 45,
+    "trigger_short_strobe": 63,
+    "trigger_magenta_heartbeat": 53,
+    "trigger_center_open": 21,
+    "trigger_star_twinkle": 63,
+    "trigger_firefly_field": 21,
+    "trigger_ghost_breath": 3,
+    "trigger_curtain_close": 5,
+    "trigger_northern_glow": 37,
+    "trigger_scene_crescendo": 63,
+    "trigger_scene_echo": 13,
+    "trigger_scene_water_echo": 45,
+    "trigger_scene_wave": 37,
+    "trigger_scene_constellation": 53,
+    "trigger_scene_suspense": 3,
+    "trigger_scene_floor": 3,
+    "trigger_scene_full": 63,
+    "trigger_slow_blackout": 5,
+    "trigger_hold_scene_rise": 63,
+    "trigger_hold_scene_shadow": 3,
+    "trigger_hold_scene_shimmer": 53,
 }
 
 MIDI_LED_COLOR_NAMES = {
@@ -2165,6 +3372,64 @@ MIDI_LED_COLOR_NAMES = {
 }
 midi_action_notes = {}
 midi_action_led_colors = {}
+midi_learn_target = {"var": None, "status_var": None, "label": ""}
+
+
+def set_midi_learn_target(var, status_var=None, label=""):
+    midi_learn_target["var"] = var
+    midi_learn_target["status_var"] = status_var
+    midi_learn_target["label"] = label
+    if status_var is not None:
+        status_var.set(f"Escuchando MIDI para: {label}. Presiona un boton de la APC.")
+
+
+def capture_midi_learn_note(note):
+    if midi_learn_target.get("var") is None:
+        return False
+
+    def apply_note():
+        var = midi_learn_target.get("var")
+        if var is None:
+            return
+        var.set(str(note))
+        status_var = midi_learn_target.get("status_var")
+        label = midi_learn_target.get("label") or "accion"
+        if status_var is not None:
+            status_var.set(f"Nota {note} capturada para {label}. Guarda el mapa para confirmar.")
+
+    root.after(0, apply_note)
+    return True
+
+
+def sanitize_midi_action_notes(notes):
+    sanitized = dict(notes)
+    for action, note in list(sanitized.items()):
+        if is_apc_espacio_note(note):
+            sanitized[action] = None
+    return sanitized
+
+
+def update_midi_scene_indicator(widget):
+    if widget is None:
+        return
+    running = escena_en_ejecucion
+    widget.config(
+        text="ESCENA EN EJECUCION" if running else "ESCENA LIBRE",
+        bg="#ef5350" if running else "#27ae60",
+        fg="#ffffff",
+        activebackground="#ef5350" if running else "#27ae60",
+        activeforeground="#ffffff",
+    )
+
+
+def update_midi_scene_execution_led():
+    try:
+        note = get_midi_note("scene_go")
+        if note is None:
+            return
+        midi_led(note, 5 if escena_en_ejecucion else 21)
+    except Exception:
+        pass
 
 
 def load_midi_config():
@@ -2201,7 +3466,7 @@ def load_midi_config():
             except Exception:
                 led_colors[action] = MIDI_ACTION_DEFAULT_LED_COLORS[action]
 
-    return notes, led_colors
+    return sanitize_midi_action_notes(notes), led_colors
 
 
 def save_midi_action_notes():
@@ -2264,6 +3529,62 @@ def get_midi_action_for_note(note):
     return None
 
 
+def save_single_midi_mapping(action, raw_note, color_name=None):
+    if action not in MIDI_ACTION_DEFAULT_NOTES:
+        messagebox.showwarning("Accion invalida", "No se encontro la accion MIDI.")
+        return False
+
+    raw = str(raw_note).strip()
+    if raw == "":
+        next_note = None
+    else:
+        try:
+            next_note = int(raw)
+        except Exception:
+            messagebox.showwarning("Nota invalida", f"'{raw}' no es una nota MIDI valida.")
+            return False
+
+        if next_note < 0 or next_note > 127:
+            messagebox.showwarning("Nota invalida", "Las notas MIDI deben estar entre 0 y 127.")
+            return False
+
+        if is_apc_espacio_note(next_note):
+            messagebox.showwarning(
+                "Nota reservada",
+                "Esa nota APC esta reservada para ESPACIO LABERINTOS."
+            )
+            return False
+
+        for other_action, other_note in midi_action_notes.items():
+            if other_action == action or other_note is None:
+                continue
+            try:
+                if int(other_note) == next_note:
+                    messagebox.showwarning(
+                        "Nota ocupada",
+                        f"La nota {next_note} ya esta asignada a {MIDI_ACTION_LABELS.get(other_action, other_action)}."
+                    )
+                    return False
+            except Exception:
+                continue
+
+    midi_action_notes[action] = next_note
+
+    if color_name is not None:
+        if color_name not in MIDI_LED_COLOR_OPTIONS:
+            messagebox.showwarning("Color invalido", f"'{color_name}' no es un color LED valido.")
+            return False
+        midi_action_led_colors[action] = MIDI_LED_COLOR_OPTIONS[color_name]
+
+    save_midi_action_notes()
+    rebuild_midi_mappings()
+    try:
+        inicializar_leds_midi()
+    except Exception:
+        pass
+    return True
+
+
 def open_midi_config_panel():
     global midi_config_window
 
@@ -2299,6 +3620,16 @@ def open_midi_config_panel():
     status_box = tk.LabelFrame(frame, text="Estado", bg="#181b1e", fg="#20bdec",
                                font=("Segoe UI", 10, "bold"), padx=8, pady=8)
     status_box.grid(row=1, column=0, sticky="ew", pady=(10, 8))
+    scene_indicator_btn = tk.Button(
+        status_box,
+        text="ESCENA LIBRE",
+        bg="#27ae60",
+        fg="#ffffff",
+        relief="flat",
+        takefocus=0,
+        font=("Segoe UI", 10, "bold"),
+    )
+    scene_indicator_btn.pack(fill="x", pady=(0, 8))
     tk.Label(status_box, textvariable=status_var, bg="#181b1e", fg="#d9f3ff",
              font=("Segoe UI", 9), justify="left", anchor="w").pack(fill="x")
 
@@ -2324,35 +3655,184 @@ def open_midi_config_panel():
     table_canvas.grid(row=0, column=0, sticky="nsew")
     table_scroll.grid(row=0, column=1, sticky="ns")
     table_inner.grid_columnconfigure(0, weight=1)
+    bind_mousewheel_scroll(table_canvas, table_canvas, table_inner)
 
     action_note_vars = {}
     action_color_vars = {}
-    tk.Label(table_inner, text="Accion", bg="#181b1e", fg="#8fb8c9",
-             font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 12), pady=(0, 4))
-    tk.Label(table_inner, text="Nota APC", bg="#181b1e", fg="#8fb8c9",
-             font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w", pady=(0, 4))
-    tk.Label(table_inner, text="Color LED", bg="#181b1e", fg="#8fb8c9",
-             font=("Segoe UI", 9, "bold")).grid(row=0, column=2, sticky="w", padx=(12, 0), pady=(0, 4))
+    midi_row_frames = {}
+    midi_row_hover = set()
+    midi_row_focus = set()
 
-    for row, action in enumerate(MIDI_ACTION_DEFAULT_NOTES, start=1):
-        note = get_midi_note(action)
-        note_var = tk.StringVar(value="" if note is None else str(note))
-        color_var = tk.StringVar(value=get_midi_led_color_name(action))
-        action_note_vars[action] = note_var
-        action_color_vars[action] = color_var
-        tk.Label(table_inner, text=MIDI_ACTION_LABELS[action], bg="#181b1e", fg="#d9f3ff",
-                 font=("Segoe UI", 10)).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=3)
-        tk.Entry(table_inner, textvariable=note_var, width=8, bg="#111519", fg="#e6e6e6",
-                 insertbackground="#20bdec", relief="flat",
-                 font=("Segoe UI", 10)).grid(row=row, column=1, sticky="w", pady=3)
-        ttk.Combobox(
-            table_inner,
-            textvariable=color_var,
-            values=list(MIDI_LED_COLOR_OPTIONS.keys()),
-            state="readonly",
-            width=18,
-            font=("Segoe UI", 9),
-        ).grid(row=row, column=2, sticky="w", padx=(12, 0), pady=3)
+    header_row = tk.Frame(table_inner, bg="#202832", padx=8, pady=5)
+    header_row.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+    header_row.grid_columnconfigure(0, minsize=42)
+    header_row.grid_columnconfigure(1, weight=1)
+    header_row.grid_columnconfigure(2, minsize=100)
+    header_row.grid_columnconfigure(3, minsize=190)
+    tk.Label(header_row, text="Fila", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold"), anchor="center").grid(row=0, column=0, sticky="ew", padx=(0, 10))
+    tk.Label(header_row, text="Accion", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w", padx=(0, 12))
+    tk.Label(header_row, text="Nota APC", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold")).grid(row=0, column=2, sticky="w", padx=(0, 12))
+    tk.Label(header_row, text="Color LED", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold")).grid(row=0, column=3, sticky="w")
+
+    def set_midi_row_highlight(action):
+        row_frame = midi_row_frames.get(action)
+        if row_frame is None:
+            return
+        active = action in midi_row_hover or action in midi_row_focus
+        normal_bg = getattr(row_frame, "normal_bg", "#181b1e")
+        bg = "#123544" if active else normal_bg
+        row_frame.config(bg=bg, highlightbackground="#20bdec" if active else "#2a343d")
+        for child in row_frame.winfo_children():
+            if isinstance(child, tk.Label):
+                child.config(bg=bg)
+
+    def set_midi_row_hover(action, active=True):
+        if active:
+            midi_row_hover.add(action)
+        else:
+            midi_row_hover.discard(action)
+        set_midi_row_highlight(action)
+
+    def set_midi_row_focus(action, active=True):
+        if active:
+            midi_row_focus.add(action)
+        else:
+            midi_row_focus.discard(action)
+        set_midi_row_highlight(action)
+
+    def leave_midi_row(action, row_frame):
+        x = row_frame.winfo_pointerx()
+        y = row_frame.winfo_pointery()
+        left = row_frame.winfo_rootx()
+        top = row_frame.winfo_rooty()
+        right = left + row_frame.winfo_width()
+        bottom = top + row_frame.winfo_height()
+        if left <= x <= right and top <= y <= bottom:
+            return
+        set_midi_row_hover(action, False)
+
+    def midi_config_category(action):
+        if action.startswith("scene_") or action == "show_stop":
+            return "ESCENAS / SHOW"
+        if action in ("all_on", "all_off", "refresh", "drum_hit"):
+            return "CONTROL GENERAL"
+        if action.startswith("effect_"):
+            return "EFECTOS"
+        if action.startswith("trigger_hold"):
+            return "DISPARADORES - PRESION"
+        if action.startswith("trigger_scene") or action == "trigger_slow_blackout":
+            return "DISPARADORES - SOBRE ESCENA"
+        if action.startswith("trigger_"):
+            return "DISPARADORES - COLOR / MOVIMIENTO"
+        return "OTROS"
+
+    category_order = (
+        "ESCENAS / SHOW",
+        "CONTROL GENERAL",
+        "EFECTOS",
+        "DISPARADORES - SOBRE ESCENA",
+        "DISPARADORES - PRESION",
+        "DISPARADORES - COLOR / MOVIMIENTO",
+        "OTROS",
+    )
+    actions_by_category = {category: [] for category in category_order}
+    for action in MIDI_ACTION_DEFAULT_NOTES:
+        actions_by_category.setdefault(midi_config_category(action), []).append(action)
+
+    table_row = 1
+    display_row = 1
+    for category in category_order:
+        actions_in_category = actions_by_category.get(category, [])
+        if not actions_in_category:
+            continue
+        actions_in_category = sorted(
+            actions_in_category,
+            key=lambda action: (
+                0 if get_midi_note(action) is not None else 1,
+                MIDI_ACTION_LABELS.get(action, action),
+            ),
+        )
+
+        assigned_count = sum(1 for action in actions_in_category if get_midi_note(action) is not None)
+        category_row = tk.Frame(table_inner, bg="#111519", padx=8, pady=4)
+        category_row.grid(row=table_row, column=0, sticky="ew", pady=(8, 2))
+        category_row.grid_columnconfigure(0, weight=1)
+        tk.Label(
+            category_row,
+            text=f"{category}  |  {assigned_count}/{len(actions_in_category)} asignadas",
+            bg="#111519",
+            fg="#20bdec",
+            font=("Segoe UI", 9, "bold"),
+            anchor="w",
+        ).grid(row=0, column=0, sticky="ew")
+        table_row += 1
+
+        for action in actions_in_category:
+            row = table_row
+            row_number_value = display_row
+            table_row += 1
+            display_row += 1
+            note = get_midi_note(action)
+            note_var = tk.StringVar(value="" if note is None else str(note))
+            color_var = tk.StringVar(value=get_midi_led_color_name(action))
+            action_note_vars[action] = note_var
+            action_color_vars[action] = color_var
+
+            row_bg = "#181f25" if row_number_value % 2 else "#151a1f"
+            row_frame = tk.Frame(
+                table_inner,
+                bg=row_bg,
+                padx=8,
+                pady=4,
+                highlightthickness=1,
+                highlightbackground=row_bg,
+            )
+            row_frame.normal_bg = row_bg
+            row_frame.grid(row=row, column=0, sticky="ew", pady=1)
+            row_frame.grid_columnconfigure(0, minsize=42)
+            row_frame.grid_columnconfigure(1, weight=1)
+            row_frame.grid_columnconfigure(2, minsize=100)
+            row_frame.grid_columnconfigure(3, minsize=190)
+            midi_row_frames[action] = row_frame
+
+            row_number = tk.Label(row_frame, text=str(row_number_value), bg=row_bg, fg="#8fb8c9",
+                                  font=("Segoe UI", 9, "bold"), anchor="center")
+            row_number.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+            action_label = tk.Label(row_frame, text=MIDI_ACTION_LABELS[action], bg=row_bg, fg="#d9f3ff",
+                                    font=("Segoe UI", 10), anchor="w")
+            action_label.grid(row=0, column=1, sticky="ew", padx=(0, 12))
+            note_entry = tk.Entry(row_frame, textvariable=note_var, width=8, bg="#111519", fg="#e6e6e6",
+                                  insertbackground="#20bdec", relief="flat",
+                                  font=("Segoe UI", 10))
+            note_entry.grid(row=0, column=2, sticky="w", padx=(0, 12))
+            note_entry.bind(
+                "<FocusIn>",
+                lambda _e, v=note_var, a=action: set_midi_learn_target(
+                    v,
+                    status_var,
+                    MIDI_ACTION_LABELS.get(a, a),
+                ),
+                add="+",
+            )
+            color_combo = ttk.Combobox(
+                row_frame,
+                textvariable=color_var,
+                values=list(MIDI_LED_COLOR_OPTIONS.keys()),
+                state="readonly",
+                width=18,
+                font=("Segoe UI", 9),
+            )
+            color_combo.grid(row=0, column=3, sticky="w")
+
+            for widget in (row_frame, row_number, action_label, note_entry, color_combo):
+                widget.bind("<FocusIn>", lambda _e, a=action: set_midi_row_focus(a, True), add="+")
+                widget.bind("<FocusOut>", lambda _e, a=action: root.after(120, lambda: set_midi_row_focus(a, False)))
+                widget.bind("<Enter>", lambda _e, a=action: set_midi_row_hover(a, True))
+                widget.bind("<Leave>", lambda _e, a=action, rf=row_frame: root.after(20, lambda: leave_midi_row(a, rf)))
 
     actions = tk.Frame(frame, bg="#181b1e")
     actions.grid(row=3, column=0, sticky="ew")
@@ -2364,6 +3844,7 @@ def open_midi_config_panel():
         ports = get_available_ports()
         input_count = len(ports.get("inputs", []))
         output_count = len(ports.get("outputs", []))
+        update_midi_scene_indicator(scene_indicator_btn)
         status_var.set(
             "Estado: {estado}\nEntrada: {entrada}\nSalida: {salida}\nPuertos disponibles: {inputs} entrada(s), {outputs} salida(s)\nUltimo error: {error}".format(
                 estado="conectado" if status.get("running") else "detenido",
@@ -2380,6 +3861,12 @@ def open_midi_config_panel():
             var.set("" if note is None else str(note))
         for action, var in action_color_vars.items():
             var.set(get_midi_led_color_name(action))
+
+    def refresh_scene_indicator_loop():
+        if not win.winfo_exists():
+            return
+        update_midi_scene_indicator(scene_indicator_btn)
+        win.after(250, refresh_scene_indicator_loop)
 
     def save_all_mappings():
         next_notes = {}
@@ -2400,6 +3887,13 @@ def open_midi_config_panel():
 
             if note < 0 or note > 127:
                 messagebox.showwarning("Nota invalida", "Las notas MIDI deben estar entre 0 y 127.")
+                return
+
+            if is_apc_espacio_note(note):
+                messagebox.showwarning(
+                    "Nota reservada",
+                    f"La nota {note} esta reservada para ESPACIO LABERINTOS."
+                )
                 return
 
             used_notes.setdefault(note, []).append(action)
@@ -2441,7 +3935,7 @@ def open_midi_config_panel():
         if not messagebox.askyesno("Restaurar MIDI", "¿Restaurar el mapa MIDI por defecto?"):
             return
         midi_action_notes.clear()
-        midi_action_notes.update(MIDI_ACTION_DEFAULT_NOTES)
+        midi_action_notes.update(sanitize_midi_action_notes(MIDI_ACTION_DEFAULT_NOTES))
         midi_action_led_colors.clear()
         midi_action_led_colors.update(MIDI_ACTION_DEFAULT_LED_COLORS)
         save_midi_action_notes()
@@ -2467,6 +3961,7 @@ def open_midi_config_panel():
               font=("Segoe UI", 10, "bold")).grid(row=0, column=3, sticky="ew", padx=(5, 0))
 
     refresh_midi_panel()
+    refresh_scene_indicator_loop()
 
 
 app_menu = tk.Menu(root)
@@ -2975,15 +4470,173 @@ def get_ips_by_scope(include_offline=False):
     return ips
 
 
+def _mix_rgb(a, b, ratio):
+    ratio = max(0.0, min(1.0, float(ratio)))
+    return tuple(int(a[i] + (b[i] - a[i]) * ratio) for i in range(3))
+
+
+def _rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def _white_preview_hex(temp):
+    try:
+        temp = float(temp)
+    except Exception:
+        temp = 128.0
+    if temp > 1000:
+        ratio = (temp - 2200) / (6500 - 2200)
+    else:
+        ratio = temp / 255.0
+    return _rgb_to_hex(_mix_rgb((255, 190, 105), (242, 248, 255), ratio))
+
+
+def _colour_preview_hex(h, s):
+    try:
+        h = float(h) % 360
+        s = max(0.0, min(1.0, float(s)))
+    except Exception:
+        h, s = 0.0, 1.0
+    r, g, b = colorsys.hsv_to_rgb(h / 360.0, s, 1.0)
+    return _rgb_to_hex((int(r * 255), int(g * 255), int(b * 255)))
+
+
+def set_panel_preview_swatch(panel, mode=None, h=None, s=None, temp=None, is_on=None):
+    swatch = getattr(panel, "preview_swatch", None)
+    if swatch is None:
+        return
+
+    if is_on is None:
+        try:
+            is_on = selected_devices[panel.ip].get() and safe_brightness(getattr(panel, "last_brillo", 0)) > 0
+        except Exception:
+            is_on = True
+
+    if not is_on:
+        swatch.config(bg="#15191d", highlightbackground="#2b343b")
+        return
+
+    mode = mode or getattr(panel, "last_mode", "colour")
+    if mode == "white":
+        color = _white_preview_hex(temp if temp is not None else getattr(panel, "last_temp", 128))
+    else:
+        color = _colour_preview_hex(
+            h if h is not None else getattr(panel, "last_hue", 0),
+            s if s is not None else getattr(panel, "last_sat", 1),
+        )
+
+    swatch.config(bg=color, highlightbackground="#d9f3ff" if mode == "white" else "#111519")
+
+
+def get_panel_assignment_state(ip):
+    try:
+        placements = globals().get("espacio_laberintos_data", {}).get("placements", {})
+        return str(get_lamp_id(ip)) in placements
+    except Exception:
+        return False
+
+
+def get_panel_connection_state(ip):
+    return lamp_status.get(ip, None)
+
+
+def apply_lamp_visual_state(panel, update_swatch=True):
+    ip = getattr(panel, "ip", None)
+    if not ip:
+        return
+
+    connected = get_panel_connection_state(ip)
+    powered = bool(selected_devices[ip].get()) if ip in selected_devices else False
+    if connected is True:
+        base_bg = "#17291c"
+        strip_bg = "#18a957"
+    elif connected is False:
+        base_bg = "#2b171a"
+        strip_bg = "#b9363f"
+    else:
+        base_bg = "#202428"
+        strip_bg = "#68737d"
+
+    scene_involved = bool(getattr(panel, "scene_involved", False))
+    border = "#252e36"
+    panel.config(bg=base_bg, highlightbackground=border, highlightcolor=border)
+
+    for widget_name in (
+        "top_frame",
+        "mode_row",
+        "body_frame",
+        "sliders_frame",
+        "wheel_slot",
+        "on_check",
+        "mode_colour_radio",
+        "mode_white_radio",
+    ):
+        widget = getattr(panel, widget_name, None)
+        if widget is not None:
+            try:
+                widget.config(bg=base_bg, activebackground=base_bg)
+            except Exception:
+                try:
+                    widget.config(bg=base_bg)
+                except Exception:
+                    pass
+
+    strip = getattr(panel, "connection_strip", None)
+    if strip is not None:
+        strip.config(bg=strip_bg)
+
+    power_dot = getattr(panel, "power_dot", None)
+    if power_dot is not None:
+        power_dot.config(bg="#23d160" if powered else "#3b444c")
+
+    scene_dot = getattr(panel, "scene_dot", None)
+    if scene_dot is not None:
+        if scene_involved:
+            scene_dot.config(text="E", bg="#f1c40f", fg="#111519", highlightbackground="#fff3a6")
+        else:
+            scene_dot.config(text="", bg=base_bg, fg=base_bg, highlightbackground=base_bg)
+
+    group_badge = getattr(panel, "group_badge", None)
+    if group_badge is not None:
+        group_badge.config(bg="#111519")
+
+    if update_swatch:
+        set_panel_preview_swatch(panel, is_on=powered)
+
+
 def update_panel_visual(panel):
     try:
-        color = "#03A125" if selected_devices[panel.ip].get() else "#252e36"
-        panel.config(highlightbackground=color, highlightcolor=color)
+        apply_lamp_visual_state(panel)
+        refresh_espacio = globals().get("refresh_espacio_laberintos_visual")
+        if callable(refresh_espacio):
+            refresh_espacio()
     except Exception:
         pass
 
 
+def sync_espacio_laberintos_current_state(ips=None):
+    if ips is None:
+        target_panels = list(panels.values())
+    else:
+        if isinstance(ips, str):
+            ips = [ips]
+        target_panels = [panels[ip] for ip in ips if ip in panels]
+
+    for panel in target_panels:
+        try:
+            panel.scene_involved = False
+            apply_lamp_visual_state(panel)
+        except Exception:
+            pass
+
+    refresh_espacio = globals().get("refresh_espacio_laberintos_visual")
+    if callable(refresh_espacio):
+        refresh_espacio()
+
+
 def set_panel_mode(panel, mode, send=True):
+    if send and not is_preview_update_suspended():
+        claim_lamps_for_manual_control(panel.ip)
     panel.mode_var.set(mode)
     panel.last_mode = mode
     if mode == "colour":
@@ -2996,6 +4649,7 @@ def set_panel_mode(panel, mode, send=True):
         panel.whitewheel_lamp.pack()
         if send and selected_devices[panel.ip].get():
             send_lamp_white(panel.ip, panel.last_brillo, panel.last_temp)
+    update_panel_visual(panel)
 
 
 def set_panel_mode_preview(panel, mode):
@@ -3007,22 +4661,29 @@ def set_panel_mode_preview(panel, mode):
         else:
             panel.whitewheel_lamp.pack_forget()
             panel.colorwheel_lamp.pack()
+        set_panel_preview_swatch(panel, mode)
     except Exception:
         pass
 
 
-def apply_master_to_ips(ips):
+def apply_master_to_ips(ips, force_on=False):
     modo = maestro_mode.get()
     h = maestro_hsv["h"]
     s = maestro_hsv["s"]
     brillo = safe_brightness(maestro_brillo.get())
     temp = int(maestro_temp.get())
 
+    claim_lamps_for_manual_control(ips)
+    live_ips = []
+
     for ip in ips:
         panel = panels.get(ip)
         if panel is None:
             continue
-        selected_devices[ip].set(brillo > 0)
+        was_on = bool(selected_devices[ip].get())
+        should_send = force_on or was_on
+        if should_send and lamp_status.get(ip, True):
+            live_ips.append(ip)
         panel.last_brillo = brillo
         panel.brillo_var.set(brillo)
         panel.last_mode = modo
@@ -3035,19 +4696,25 @@ def apply_master_to_ips(ips):
             panel.last_temp = temp
             panel.temp_var.set(temp)
             panel.whitewheel_lamp.set_temp_value(temp)
+        if should_send and brillo <= 0:
+            selected_devices[ip].set(False)
+        elif should_send:
+            selected_devices[ip].set(True)
         set_panel_mode(panel, modo, send=False)
         update_panel_visual(panel)
 
-    if not ips:
+    sync_espacio_laberintos_current_state(ips)
+
+    if not live_ips:
         return
     if brillo <= 0:
-        for ip in ips:
+        for ip in live_ips:
             send_off(ip)
         return
     if modo == "colour":
-        send_color_to_lamps(ips, h, s, brillo)
+        send_color_to_lamps(live_ips, h, s, brillo)
     else:
-        send_white_to_lamps(ips, brillo, map_slider_to_wiz_temperature(temp))
+        send_white_to_lamps(live_ips, brillo, map_slider_to_wiz_temperature(temp))
 
 
 def maestro_on_color(h, s, v):
@@ -3084,6 +4751,7 @@ def aplicar_maestro():
 
 def apagar_todo():
     ips = get_ips_by_scope()
+    claim_lamps_for_manual_control(ips)
     for ip in ips:
         selected_devices[ip].set(False)
         if ip in panels:
@@ -3091,10 +4759,13 @@ def apagar_todo():
             panels[ip].brillo_var.set(0)
             update_panel_visual(panels[ip])
         send_off(ip)
+    sync_espacio_laberintos_current_state(ips)
 
 
 def encender_todo():
-    apply_master_to_ips(get_ips_by_scope())
+    if safe_brightness(maestro_brillo.get()) <= 0:
+        maestro_brillo.set(180)
+    apply_master_to_ips(get_ips_by_scope(), force_on=True)
 
 
 maestro_top = tk.Frame(frame_maestro, bg="#181b1e")
@@ -3110,7 +4781,7 @@ tk.Radiobutton(maestro_top, text="B", variable=maestro_mode, value="white",
 
 scope_row = tk.Frame(frame_maestro, bg="#181b1e")
 scope_row.pack(fill="x", pady=(0, 3))
-tk.Checkbutton(scope_row, text="Efectos", variable=maestro_scope_effects,
+tk.Checkbutton(scope_row, text="Bichos", variable=maestro_scope_effects,
                bg="#181b1e", fg="#20bdec", selectcolor="#181b1e",
                font=("Segoe UI", 8)).pack(side="left", padx=(12, 2))
 tk.Checkbutton(scope_row, text="Atmos.", variable=maestro_scope_atmos,
@@ -3158,18 +4829,894 @@ tk.Button(master_actions, text="Refrescar", command=refresh_lamp_status,
 frame_center = tk.Frame(frame_main, bg="#181b1e")
 frame_center.pack(side="left", fill="both", expand=True, padx=(0, 8), pady=15)
 canvas_lamps = tk.Canvas(frame_center, bg="#181b1e", highlightthickness=0, bd=0)
-canvas_lamps.pack(side="left", fill="both", expand=True)
+canvas_lamps.grid(row=0, column=0, sticky="nsew")
 scroll_lamps = tk.Scrollbar(frame_center, orient="vertical", command=canvas_lamps.yview)
-scroll_lamps.pack(side="right", fill="y")
+scroll_lamps.grid(row=0, column=1, sticky="ns")
+frame_center.grid_rowconfigure(0, weight=1)
+frame_center.grid_columnconfigure(0, weight=1)
 canvas_lamps.configure(yscrollcommand=scroll_lamps.set)
 
 frame_lamps = tk.Frame(canvas_lamps, bg="#181b1e")
-canvas_lamps.create_window((0, 0), window=frame_lamps, anchor="nw")
+frame_lamps_window = canvas_lamps.create_window((0, 0), window=frame_lamps, anchor="nw")
+frame_lamps.grid_columnconfigure(0, weight=1)
 frame_lamps.bind("<Configure>", lambda event: canvas_lamps.configure(scrollregion=canvas_lamps.bbox("all")))
+canvas_lamps.bind("<Configure>", lambda event: canvas_lamps.itemconfigure(frame_lamps_window, width=event.width))
+
+espacio_laberintos_data = load_espacio_laberintos()
+espacio_selected_lamp = {"id": None}
+espacio_drag_lamp = {"id": None}
+espacio_cells = {}
+espacio_palette_items = {}
+espacio_status_var = tk.StringVar(value="Elige una lampara y ubicala en la matriz.")
+espacio_midi_action_var = tk.StringVar(value="toggle")
+espacio_midi_trigger_var = tk.StringVar(value="Pulso color")
+ESPACIO_MIDI_ACTIONS = {
+    "toggle": "Alternar",
+    "pulse": "Pulso",
+    "hold": "Sostener",
+    "solo": "Solo",
+    "master": "Copiar maestro",
+    "scene_mark": "Sumar escena",
+    "freeze": "Congelar",
+}
+ESPACIO_MIDI_TRIGGERS = ("Pulso color", "Pulso blanco", "Flash rojo")
+espacio_midi_hold_states = {}
+espacio_midi_pulse_states = {}
+
+
+def normalize_espacio_laberintos():
+    rows = max(1, min(ESPACIO_MAX_ROWS, int(espacio_laberintos_data.get("rows", ESPACIO_DEFAULT_ROWS))))
+    cols = max(1, min(ESPACIO_MAX_COLS, int(espacio_laberintos_data.get("cols", ESPACIO_DEFAULT_COLS))))
+    valid_ids = {str(get_lamp_id(ip)) for ip in LAMP_IPS}
+    occupied = set()
+    clean = {}
+    for lamp_id, pos in espacio_laberintos_data.get("placements", {}).items():
+        lamp_id = str(lamp_id)
+        if lamp_id not in valid_ids or not isinstance(pos, dict):
+            continue
+        try:
+            row = int(pos.get("row", -1))
+            col = int(pos.get("col", -1))
+        except Exception:
+            continue
+        if row < 0 or col < 0 or row >= rows or col >= cols:
+            continue
+        if (row, col) in occupied:
+            continue
+        clean[lamp_id] = {"row": row, "col": col}
+        occupied.add((row, col))
+    espacio_laberintos_data["rows"] = rows
+    espacio_laberintos_data["cols"] = cols
+    espacio_laberintos_data["placements"] = clean
+
+
+def get_espacio_lamp_at(row, col):
+    for lamp_id, pos in espacio_laberintos_data.get("placements", {}).items():
+        if int(pos.get("row", -1)) == row and int(pos.get("col", -1)) == col:
+            return lamp_id
+    return None
+
+
+def get_espacio_cell_from_event(event):
+    widget = root.winfo_containing(event.x_root, event.y_root)
+    while widget is not None:
+        cell = getattr(widget, "espacio_cell", None)
+        if cell is not None:
+            return cell
+        widget = getattr(widget, "master", None)
+    return None
+
+
+def select_espacio_lamp(lamp_id):
+    espacio_selected_lamp["id"] = lamp_id
+    espacio_status_var.set(f"{lamp_id} lista para ubicar.")
+    refresh_espacio_laberintos_visual()
+
+
+def assign_espacio_lamp(lamp_id, row, col, save=False):
+    if not lamp_id:
+        return
+    normalize_espacio_laberintos()
+    current = get_espacio_lamp_at(row, col)
+    if current and current != lamp_id:
+        espacio_laberintos_data["placements"].pop(current, None)
+    espacio_laberintos_data["placements"][lamp_id] = {"row": row, "col": col}
+    espacio_status_var.set(f"{lamp_id} ubicada en fila {row + 1}, columna {col + 1}.")
+    rebuild_layout = globals().get("rebuild_lamp_layout")
+    if callable(rebuild_layout):
+        rebuild_layout()
+    else:
+        refresh_espacio_laberintos_visual()
+    if save:
+        save_espacio_laberintos(espacio_laberintos_data)
+
+
+def clear_espacio_cell(row, col):
+    lamp_id = get_espacio_lamp_at(row, col)
+    if lamp_id:
+        espacio_laberintos_data["placements"].pop(lamp_id, None)
+        espacio_status_var.set(f"{lamp_id} queda sin ubicacion.")
+        rebuild_layout = globals().get("rebuild_lamp_layout")
+        if callable(rebuild_layout):
+            rebuild_layout()
+        else:
+            refresh_espacio_laberintos_visual()
+
+
+def remove_espacio_lamp(lamp_id):
+    lamp_id = str(lamp_id)
+    if lamp_id not in espacio_laberintos_data.get("placements", {}):
+        return
+    espacio_laberintos_data["placements"].pop(lamp_id, None)
+    espacio_status_var.set(f"{lamp_id} retirada de ESPACIO LABERINTOS.")
+    rebuild_layout = globals().get("rebuild_lamp_layout")
+    if callable(rebuild_layout):
+        rebuild_layout()
+    else:
+        refresh_espacio_laberintos_visual()
+
+
+def is_espacio_lamp_connected(ip):
+    if not ip:
+        return False
+    return bool(lamp_status.get(ip, False))
+
+
+def get_espacio_cell_for_apc_note(note):
+    try:
+        note = int(note)
+    except Exception:
+        return None
+    for row, notes in enumerate(APC_ESPACIO_ROWS):
+        for col, cell_note in enumerate(notes):
+            if cell_note == note:
+                return row, col
+    return None
+
+
+def refresh_espacio_midi_leds():
+    for row in range(ESPACIO_MAX_ROWS):
+        for col in range(ESPACIO_MAX_COLS):
+            note = get_apc_espacio_note(row, col)
+            if note is None:
+                continue
+            lamp_id = get_espacio_lamp_at(row, col)
+            if not lamp_id:
+                midi_led(note, APC_ESPACIO_LED_EMPTY)
+                continue
+            ip = get_lamp_ip_by_id(lamp_id)
+            midi_led(
+                note,
+                APC_ESPACIO_LED_CONNECTED
+                if is_espacio_lamp_connected(ip)
+                else APC_ESPACIO_LED_DISCONNECTED,
+            )
+
+
+def set_active_scene_runtime(name=None, scene_data=None):
+    active_scene_runtime["name"] = name
+    active_scene_runtime["data"] = scene_data
+    if scene_data:
+        try:
+            target_ips = resolve_scene_effect_target_ips(scene_data)
+        except Exception:
+            target_ips = None
+        if target_ips is None:
+            target_ips = {
+                ip for ip in LAMP_IPS
+                if ip in scene_data
+                and scene_data[ip].get("state", "off") == "on"
+                and safe_brightness(scene_data[ip].get("brillo", 0)) > 0
+            }
+        active_scene_runtime["target_ips"] = set(target_ips or [])
+        try:
+            active_scene_runtime["effects"] = set(active_scene_effect_names(scene_data))
+        except Exception:
+            active_scene_runtime["effects"] = set()
+    else:
+        active_scene_runtime["target_ips"] = set()
+        active_scene_runtime["effects"] = set()
+        espacio_midi_effect_ips.clear()
+
+
+def is_ip_in_active_scene_effect(ip):
+    active_effects = {
+        name for name, var in globals().get("effect_vars", {}).items()
+        if getattr(var, "get", lambda: False)()
+    }
+    if not active_effects:
+        return False
+
+    target_ips = active_scene_runtime.get("target_ips", set())
+    if target_ips:
+        return ip in target_ips
+
+    return (
+        ip in espacio_midi_effect_ips
+        or bool(selected_devices.get(ip) is not None and selected_devices[ip].get())
+    )
+
+
+def restore_ip_to_active_scene_effect(ip):
+    scene_data = active_scene_runtime.get("data")
+    if ip not in panels:
+        return
+    if not scene_data:
+        effect_retired_ips.setdefault("atardecer", set()).discard(ip)
+        espacio_midi_effect_ips.add(ip)
+        selected_devices[ip].set(True)
+        panel = panels[ip]
+        if safe_brightness(getattr(panel, "last_brillo", 0)) <= 0:
+            panel.last_brillo = 180
+            try:
+                panel.brillo_var.set(180)
+            except Exception:
+                pass
+        update_panel_visual(panel)
+        sync_espacio_laberintos_current_state(ip)
+        return
+    effect_retired_ips.setdefault("atardecer", set()).discard(ip)
+    espacio_midi_effect_ips.add(ip)
+    selected_devices[ip].set(True)
+    try:
+        apply_scene_mode_to_effect_target(
+            scene_data,
+            {ip},
+            preserve_brightness=False,
+            send_to_lamps=False,
+        )
+    except Exception:
+        update_panel_visual(panels[ip])
+
+
+def remove_ip_from_active_scene_effect(ip, turn_off=True):
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    effect_retired_ips.setdefault("atardecer", set()).add(ip)
+    espacio_midi_effect_ips.add(ip)
+    selected_devices[ip].set(False)
+    panel.scene_involved = True
+    if turn_off:
+        panel.last_brillo = 0
+        try:
+            panel.brillo_var.set(0)
+        except Exception:
+            pass
+        send_off(ip)
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+
+
+def espacio_midi_set_lamp_power(ip, powered):
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    if is_ip_in_active_scene_effect(ip):
+        if powered:
+            restore_ip_to_active_scene_effect(ip)
+        else:
+            remove_ip_from_active_scene_effect(ip, turn_off=True)
+        refresh_espacio_midi_leds()
+        return
+
+    claim_lamps_for_manual_control(ip)
+    selected_devices[ip].set(bool(powered))
+    if powered:
+        if safe_brightness(getattr(panel, "last_brillo", 0)) <= 0:
+            panel.last_brillo = 180
+            try:
+                panel.brillo_var.set(panel.last_brillo)
+            except Exception:
+                pass
+        if getattr(panel, "last_mode", "colour") == "white":
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+        else:
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+    else:
+        send_off(ip)
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+
+
+def espacio_midi_restore_lamp(ip, snapshot):
+    panel = panels.get(ip)
+    if panel is None or not snapshot:
+        return
+    selected_devices[ip].set(bool(snapshot.get("selected", False)))
+    panel.last_mode = snapshot.get("mode", getattr(panel, "last_mode", "colour"))
+    panel.last_hue = snapshot.get("h", getattr(panel, "last_hue", 0))
+    panel.last_sat = snapshot.get("s", getattr(panel, "last_sat", 1))
+    panel.last_brillo = snapshot.get("brillo", getattr(panel, "last_brillo", 0))
+    panel.last_temp = snapshot.get("temp", getattr(panel, "last_temp", 128))
+    try:
+        panel.brillo_var.set(panel.last_brillo)
+        panel.temp_var.set(panel.last_temp)
+    except Exception:
+        pass
+    set_panel_mode(panel, panel.last_mode, send=False)
+    if selected_devices[ip].get() and panel.last_brillo > 0:
+        if panel.last_mode == "white":
+            send_lamp_white(ip, panel.last_brillo, panel.last_temp)
+        else:
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
+    else:
+        send_off(ip)
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+
+
+def espacio_midi_snapshot_lamp(ip):
+    panel = panels.get(ip)
+    if panel is None or ip not in selected_devices:
+        return None
+    return {
+        "selected": selected_devices[ip].get(),
+        "mode": getattr(panel, "last_mode", "colour"),
+        "h": getattr(panel, "last_hue", 0),
+        "s": getattr(panel, "last_sat", 1),
+        "brillo": getattr(panel, "last_brillo", 0),
+        "temp": getattr(panel, "last_temp", 128),
+    }
+
+
+def espacio_midi_trigger_lamp(ip, restore_after_ms=320, snapshot=None):
+    panel = panels.get(ip)
+    if panel is None:
+        return None
+    if not is_ip_in_active_scene_effect(ip):
+        claim_lamps_for_manual_control(ip)
+    if snapshot is None:
+        snapshot = espacio_midi_snapshot_lamp(ip)
+    if snapshot is None:
+        return None
+    selected_devices[ip].set(True)
+    trigger = espacio_midi_trigger_var.get()
+    if trigger == "Pulso blanco":
+        panel.last_mode = "white"
+        panel.last_brillo = 255
+        panel.last_temp = 170
+        try:
+            panel.brillo_var.set(255)
+            panel.temp_var.set(170)
+        except Exception:
+            pass
+        set_panel_mode(panel, "white", send=False)
+        send_lamp_white(ip, 255, 170)
+    elif trigger == "Flash rojo":
+        panel.last_mode = "colour"
+        panel.last_hue = 0
+        panel.last_sat = 1
+        panel.last_brillo = 255
+        try:
+            panel.brillo_var.set(255)
+        except Exception:
+            pass
+        set_panel_mode(panel, "colour", send=False)
+        send_lamp_color_safe(ip, 0, 1, 255)
+    else:
+        panel.last_brillo = 255
+        try:
+            panel.brillo_var.set(255)
+        except Exception:
+            pass
+        if getattr(panel, "last_mode", "colour") == "white":
+            send_lamp_white(ip, 255, panel.last_temp)
+        else:
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, 255)
+    update_panel_visual(panel)
+    if restore_after_ms is not None:
+        root.after(
+            max(60, int(restore_after_ms)),
+            lambda target_ip=ip, state=snapshot: espacio_midi_restore_lamp(target_ip, state),
+        )
+    return snapshot
+
+
+def espacio_midi_send_pulse_level(ip, level):
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    selected_devices[ip].set(level > 0)
+    panel.last_brillo = level
+    try:
+        panel.brillo_var.set(level)
+    except Exception:
+        pass
+    trigger = espacio_midi_trigger_var.get()
+    if level <= 0:
+        send_off(ip)
+    elif trigger == "Pulso blanco":
+        panel.last_mode = "white"
+        panel.last_temp = 170
+        try:
+            panel.temp_var.set(170)
+        except Exception:
+            pass
+        set_panel_mode(panel, "white", send=False)
+        send_lamp_white(ip, level, panel.last_temp)
+    elif trigger == "Flash rojo":
+        panel.last_mode = "colour"
+        panel.last_hue = 0
+        panel.last_sat = 1
+        set_panel_mode(panel, "colour", send=False)
+        send_lamp_color_safe(ip, 0, 1, level)
+    else:
+        if getattr(panel, "last_mode", "colour") == "white":
+            send_lamp_white(ip, level, panel.last_temp)
+        else:
+            send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, level)
+    update_panel_visual(panel)
+
+
+def start_espacio_midi_pulse(note, ip):
+    note = int(note)
+    stop_espacio_midi_pulse(note, turn_off=False)
+    if not is_ip_in_active_scene_effect(ip):
+        claim_lamps_for_manual_control(ip)
+    state = {
+        "ip": ip,
+        "active": True,
+        "step": 0,
+        "levels": (18, 70, 145, 235, 255, 180, 80, 18),
+    }
+    espacio_midi_pulse_states[note] = state
+    midi_led(note, 63)
+
+    def loop():
+        current = espacio_midi_pulse_states.get(note)
+        if not current or not current.get("active"):
+            return
+        levels = current["levels"]
+        level = levels[current["step"] % len(levels)]
+        current["step"] += 1
+        espacio_midi_send_pulse_level(ip, level)
+        root.after(115, loop)
+
+    loop()
+
+
+def stop_espacio_midi_pulse(note, turn_off=True):
+    state = espacio_midi_pulse_states.pop(int(note), None)
+    if not state:
+        return False
+    state["active"] = False
+    ip = state.get("ip")
+    if turn_off and ip in panels:
+        panel = panels[ip]
+        selected_devices[ip].set(False)
+        panel.last_brillo = 0
+        try:
+            panel.brillo_var.set(0)
+        except Exception:
+            pass
+        send_off(ip)
+        update_panel_visual(panel)
+        sync_espacio_laberintos_current_state(ip)
+    refresh_espacio_midi_leds()
+    return True
+
+
+def espacio_midi_solo_lamp(ip):
+    target_group = get_lamp_group(ip)
+    group_ips = [
+        candidate_ip
+        for candidate_ip in LAMP_IPS
+        if get_lamp_group(candidate_ip) == target_group and is_espacio_lamp_connected(candidate_ip)
+    ]
+    for candidate_ip in group_ips:
+        espacio_midi_set_lamp_power(candidate_ip, candidate_ip == ip)
+
+
+def espacio_midi_toggle_scene_mark(ip):
+    panel = panels.get(ip)
+    if panel is None:
+        return False
+    selected_devices[ip].set(not selected_devices[ip].get())
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+    return selected_devices[ip].get()
+
+
+def espacio_midi_freeze_lamp(ip):
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    effect_retired_ips.setdefault("atardecer", set()).add(ip)
+    panel.scene_involved = False
+    selected_devices[ip].set(False)
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+
+
+def espacio_midi_apply_master_to_scene_ip(ip):
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    modo = maestro_mode.get()
+    brillo = max(8, safe_brightness(maestro_brillo.get()))
+    panel.last_mode = modo
+    panel.mode_var.set(modo)
+    panel.last_brillo = brillo
+    try:
+        panel.brillo_var.set(brillo)
+    except Exception:
+        pass
+    if modo == "colour":
+        panel.last_hue = maestro_hsv["h"]
+        panel.last_sat = maestro_hsv["s"]
+        try:
+            panel.colorwheel_lamp.set_color(panel.last_hue, panel.last_sat, max(0.01, brillo / 255))
+        except Exception:
+            pass
+    else:
+        panel.last_temp = int(maestro_temp.get())
+        try:
+            panel.temp_var.set(panel.last_temp)
+            panel.whitewheel_lamp.set_temp_value(panel.last_temp)
+        except Exception:
+            pass
+    selected_devices[ip].set(True)
+    effect_retired_ips.setdefault("atardecer", set()).discard(ip)
+    set_panel_mode(panel, modo, send=False)
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+
+
+def handle_espacio_midi_note_off(note):
+    if stop_espacio_midi_pulse(note, turn_off=True):
+        return True
+    state = espacio_midi_hold_states.pop(int(note), None)
+    if not state:
+        return False
+    espacio_midi_restore_lamp(state.get("ip"), state.get("snapshot"))
+    refresh_espacio_midi_leds()
+    return True
+
+
+def handle_espacio_midi_note(note):
+    cell = get_espacio_cell_for_apc_note(note)
+    if cell is None:
+        return False
+    row, col = cell
+    lamp_id = get_espacio_lamp_at(row, col)
+    if not lamp_id:
+        espacio_status_var.set(f"Pad MIDI {note}: celda vacia.")
+        refresh_espacio_midi_leds()
+        return True
+    ip = get_lamp_ip_by_id(lamp_id)
+    if not ip:
+        espacio_status_var.set(f"Pad MIDI {note}: {lamp_id} no encontrada.")
+        refresh_espacio_midi_leds()
+        return True
+    if not is_espacio_lamp_connected(ip):
+        espacio_status_var.set(f"{lamp_id} no esta conectada.")
+        refresh_espacio_midi_leds()
+        return True
+
+    mode = espacio_midi_action_var.get()
+    if mode == "pulse":
+        start_espacio_midi_pulse(note, ip)
+        espacio_status_var.set(f"{lamp_id}: pulso vivo hasta soltar.")
+    elif mode == "hold":
+        snapshot = espacio_midi_snapshot_lamp(ip)
+        espacio_midi_trigger_lamp(ip, restore_after_ms=None, snapshot=snapshot)
+        espacio_midi_hold_states[int(note)] = {"ip": ip, "snapshot": snapshot}
+        espacio_status_var.set(f"{lamp_id}: sosteniendo {espacio_midi_trigger_var.get()}.")
+    elif mode == "solo":
+        espacio_midi_solo_lamp(ip)
+        espacio_status_var.set(f"{lamp_id} en solo dentro de su grupo.")
+    elif mode == "master":
+        if is_ip_in_active_scene_effect(ip):
+            espacio_midi_apply_master_to_scene_ip(ip)
+        else:
+            apply_master_to_ips([ip])
+        espacio_status_var.set(f"{lamp_id} copio el control maestro.")
+    elif mode == "scene_mark":
+        marcado = espacio_midi_toggle_scene_mark(ip)
+        espacio_status_var.set(f"{lamp_id} {'sumada a' if marcado else 'retirada de'} la seleccion de escena.")
+    elif mode == "freeze":
+        espacio_midi_freeze_lamp(ip)
+        espacio_status_var.set(f"{lamp_id} congelada fuera de la seleccion viva.")
+    else:
+        espacio_midi_set_lamp_power(ip, not selected_devices[ip].get())
+        estado = "encendida" if selected_devices[ip].get() else "apagada"
+        espacio_status_var.set(f"{lamp_id} {estado} desde MIDI.")
+    refresh_espacio_midi_leds()
+    return True
+
+
+def on_espacio_cell_click(row, col):
+    selected = espacio_selected_lamp.get("id")
+    current = get_espacio_lamp_at(row, col)
+    if selected and selected != current:
+        assign_espacio_lamp(selected, row, col)
+    elif current:
+        select_espacio_lamp(current)
+
+
+def on_espacio_palette_press(lamp_id):
+    espacio_drag_lamp["id"] = lamp_id
+    select_espacio_lamp(lamp_id)
+
+
+def on_espacio_palette_release(event):
+    lamp_id = espacio_drag_lamp.get("id") or espacio_selected_lamp.get("id")
+    cell = get_espacio_cell_from_event(event)
+    if lamp_id and cell:
+        assign_espacio_lamp(lamp_id, cell[0], cell[1])
+    espacio_drag_lamp["id"] = None
+
+
+def apply_espacio_matrix_size():
+    try:
+        rows = int(espacio_rows_var.get())
+        cols = int(espacio_cols_var.get())
+    except Exception:
+        messagebox.showwarning("ESPACIO LABERINTOS", "Revisa filas y columnas.")
+        return
+    espacio_laberintos_data["rows"] = max(1, min(ESPACIO_MAX_ROWS, rows))
+    espacio_laberintos_data["cols"] = max(1, min(ESPACIO_MAX_COLS, cols))
+    normalize_espacio_laberintos()
+    build_espacio_laberintos_grid()
+    rebuild_layout = globals().get("rebuild_lamp_layout")
+    if callable(rebuild_layout):
+        rebuild_layout()
+
+
+def save_espacio_from_ui():
+    normalize_espacio_laberintos()
+    if save_espacio_laberintos(espacio_laberintos_data):
+        espacio_status_var.set("Espacio guardado.")
+        messagebox.showinfo("ESPACIO LABERINTOS", "Mapa espacial guardado.")
+
+
+def clear_espacio_all():
+    if messagebox.askyesno("ESPACIO LABERINTOS", "Quitar todas las lamparas de la matriz?"):
+        espacio_laberintos_data["placements"] = {}
+        espacio_status_var.set("Matriz limpia.")
+        rebuild_layout = globals().get("rebuild_lamp_layout")
+        if callable(rebuild_layout):
+            rebuild_layout()
+        else:
+            refresh_espacio_laberintos_visual()
+
+
+def refresh_espacio_laberintos_visual():
+    if not espacio_cells:
+        refresh_espacio_midi_leds()
+        return
+    placements = espacio_laberintos_data.get("placements", {})
+    selected = espacio_selected_lamp.get("id")
+    placed_ids = set(placements.keys())
+    for (row, col), cell in espacio_cells.items():
+        lamp_id = get_espacio_lamp_at(row, col)
+        if lamp_id:
+            ip = get_lamp_ip_by_id(lamp_id)
+            group = get_lamp_group(ip) if ip else "sin_grupo"
+            is_connected = is_espacio_lamp_connected(ip)
+            bg = "#14351d" if group == "efectos" else "#34311a" if group == "atmosfera" else "#24313a"
+            outline = "#20bdec" if lamp_id == selected else "#03A125" if is_connected else "#58616a"
+            cell.config(bg=bg, highlightbackground=outline, highlightcolor=outline)
+        else:
+            cell.config(bg="#111519", highlightbackground="#303840", highlightcolor="#303840")
+    for lamp_id, widget in espacio_palette_items.items():
+        ip = get_lamp_ip_by_id(lamp_id)
+        is_connected = is_espacio_lamp_connected(ip)
+        is_placed = lamp_id in placed_ids
+        if is_connected:
+            bg = "#198f41"
+            fg = "#ffffff"
+        else:
+            bg = "#7b2028"
+            fg = "#ffd9d9"
+
+        if is_placed:
+            border = "#f1c40f"
+        else:
+            border = "#212529"
+
+        if lamp_id == selected:
+            border = "#ffffff"
+            fg = "#ffffff"
+        border_frame = getattr(widget, "border_frame", None)
+        if border_frame is not None:
+            border_frame.config(bg=border)
+        widget.config(bg=bg, fg=fg, highlightbackground=border, highlightcolor=border)
+    refresh_espacio_midi_leds()
+
+
+def build_espacio_empty_cell(cell, row, col):
+    for child in cell.winfo_children():
+        child.destroy()
+    empty = tk.Label(
+        cell,
+        text="+",
+        bg="#111519",
+        fg="#303840",
+        bd=0,
+        font=("Segoe UI", 18, "bold"),
+        cursor="hand2",
+    )
+    empty.pack(fill="both", expand=True)
+    empty.bind("<Button-1>", lambda e, r=row, c=col: on_espacio_cell_click(r, c))
+    empty.bind("<ButtonRelease-1>", lambda e, r=row, c=col: on_espacio_cell_click(r, c) if espacio_drag_lamp.get("id") else None)
+    empty.bind("<Button-3>", lambda e, r=row, c=col: clear_espacio_cell(r, c))
+
+
+def build_espacio_laberintos_grid():
+    normalize_espacio_laberintos()
+    for child in espacio_grid_frame.winfo_children():
+        child.destroy()
+    espacio_cells.clear()
+    rows = espacio_laberintos_data["rows"]
+    cols = espacio_laberintos_data["cols"]
+    for r in range(rows):
+        espacio_grid_frame.grid_rowconfigure(r, weight=1, minsize=178)
+        for c in range(cols):
+            espacio_grid_frame.grid_columnconfigure(c, weight=1, minsize=128)
+            cell = tk.Frame(
+                espacio_grid_frame,
+                bg="#111519",
+                bd=1,
+                relief="flat",
+                highlightthickness=2,
+                highlightbackground="#303840",
+            )
+            cell.is_espacio_cell = True
+            cell.espacio_cell = (r, c)
+            cell.grid(row=r, column=c, sticky="nsew", padx=2, pady=2)
+            cell.bind("<Button-1>", lambda e, row=r, col=c: on_espacio_cell_click(row, col))
+            cell.bind("<ButtonRelease-1>", lambda e, row=r, col=c: on_espacio_cell_click(row, col) if espacio_drag_lamp.get("id") else None)
+            cell.bind("<Button-3>", lambda e, row=r, col=c: clear_espacio_cell(row, col))
+            espacio_cells[(r, c)] = cell
+            build_espacio_empty_cell(cell, r, c)
+    refresh_espacio_laberintos_visual()
+
+
+frame_espacio = tk.LabelFrame(
+    frame_lamps,
+    text="ESPACIO LABERINTOS",
+    bg="#212529",
+    fg="#20bdec",
+    font=("Segoe UI", 12, "bold"),
+    padx=8,
+    pady=8,
+)
+frame_espacio.grid(row=0, column=0, sticky="ew", padx=4, pady=(0, 10))
+
+espacio_toolbar = tk.Frame(frame_espacio, bg="#212529")
+espacio_toolbar.pack(fill="x", pady=(0, 6))
+espacio_matrix_tools = tk.Frame(espacio_toolbar, bg="#212529")
+espacio_matrix_tools.pack(side="left", anchor="w")
+tk.Label(espacio_matrix_tools, text="Filas", bg="#212529", fg="#b9e3f7", font=("Segoe UI", 8)).pack(side="left")
+espacio_rows_var = tk.IntVar(value=espacio_laberintos_data.get("rows", ESPACIO_DEFAULT_ROWS))
+tk.Spinbox(espacio_matrix_tools, from_=1, to=ESPACIO_MAX_ROWS, width=4, textvariable=espacio_rows_var, bg="#111519", fg="#d8f6ff",
+           relief="flat").pack(side="left", padx=(4, 8))
+tk.Label(espacio_matrix_tools, text="Columnas", bg="#212529", fg="#b9e3f7", font=("Segoe UI", 8)).pack(side="left")
+espacio_cols_var = tk.IntVar(value=espacio_laberintos_data.get("cols", ESPACIO_DEFAULT_COLS))
+tk.Spinbox(espacio_matrix_tools, from_=1, to=ESPACIO_MAX_COLS, width=4, textvariable=espacio_cols_var, bg="#111519", fg="#d8f6ff",
+           relief="flat").pack(side="left", padx=(4, 8))
+tk.Button(espacio_matrix_tools, text="Aplicar matriz", command=apply_espacio_matrix_size,
+          bg="#35bdf2", fg="#000", relief="flat", font=("Segoe UI", 8, "bold")).pack(side="left", padx=(0, 5))
+tk.Button(espacio_matrix_tools, text="Guardar espacio", command=save_espacio_from_ui,
+          bg="#27ae60", fg="#fff", relief="flat", font=("Segoe UI", 8, "bold")).pack(side="left", padx=(0, 5))
+tk.Button(espacio_matrix_tools, text="Limpiar", command=clear_espacio_all,
+          bg="#807D7D", fg="#fff", relief="flat", font=("Segoe UI", 8, "bold")).pack(side="left")
+tk.Label(espacio_toolbar, textvariable=espacio_status_var, bg="#212529", fg="#9fe7ff",
+         font=("Segoe UI", 8, "italic"), anchor="w").pack(side="left", fill="x", expand=True, padx=(12, 0))
+
+espacio_midi_controls = tk.LabelFrame(
+    frame_espacio,
+    text="Control Buttons MIDI",
+    bg="#212529",
+    fg="#20bdec",
+    font=("Segoe UI", 9, "bold"),
+    padx=6,
+    pady=4,
+    bd=1,
+    relief="solid",
+)
+espacio_midi_controls.pack(fill="x", pady=(0, 6))
+espacio_midi_controls.grid_columnconfigure(0, weight=1)
+espacio_midi_controls.grid_columnconfigure(1, weight=0)
+
+espacio_midi_modes = tk.Frame(espacio_midi_controls, bg="#212529")
+espacio_midi_modes.grid(row=0, column=0, sticky="ew")
+
+for idx, (value, label) in enumerate(ESPACIO_MIDI_ACTIONS.items()):
+    tk.Radiobutton(
+        espacio_midi_modes,
+        text=label,
+        variable=espacio_midi_action_var,
+        value=value,
+        bg="#212529",
+        fg="#d9f3ff",
+        selectcolor="#111519",
+        activebackground="#212529",
+        activeforeground="#20bdec",
+        font=("Segoe UI", 8, "bold"),
+    ).grid(row=idx // 4, column=idx % 4, sticky="w", padx=(0, 8), pady=1)
+
+espacio_midi_trigger_box = tk.Frame(espacio_midi_controls, bg="#212529")
+espacio_midi_trigger_box.grid(row=0, column=1, sticky="e", padx=(12, 0))
+
+tk.Label(
+    espacio_midi_trigger_box,
+    text="Tipo:",
+    bg="#212529",
+    fg="#8fb8c9",
+    font=("Segoe UI", 8, "bold"),
+).pack(side="left", padx=(0, 4))
+
+ttk.Combobox(
+    espacio_midi_trigger_box,
+    textvariable=espacio_midi_trigger_var,
+    values=list(ESPACIO_MIDI_TRIGGERS),
+    state="readonly",
+    width=13,
+    font=("Segoe UI", 8),
+).pack(side="left")
+
+espacio_palette = tk.Frame(frame_espacio, bg="#212529")
+espacio_palette.pack(fill="x", pady=(0, 6))
+
+
+def build_espacio_palette_group(parent, title, group_key, accent):
+    lamps = [ip for ip in get_sequence_ordered_lamp_ips() if get_lamp_group(ip) == group_key]
+    if not lamps:
+        return
+    box = tk.LabelFrame(
+        parent,
+        text=title,
+        bg="#212529",
+        fg=accent,
+        font=("Segoe UI", 9, "bold"),
+        padx=6,
+        pady=4,
+        bd=1,
+        relief="solid",
+    )
+    box.pack(side="left", fill="x", expand=False, padx=(0, 10))
+    for ip in lamps:
+        lamp_id = str(get_lamp_id(ip))
+        item_border = tk.Frame(box, bg="#212529", padx=1, pady=1)
+        item_border.pack(side="left", padx=2, pady=2)
+        item = tk.Label(
+            item_border,
+            text=lamp_id,
+            bg="#111519",
+            fg=accent,
+            width=4,
+            bd=0,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#111519",
+            font=("Segoe UI", 8, "bold"),
+            cursor="hand2",
+        )
+        item.border_frame = item_border
+        item.pack(side="left")
+        item.bind("<ButtonPress-1>", lambda e, lid=lamp_id: on_espacio_palette_press(lid))
+        item.bind("<ButtonRelease-1>", on_espacio_palette_release)
+        item.bind("<Button-3>", lambda e, lid=lamp_id: remove_espacio_lamp(lid))
+        item_border.bind("<ButtonPress-1>", lambda e, lid=lamp_id: on_espacio_palette_press(lid))
+        item_border.bind("<ButtonRelease-1>", on_espacio_palette_release)
+        item_border.bind("<Button-3>", lambda e, lid=lamp_id: remove_espacio_lamp(lid))
+        espacio_palette_items[lamp_id] = item
+
+
+build_espacio_palette_group(espacio_palette, "Bichos", "efectos", "#20bdec")
+build_espacio_palette_group(espacio_palette, "Atmosfera", "atmosfera", "#f1c40f")
+build_espacio_palette_group(espacio_palette, "Sin grupo", "sin_grupo", "#c9d8e3")
+
+espacio_grid_frame = tk.Frame(frame_espacio, bg="#181b1e")
+espacio_grid_frame.pack(fill="x")
+build_espacio_laberintos_grid()
 
 group_sections = {
     "efectos": {
-        "frame": tk.LabelFrame(frame_lamps, text="Lamparas de efectos", bg="#212529", fg="#20bdec",
+        "frame": tk.LabelFrame(frame_lamps, text="Lamparas bichos", bg="#212529", fg="#20bdec",
                                font=("Segoe UI", 12, "bold"), padx=8, pady=8),
         "items": [],
     },
@@ -3191,21 +5738,27 @@ for ip in LAMP_IPS:
         group = "sin_grupo"
     group_sections[group]["items"].append(ip)
 
-row_section = 0
+row_section = 1
 for key in ("efectos", "atmosfera", "sin_grupo"):
     if not group_sections[key]["items"]:
         continue
     section = group_sections[key]["frame"]
-    section.grid(row=row_section, column=0, sticky="ew", padx=4, pady=(0, 10))
+    # Los grupos ahora se gestionan visualmente desde ESPACIO LABERINTOS.
+    # Se conservan como contenedores internos para no romper referencias existentes.
     for col in range(5):
         section.grid_columnconfigure(col, weight=0, minsize=160)
     row_section += 1
+
+frame_hidden_lamp_controls = tk.Frame(frame_lamps, bg="#181b1e")
 
 
 def toggle_lamp_power(ip):
     panel = panels[ip]
     update_panel_visual(panel)
     if selected_devices[ip].get():
+        claim_lamps_for_manual_control(ip)
+        if ip in effect_retired_ips.get("atardecer", set()):
+            panel.last_brillo = max(80, safe_brightness(getattr(panel, "last_brillo", 180)))
         if panel.last_mode == "colour":
             send_lamp_color_safe(ip, panel.last_hue, panel.last_sat, panel.last_brillo)
         else:
@@ -3215,13 +5768,23 @@ def toggle_lamp_power(ip):
 
 
 def build_lamp_panel(parent, ip, idx):
+    lamp_group = get_lamp_group(ip)
+    group_badge = "BI" if lamp_group == "efectos" else "AT" if lamp_group == "atmosfera" else "SG"
+    group_color = "#20bdec" if lamp_group == "efectos" else "#f1c40f" if lamp_group == "atmosfera" else "#c9d8e3"
+    compact_space = bool(getattr(parent, "is_espacio_cell", False))
+    wheel_radius = 44 if compact_space else 55
+    wheel_size = 94 if compact_space else 118
+    slider_length = 58 if compact_space else 72
+    entry_width = 9 if compact_space else 15
+    panel_padx = 3 if compact_space else 5
+    panel_pady = 3 if compact_space else 4
     panel = tk.LabelFrame(
         parent,
         bg="#17291c",
         fg="#20bdec",
         font=("Segoe UI", 9, "bold"),
-        padx=5,
-        pady=4,
+        padx=panel_padx,
+        pady=panel_pady,
         bd=2,
         highlightthickness=2,
         highlightbackground="#03A125",
@@ -3231,35 +5794,111 @@ def build_lamp_panel(parent, ip, idx):
     panel.grid(row=idx // 5, column=idx % 5, padx=5, pady=5, sticky="nw")
     panels[ip] = panel
 
+    connection_strip = tk.Frame(panel, bg="#68737d", height=4)
+    connection_strip.pack(fill="x", pady=(0, 3))
+    panel.connection_strip = connection_strip
+
     top = tk.Frame(panel, bg="#17291c")
+    panel.top_frame = top
     top.pack(fill="x")
-    entry = tk.Entry(top, font=("Segoe UI", 8), width=15, bg="#111519", fg="#b9e3f7", relief="flat")
+    top.grid_columnconfigure(0, weight=1)
+    entry = tk.Entry(top, font=("Segoe UI", 8), width=entry_width, bg="#111519", fg="#b9e3f7", relief="flat")
     entry.insert(0, lamp_names.get(ip, f"Lampara {ip}"))
-    entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+    entry.grid(row=0, column=0, sticky="ew", padx=(0, 3))
     entry.bind("<FocusOut>", lambda e, ip=ip, entry=entry: update_name(ip, entry))
 
-    tk.Checkbutton(top, text="On", variable=selected_devices[ip],
-                   command=lambda ip=ip: toggle_lamp_power(ip),
-                   bg="#17291c", fg="#20bdec", selectcolor="#17291c",
-                   activebackground="#17291c", activeforeground="#20bdec",
-                   font=("Segoe UI", 8, "bold")).pack(side="right")
+    group_badge_widget = tk.Label(
+        top,
+        text=group_badge,
+        bg="#111519",
+        fg=group_color,
+        bd=1,
+        relief="solid",
+        font=("Segoe UI", 7, "bold"),
+        width=3,
+    )
+    group_badge_widget.grid(row=0, column=1, sticky="e", padx=(0, 3))
+    panel.group_badge = group_badge_widget
+
+    if compact_space:
+        remove_btn = tk.Button(
+            top,
+            text="X",
+            command=lambda lid=str(get_lamp_id(ip)): remove_espacio_lamp(lid),
+            bg="#5a1f24",
+            fg="#ffffff",
+            activebackground="#7b2028",
+            activeforeground="#ffffff",
+            relief="flat",
+            bd=0,
+            width=1,
+            font=("Segoe UI", 7, "bold"),
+        )
+        remove_btn.grid(row=0, column=5, sticky="ne")
+        panel.remove_button = remove_btn
+
+    scene_dot = tk.Label(
+        top,
+        text="",
+        width=1,
+        bg="#17291c",
+        fg="#17291c",
+        highlightthickness=1,
+        highlightbackground="#17291c",
+        font=("Segoe UI", 6, "bold"),
+    )
+    scene_dot.grid(row=0, column=2, sticky="e", padx=(0, 3))
+    panel.scene_dot = scene_dot
+
+    power_dot = tk.Frame(top, width=7, height=7, bg="#3b444c", highlightthickness=1, highlightbackground="#111519")
+    power_dot.grid(row=0, column=3, sticky="e", padx=(0, 3))
+    power_dot.pack_propagate(False)
+    panel.power_dot = power_dot
+
+    on_check = tk.Checkbutton(top, text="On", variable=selected_devices[ip],
+                              command=lambda ip=ip: toggle_lamp_power(ip),
+                              bg="#17291c", fg="#20bdec", selectcolor="#17291c",
+                              activebackground="#17291c", activeforeground="#20bdec",
+                              font=("Segoe UI", 8, "bold"))
+    on_check.grid(row=0, column=4, sticky="e", padx=(0, 3))
+    panel.on_check = on_check
 
     mode_row = tk.Frame(panel, bg="#17291c")
+    panel.mode_row = mode_row
     mode_row.pack(fill="x", pady=(3, 2))
     modo_var = tk.StringVar(value="colour")
     panel.mode_var = modo_var
     panel.last_mode = "colour"
 
-    tk.Radiobutton(mode_row, text="C", variable=modo_var, value="colour",
-                   command=lambda p=panel: set_panel_mode(p, "colour"),
-                   bg="#17291c", fg="#20bdec", selectcolor="#17291c",
-                   font=("Segoe UI", 8, "bold")).pack(side="left", padx=(38, 2))
-    tk.Radiobutton(mode_row, text="B", variable=modo_var, value="white",
-                   command=lambda p=panel: set_panel_mode(p, "white"),
-                   bg="#17291c", fg="#f1c40f", selectcolor="#17291c",
-                   font=("Segoe UI", 8, "bold")).pack(side="left", padx=2)
+    preview_swatch = tk.Frame(
+        mode_row,
+        width=34,
+        height=15,
+        bg="#ff0000",
+        bd=1,
+        relief="sunken",
+        highlightthickness=1,
+        highlightbackground="#111519",
+    )
+    preview_swatch.pack(side="left", padx=(2, 6))
+    preview_swatch.pack_propagate(False)
+    panel.preview_swatch = preview_swatch
+
+    mode_colour = tk.Radiobutton(mode_row, text="C", variable=modo_var, value="colour",
+                                 command=lambda p=panel: set_panel_mode(p, "colour"),
+                                 bg="#17291c", fg="#20bdec", selectcolor="#17291c",
+                                 font=("Segoe UI", 8, "bold"))
+    mode_colour.pack(side="left", padx=(0, 2))
+    mode_white = tk.Radiobutton(mode_row, text="B", variable=modo_var, value="white",
+                                command=lambda p=panel: set_panel_mode(p, "white"),
+                                bg="#17291c", fg="#f1c40f", selectcolor="#17291c",
+                                font=("Segoe UI", 8, "bold"))
+    mode_white.pack(side="left", padx=2)
+    panel.mode_colour_radio = mode_colour
+    panel.mode_white_radio = mode_white
 
     body = tk.Frame(panel, bg="#17291c")
+    panel.body_frame = body
     body.pack(fill="x")
     brillo_var = tk.IntVar(value=180)
     temp_var = tk.IntVar(value=128)
@@ -3273,33 +5912,46 @@ def build_lamp_panel(parent, ip, idx):
     def on_color(h, s, v, ip=ip, panel=panel):
         if is_preview_update_suspended():
             return
+        claim_lamps_for_manual_control(ip)
         panel.last_hue = h
         panel.last_sat = s
-        panel.last_brillo = panel.brillo_var.get()
+        panel.last_brillo = max(80, safe_brightness(panel.brillo_var.get()))
         set_panel_mode(panel, "colour", send=False)
+        if ip in effect_retired_ips.get("atardecer", set()) and not selected_devices[ip].get():
+            selected_devices[ip].set(True)
+            update_panel_visual(panel)
         if selected_devices[ip].get():
             send_lamp_color_safe(ip, h, s, panel.last_brillo)
 
     def on_white(value, ip=ip, panel=panel):
         if is_preview_update_suspended():
             return
+        claim_lamps_for_manual_control(ip)
         panel.last_temp = int(value)
         panel.temp_var.set(panel.last_temp)
         set_panel_mode(panel, "white", send=False)
+        if ip in effect_retired_ips.get("atardecer", set()) and not selected_devices[ip].get():
+            selected_devices[ip].set(True)
+            panel.last_brillo = max(80, safe_brightness(panel.brillo_var.get()))
+            update_panel_visual(panel)
         if selected_devices[ip].get():
             send_lamp_white(ip, panel.last_brillo, panel.last_temp)
 
     wheel_slot = tk.Frame(body, bg="#17291c", width=118, height=118)
+    panel.wheel_slot = wheel_slot
     wheel_slot.pack(side="left", padx=(0, 5))
     wheel_slot.pack_propagate(False)
 
-    colorwheel = RealColorWheel(wheel_slot, radius=55, callback=on_color, bg="#111519", bd=0, highlightthickness=0)
-    whitewheel = WhiteTempWheel(wheel_slot, radius=55, callback=on_white, bg="#111519", bd=0, highlightthickness=0)
+    wheel_slot.config(width=wheel_size, height=wheel_size)
+
+    colorwheel = RealColorWheel(wheel_slot, radius=wheel_radius, callback=on_color, bg="#111519", bd=0, highlightthickness=0)
+    whitewheel = WhiteTempWheel(wheel_slot, radius=wheel_radius, callback=on_white, bg="#111519", bd=0, highlightthickness=0)
     panel.colorwheel_lamp = colorwheel
     panel.whitewheel_lamp = whitewheel
     colorwheel.pack()
 
     sliders = tk.Frame(body, bg="#17291c")
+    panel.sliders_frame = sliders
     sliders.pack(side="left")
     tk.Label(sliders, text="I", bg="#17291c", fg="#20bdec", font=("Segoe UI", 7, "bold")).grid(row=0, column=0)
     tk.Label(sliders, text="T", bg="#17291c", fg="#f1c40f", font=("Segoe UI", 7, "bold")).grid(row=0, column=1)
@@ -3307,7 +5959,9 @@ def build_lamp_panel(parent, ip, idx):
     def on_brillo_change(value, ip=ip, panel=panel):
         if is_preview_update_suspended():
             return
+        claim_lamps_for_manual_control(ip)
         panel.last_brillo = safe_brightness(value)
+        update_panel_visual(panel)
         if selected_devices[ip].get():
             if panel.last_brillo <= 0:
                 send_off(ip)
@@ -3319,24 +5973,113 @@ def build_lamp_panel(parent, ip, idx):
     def on_temp_panel(value, ip=ip, panel=panel):
         if is_preview_update_suspended():
             return
+        claim_lamps_for_manual_control(ip)
         panel.last_temp = int(float(value))
+        update_panel_visual(panel)
         if panel.last_mode == "white" and selected_devices[ip].get():
             send_lamp_white(ip, panel.last_brillo, panel.last_temp)
 
     tk.Scale(sliders, from_=255, to=0, orient="vertical", variable=brillo_var,
-             length=72, width=4, sliderlength=10, showvalue=False, bg="#17291c", fg="#20bdec",
+             length=slider_length, width=4, sliderlength=10, showvalue=False, bg="#17291c", fg="#20bdec",
              highlightthickness=0, command=on_brillo_change).grid(row=1, column=0, padx=1)
     tk.Scale(sliders, from_=255, to=0, orient="vertical", variable=temp_var,
-             length=72, width=4, sliderlength=10, showvalue=False, bg="#17291c", fg="#f1c40f",
+             length=slider_length, width=4, sliderlength=10, showvalue=False, bg="#17291c", fg="#f1c40f",
              highlightthickness=0, command=on_temp_panel).grid(row=1, column=1, padx=1)
 
     update_panel_visual(panel)
 
 
-for key in ("efectos", "atmosfera", "sin_grupo"):
-    section = group_sections[key]["frame"]
-    for idx, ip in enumerate(group_sections[key]["items"]):
-        build_lamp_panel(section, ip, idx)
+def snapshot_lamp_panel_states():
+    states = {}
+    for ip, panel in list(panels.items()):
+        states[ip] = {
+            "last_mode": getattr(panel, "last_mode", "colour"),
+            "last_hue": getattr(panel, "last_hue", 0),
+            "last_sat": getattr(panel, "last_sat", 1),
+            "last_brillo": getattr(panel, "last_brillo", 0),
+            "last_temp": getattr(panel, "last_temp", 128),
+            "brillo_var": panel.brillo_var.get() if hasattr(panel, "brillo_var") else getattr(panel, "last_brillo", 0),
+            "temp_var": panel.temp_var.get() if hasattr(panel, "temp_var") else getattr(panel, "last_temp", 128),
+        }
+    return states
+
+
+def restore_lamp_panel_state(ip, state):
+    panel = panels.get(ip)
+    if panel is None or not state:
+        return
+    panel.last_mode = state.get("last_mode", "colour")
+    panel.last_hue = state.get("last_hue", 0)
+    panel.last_sat = state.get("last_sat", 1)
+    panel.last_brillo = state.get("last_brillo", 0)
+    panel.last_temp = state.get("last_temp", 128)
+    try:
+        panel.brillo_var.set(state.get("brillo_var", panel.last_brillo))
+        panel.temp_var.set(state.get("temp_var", panel.last_temp))
+    except Exception:
+        pass
+    try:
+        set_panel_mode(panel, panel.last_mode, send=False)
+    except Exception:
+        pass
+    update_panel_visual(panel)
+
+
+def rebuild_lamp_layout():
+    previous_states = snapshot_lamp_panel_states()
+
+    for panel in list(panels.values()):
+        try:
+            panel.destroy()
+        except Exception:
+            pass
+    panels.clear()
+
+    for cell, (row, col) in [(cell, coords) for coords, cell in espacio_cells.items()]:
+        build_espacio_empty_cell(cell, row, col)
+
+    for key in ("efectos", "atmosfera", "sin_grupo"):
+        section = group_sections[key]["frame"]
+        for child in section.winfo_children():
+            child.destroy()
+    for child in frame_hidden_lamp_controls.winfo_children():
+        child.destroy()
+
+    normalize_espacio_laberintos()
+    placed_ids = set(espacio_laberintos_data.get("placements", {}).keys())
+
+    for lamp_id, pos in espacio_laberintos_data.get("placements", {}).items():
+        ip = get_lamp_ip_by_id(lamp_id)
+        if not ip:
+            continue
+        row = int(pos.get("row", -1))
+        col = int(pos.get("col", -1))
+        cell = espacio_cells.get((row, col))
+        if cell is None:
+            continue
+        for child in cell.winfo_children():
+            child.destroy()
+        build_lamp_panel(cell, ip, 0)
+        if ip in panels:
+            panels[ip].grid_configure(row=0, column=0, sticky="nsew", padx=2, pady=2)
+            cell.grid_rowconfigure(0, weight=1)
+            cell.grid_columnconfigure(0, weight=1)
+
+    for key in ("efectos", "atmosfera", "sin_grupo"):
+        visible_idx = 0
+        for ip in group_sections[key]["items"]:
+            if str(get_lamp_id(ip)) in placed_ids:
+                continue
+            build_lamp_panel(frame_hidden_lamp_controls, ip, visible_idx)
+            visible_idx += 1
+
+    for ip, state in previous_states.items():
+        restore_lamp_panel_state(ip, state)
+
+    refresh_espacio_laberintos_visual()
+
+
+rebuild_lamp_layout()
 
 for ip in LAMP_IPS:
     selected_devices[ip].set(False)
@@ -3360,7 +6103,7 @@ from .escenas_proyectos import (
     load_escenas, save_escenas,
     get_effects_state, apply_effects_state,
     guardar_escena, actualizar_escena_completa,
-    load_proyectos,
+    load_proyectos, save_proyectos,
     guardar_proyecto, obtener_escenas_de_proyecto,
     exportar_proyecto_a_archivo, importar_obra_desde_archivo,
     borrar_proyecto, borrar_todos_los_proyectos,  # 👈 agrega esto
@@ -3558,14 +6301,63 @@ def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
         return
 
     escena = datos[nombre_escena]
+
+    def scene_raw_brightness(value):
+        try:
+            return max(0, min(255, int(float(value))))
+        except Exception:
+            return 0
+
+    def estado_escena_para_ip(ip):
+        estado = escena.get(ip, {})
+        if estado:
+            return estado, True
+        lamparas = escena.get("lamparas", {})
+        lamp_id = str(get_lamp_id(ip))
+        nested = lamparas.get(lamp_id, {})
+        if nested:
+            return nested, True
+        return {}, False
+
+    def scene_involved_ips():
+        involved = set()
+
+        resolve_targets = globals().get("resolve_scene_effect_target_ips")
+        if callable(resolve_targets):
+            try:
+                involved.update(resolve_targets(escena) or [])
+            except Exception:
+                pass
+
+        for lamp_ip in LAMP_IPS:
+            estado, has_state = estado_escena_para_ip(lamp_ip)
+            if not has_state:
+                continue
+            if estado.get("state") == "on" or scene_raw_brightness(estado.get("brillo", 0)) > 0:
+                involved.add(lamp_ip)
+
+        return involved
+
+    involved_ips = scene_involved_ips()
+
     preview_updates_suspended = True
     preview_updates_block_until = time.monotonic() + 0.5
     try:
+        for panel in panels.values():
+            panel.scene_involved = False
+
         for ip in LAMP_IPS:
-            estado = escena.get(ip, {})
+            estado, _has_scene_state = estado_escena_para_ip(ip)
             panel = panels.get(ip)
             if panel is None:
                 continue
+
+            panel.scene_involved = ip in involved_ips
+
+            preview_on = (
+                estado.get("state", "off") == "on"
+                and scene_raw_brightness(estado.get("brillo", getattr(panel, "last_brillo", 255))) > 0
+            )
 
             # ----- PREVIEW DEL MODO -----
             modo = estado.get("modo", "colour")
@@ -3573,7 +6365,7 @@ def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
 
             # ----- PREVIEW DEL BRILLO (solo UI) -----
             if actualizar_seleccion and hasattr(panel, "brillo_var"):
-                panel.brillo_var.set(safe_brightness(estado.get("brillo", 0)))
+                panel.brillo_var.set(scene_raw_brightness(estado.get("brillo", 0)))
 
             # ----- PREVIEW DE SELECCION ON/OFF -----
             # Si hay efectos corriendo, no tocamos selected_devices:
@@ -3588,6 +6380,7 @@ def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
             if modo == "colour":
                 h = estado.get("h", getattr(panel, "last_hue", 0))
                 s = estado.get("s", getattr(panel, "last_sat", 1))
+                set_panel_preview_swatch(panel, modo, h=h, s=s, is_on=preview_on)
 
                 # NO tocamos last_hue / last_sat, solo el wheel
                 if hasattr(panel, "colorwheel_lamp"):
@@ -3595,16 +6388,20 @@ def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
                     panel.colorwheel_lamp.set_color(h, s, v)
             else:
                 temp = estado.get("temp", getattr(panel, "last_temp", 4000))
+                set_panel_preview_swatch(panel, modo, temp=temp, is_on=preview_on)
                 if hasattr(panel, "whitewheel_lamp"):
                     panel.whitewheel_lamp.set_temp_value(temp)
                 if actualizar_seleccion and hasattr(panel, "temp_var"):
                     panel.temp_var.set(temp)
 
-            # ----- PREVIEW DE BORDE (solo visual) -----
-            color_borde = "#03A125" if estado.get("state", "off") == "on" else "#252e36"
-            panel.config(highlightbackground=color_borde, highlightcolor=color_borde)
+            apply_lamp_visual_state(panel, update_swatch=False)
+
     finally:
         preview_updates_suspended = False
+        preview_updates_block_until = 0.0
+        refresh_espacio = globals().get("refresh_espacio_laberintos_visual")
+        if callable(refresh_espacio):
+            refresh_espacio()
 
 
  
@@ -3613,34 +6410,72 @@ def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
 lista_proyectos = tk.StringVar(value=[])
 proyecto_activo = {"nombre": None, "dirty": False}
 proyecto_estado_var = tk.StringVar(value="Proyecto activo: ninguno")
+LAST_ACTIVE_PROJECT_KEY = "ultimo_proyecto_activo"
+
+
+def guardar_ultimo_proyecto_activo(nombre):
+    proyectos = load_proyectos()
+    meta = proyectos.setdefault("_meta", {})
+    if meta.get(LAST_ACTIVE_PROJECT_KEY) == nombre:
+        return
+    if not nombre and LAST_ACTIVE_PROJECT_KEY not in meta:
+        return
+
+    if nombre:
+        meta[LAST_ACTIVE_PROJECT_KEY] = nombre
+    else:
+        meta.pop(LAST_ACTIVE_PROJECT_KEY, None)
+    save_proyectos(proyectos)
+
+
+def obtener_ultimo_proyecto_activo():
+    proyectos = load_proyectos()
+    nombre = proyectos.get("_meta", {}).get(LAST_ACTIVE_PROJECT_KEY)
+    if nombre in proyectos.get("datos", {}):
+        return nombre
+    return None
 
 
 def actualizar_estado_proyecto():
     nombre = proyecto_activo.get("nombre")
     dirty = proyecto_activo.get("dirty", False)
-    if not nombre:
+    if not nombre and dirty:
+        proyecto_estado_var.set("Proyecto activo: sin nombre  *sin guardar")
+        color = "#ffcc66"
+    elif not nombre:
         proyecto_estado_var.set("Proyecto activo: ninguno")
+        color = "#8fb8c9"
     elif dirty:
         proyecto_estado_var.set(f"Proyecto activo: {nombre}  *sin guardar")
+        color = "#ffcc66"
     else:
         proyecto_estado_var.set(f"Proyecto activo: {nombre}")
+        color = "#8dfa9f"
+
+    label = globals().get("lbl_proyecto_estado")
+    if label is not None:
+        try:
+            label.config(fg=color)
+        except Exception:
+            pass
 
 
 def set_proyecto_activo(nombre, dirty=False):
     proyecto_activo["nombre"] = nombre
     proyecto_activo["dirty"] = bool(dirty)
+    guardar_ultimo_proyecto_activo(nombre)
     actualizar_estado_proyecto()
 
 
 def marcar_proyecto_modificado():
-    if proyecto_activo.get("nombre"):
-        proyecto_activo["dirty"] = True
-        actualizar_estado_proyecto()
+    proyecto_activo["dirty"] = True
+    actualizar_estado_proyecto()
 
 
 def guardar_proyecto_activo():
     nombre = entry_proyecto.get().strip() or proyecto_activo.get("nombre")
     if not nombre:
+        messagebox.showwarning("Nombre requerido", "Escribe un nombre de proyecto/obra para guardar los cambios.")
         return False
 
     escenas = load_escenas()
@@ -3659,11 +6494,11 @@ def guardar_proyecto_activo():
     return True
 
 
-def confirmar_cambios_proyecto_pendientes(accion="continuar"):
+def confirmar_cambios_proyecto_pendientes_legacy(accion="continuar"):
     if not proyecto_activo.get("dirty"):
         return True
 
-    nombre = proyecto_activo.get("nombre")
+    nombre = proyecto_activo.get("nombre") or "sin nombre"
     respuesta = messagebox.askyesnocancel(
         "Proyecto con cambios sin guardar",
         f"El proyecto '{nombre}' tiene cambios sin guardar.\n\n"
@@ -3674,6 +6509,64 @@ def confirmar_cambios_proyecto_pendientes(accion="continuar"):
     if respuesta:
         return guardar_proyecto_activo()
     return True
+
+
+def confirmar_cambios_proyecto_pendientes(accion="continuar"):
+    if not proyecto_activo.get("dirty"):
+        return True
+
+    nombre = proyecto_activo.get("nombre") or "sin nombre"
+    respuesta = messagebox.askyesnocancel(
+        "Proyecto con cambios sin guardar",
+        f"El proyecto '{nombre}' tiene cambios sin guardar.\n\n"
+        f"Para {accion}, primero elige una accion:\n\n"
+        "Si: guardar cambios\n"
+        "No: descartar cambios\n"
+        "Cancelar: seguir trabajando en este proyecto"
+    )
+    if respuesta is None:
+        return False
+    if respuesta:
+        return guardar_proyecto_activo()
+    return True
+
+
+def salir_del_proyecto_actual(limpiar_escenas=True):
+    if limpiar_escenas:
+        escenas = load_escenas()
+        escenas["orden"] = []
+        save_escenas(escenas)
+        try:
+            actualizar_lista_escenas()
+        except Exception:
+            pass
+
+    try:
+        entry_proyecto.delete(0, tk.END)
+    except Exception:
+        pass
+    set_proyecto_activo(None, dirty=False)
+
+
+def on_nuevo_proyecto():
+    if not confirmar_cambios_proyecto_pendientes("crear un proyecto nuevo"):
+        return
+    salir_del_proyecto_actual(limpiar_escenas=True)
+    set_proyecto_activo(None, dirty=True)
+
+
+def on_descartar_proyecto():
+    nombre = proyecto_activo.get("nombre") or "sin nombre"
+    if not proyecto_activo.get("dirty") and not proyecto_activo.get("nombre"):
+        messagebox.showinfo("Sin proyecto activo", "No hay un proyecto activo para descartar.")
+        return
+
+    if not messagebox.askyesno(
+        "Descartar proyecto activo",
+        f"Descartar los cambios del proyecto '{nombre}' y salir de este proyecto?"
+    ):
+        return
+    salir_del_proyecto_actual(limpiar_escenas=True)
 
 # ================== PROYECTOS / OBRAS ==================
 
@@ -3693,6 +6586,52 @@ def on_guardar_proyecto():
     # no borro el entry para facilitar sobreescritura
 
 
+def aplicar_proyecto_por_nombre(nombre, mostrar_mensaje=True):
+    try:
+        escenas_proyecto = obtener_escenas_de_proyecto(nombre)
+    except KeyError:
+        if mostrar_mensaje:
+            messagebox.showerror("Proyecto no encontrado", f"No existe el proyecto '{nombre}'.")
+        return False
+
+    escenas = load_escenas()
+    nuevas = [e for e in escenas_proyecto if e in escenas["datos"]]
+    if not nuevas:
+        if mostrar_mensaje:
+            messagebox.showwarning("Proyecto vacio", f"El proyecto '{nombre}' no tiene escenas validas.")
+        return False
+
+    escenas["orden"] = nuevas
+    save_escenas(escenas)
+    try:
+        actualizar_lista_escenas()
+    except Exception:
+        pass
+
+    try:
+        entry_proyecto.delete(0, tk.END)
+        entry_proyecto.insert(0, nombre)
+    except Exception:
+        pass
+
+    set_proyecto_activo(nombre, dirty=False)
+
+    try:
+        proyectos = load_proyectos().get("orden", [])
+        if nombre in proyectos:
+            idx = proyectos.index(nombre)
+            listbox_proyectos.selection_clear(0, tk.END)
+            listbox_proyectos.selection_set(idx)
+            listbox_proyectos.activate(idx)
+            listbox_proyectos.see(idx)
+    except Exception:
+        pass
+
+    if mostrar_mensaje:
+        messagebox.showinfo("Proyecto cargado", f"Escenas reordenadas segun el proyecto '{nombre}'.")
+    return True
+
+
 def on_cargar_proyecto():
     if not confirmar_cambios_proyecto_pendientes("cargar otro proyecto"):
         return
@@ -3702,27 +6641,8 @@ def on_cargar_proyecto():
         messagebox.showwarning("Selecciona un proyecto", "Debes seleccionar un proyecto/obra.")
         return
 
-    nombre = listbox_proyectos.get(sel)
-    try:
-        escenas_proyecto = obtener_escenas_de_proyecto(nombre)
-    except KeyError:
-        messagebox.showerror("Proyecto no encontrado", f"No existe el proyecto '{nombre}'.")
-        return
-
-    escenas = load_escenas()
-    # Filtrar solo escenas que todavía existan
-    nuevas = [e for e in escenas_proyecto if e in escenas["datos"]]
-    if not nuevas:
-        messagebox.showwarning("Proyecto vacío", f"El proyecto '{nombre}' no tiene escenas válidas.")
-        return
-
-    escenas["orden"] = nuevas
-    save_escenas(escenas)
-    actualizar_lista_escenas()
-    entry_proyecto.delete(0, tk.END)
-    entry_proyecto.insert(0, nombre)
-    set_proyecto_activo(nombre, dirty=False)
-    messagebox.showinfo("Proyecto cargado", f"Escenas reordenadas según el proyecto '{nombre}'.")
+    nombre = listbox_proyectos.get(sel[0])
+    aplicar_proyecto_por_nombre(nombre, mostrar_mensaje=True)
     
 
 
@@ -3732,7 +6652,7 @@ def on_exportar_obra():
         messagebox.showwarning("Selecciona un proyecto", "Debes seleccionar un proyecto/obra para exportar.")
         return
 
-    nombre = listbox_proyectos.get(sel)
+    nombre = listbox_proyectos.get(sel[0])
 
     filename = filedialog.asksaveasfilename(
         defaultextension=".json",
@@ -3778,7 +6698,11 @@ def on_borrar_proyecto():
         messagebox.showwarning("Selecciona un proyecto", "Debes seleccionar un proyecto para borrarlo.")
         return
 
-    nombre = listbox_proyectos.get(sel)
+    nombre = listbox_proyectos.get(sel[0])
+
+    if proyecto_activo.get("nombre") == nombre and proyecto_activo.get("dirty"):
+        if not confirmar_cambios_proyecto_pendientes("borrar este proyecto"):
+            return
 
     if not messagebox.askyesno(
         "Confirmar borrado",
@@ -3788,6 +6712,8 @@ def on_borrar_proyecto():
 
     if borrar_proyecto(nombre):
         actualizar_lista_proyectos()
+        if obtener_ultimo_proyecto_activo() == nombre:
+            guardar_ultimo_proyecto_activo(None)
         if proyecto_activo.get("nombre") == nombre:
             set_proyecto_activo(None, dirty=False)
             entry_proyecto.delete(0, tk.END)
@@ -3803,7 +6729,7 @@ tk.Label(
     font=("Segoe UI", 14, "bold")
 ).pack(anchor="w", pady=(10, 4))
 
-tk.Label(
+lbl_proyecto_estado = tk.Label(
     frame_right,
     textvariable=proyecto_estado_var,
     bg="#202428",
@@ -3811,7 +6737,9 @@ tk.Label(
     font=("Segoe UI", 9, "italic"),
     wraplength=280,
     justify="left"
-).pack(anchor="w", pady=(0, 6))
+)
+lbl_proyecto_estado.pack(anchor="w", pady=(0, 6))
+actualizar_estado_proyecto()
 
 # --- BARRA DE BOTONES PEQUEÑOS EN UNA FILA ---
 
@@ -3957,6 +6885,34 @@ btn_borrar_proyecto = tk.Button(
 btn_borrar_proyecto.grid(row=0, column=4, padx=2)
 
 Tooltip(btn_borrar_proyecto, "Eliminar el proyecto seleccionado")
+
+
+btn_nuevo_proyecto = tk.Button(
+    frame_proy_bar,
+    text="Nuevo",
+    command=on_nuevo_proyecto,
+    width=6,
+    bg="#4fc3f7", fg="#000",
+    font=("Segoe UI", 9, "bold"),
+    relief="raised"
+)
+btn_nuevo_proyecto.grid(row=0, column=5, padx=2)
+
+Tooltip(btn_nuevo_proyecto, "Salir del proyecto actual y empezar uno nuevo")
+
+
+btn_descartar_proyecto = tk.Button(
+    frame_proy_bar,
+    text="Desc.",
+    command=on_descartar_proyecto,
+    width=5,
+    bg="#ffb74d", fg="#000",
+    font=("Segoe UI", 9, "bold"),
+    relief="raised"
+)
+btn_descartar_proyecto.grid(row=0, column=6, padx=2)
+
+Tooltip(btn_descartar_proyecto, "Descartar cambios y salir del proyecto actual")
 
 
 frame_proy_top = tk.Frame(frame_right, bg="#202428")
@@ -4138,6 +7094,26 @@ def fade_to(ip, tiempo, from_brillo, to_brillo, modo, h=0, s=1, temp=4000, token
     update_lamp_state(ip, modo, h, s, temp, to_b)
 
 
+def avanzar_lista_escenas_si_corresponde():
+    global ultima_idx_escena
+
+    if ultima_idx_escena is None:
+        return
+
+    try:
+        next_idx = ultima_idx_escena + 1
+        listbox_escenas.selection_clear(0, tk.END)
+
+        if next_idx < listbox_escenas.size():
+            listbox_escenas.selection_set(next_idx)
+            listbox_escenas.activate(next_idx)
+            listbox_escenas.see(next_idx)
+
+        ultima_idx_escena = None
+    except Exception as e:
+        print(f"[WARN] No se pudo avanzar en la lista de escenas: {e}")
+
+
 def finalizar_escena(token, nombre):
     global escena_en_ejecucion, ultima_idx_escena
 
@@ -4146,6 +7122,8 @@ def finalizar_escena(token, nombre):
         return
 
     escena_en_ejecucion = False
+    set_active_scene_runtime()
+    update_midi_scene_execution_led()
 
     # Reactivar controles
     try:
@@ -4366,6 +7344,10 @@ def apply_scene_mode_to_effect_target(scene_data, target_ips, preserve_brightnes
                 pass
     finally:
         preview_updates_suspended = False
+        preview_updates_block_until = 0.0
+        refresh_espacio = globals().get("refresh_espacio_laberintos_visual")
+        if callable(refresh_espacio):
+            refresh_espacio()
 
 
 def aplicar_escena(nombre_escena):
@@ -4383,6 +7365,10 @@ def aplicar_escena(nombre_escena):
         print("[INFO] No se puede ejecutar otra escena aún.")
         return
     escena_en_ejecucion = True
+    update_midi_scene_execution_led()
+
+    stop_all_active_effects("cambio de escena")
+    effect_retired_ips["atardecer"].clear()
 
     # Deshabilitar UI
     try: btn_cargar.config(state="disabled")
@@ -4391,6 +7377,7 @@ def aplicar_escena(nombre_escena):
     except: pass
 
     escena = datos[nombre_escena]
+    set_active_scene_runtime(nombre_escena, escena)
 
     fade_in_val = normalize_fade_seconds(escena.get("fade_in", 0.0) or 0.0)
     fade_out_val = normalize_fade_seconds(escena.get("fade_out", 0.0) or 0.0)
@@ -4408,6 +7395,10 @@ def aplicar_escena(nombre_escena):
     except:
         pass
     try:
+        start_scene_timer()
+    except Exception:
+        pass
+    try:
         start_scene_progress(nuevo_token, max(fade_in_val, fade_out_val))
     except:
         pass
@@ -4423,7 +7414,9 @@ def aplicar_escena(nombre_escena):
         "respiracion",
         "secuencia",
         "secuencia_on",
+        "secuencia_on_overlay",
         "secuencia_off",
+        "secuencia_off_overlay",
         "parpadeo",
         "estrobo",
         "estrobo_udp",
@@ -4443,20 +7436,38 @@ def aplicar_escena(nombre_escena):
     if hay_accion_dinamica:
         print(f"[ESCENA] {nombre_escena}: acción dinámica detectada → NO ejecutar fades.")
 
-        # Marcar la escena como finalizada
-        marcar_escena_terminada()
-
         target_ips = resolve_scene_effect_target_ips(escena)
         preserve_target_state = "secuencia_off" in active_effects
+        overlay_target_state = "secuencia_off_overlay" in active_effects
+        on_overlay_target_state = "secuencia_on_overlay" in active_effects
+        sequence_finishes_scene = overlay_target_state or on_overlay_target_state or "secuencia_on" in active_effects
+
+        if sequence_finishes_scene:
+            if overlay_target_state:
+                sequence_effect_name = "secuencia_off_overlay"
+            elif on_overlay_target_state:
+                sequence_effect_name = "secuencia_on_overlay"
+            else:
+                sequence_effect_name = "secuencia_on"
+            try:
+                start_scene_progress(
+                    nuevo_token,
+                    estimate_sequence_effect_seconds(escena, sequence_effect_name, target_ips)
+                )
+            except Exception:
+                pass
+        else:
+            marcar_escena_terminada()
 
         if preserve_target_state:
             stop_all_active_effects("preparando secuencia off")
 
-        threading.Thread(
-            target=fade_scene_lamps_outside_effect_target,
-            args=(escena, target_ips, fade_out_val, nuevo_token),
-            daemon=True,
-        ).start()
+        if not overlay_target_state and not on_overlay_target_state:
+            threading.Thread(
+                target=fade_scene_lamps_outside_effect_target,
+                args=(escena, target_ips, fade_out_val, nuevo_token),
+                daemon=True,
+            ).start()
 
         if preserve_target_state:
             apply_scene_mode_to_effect_target(
@@ -4468,7 +7479,7 @@ def aplicar_escena(nombre_escena):
 
         # Actualizar panel (estado visual)
         for ip in online_ips:
-            if preserve_target_state and target_ips is not None and ip in target_ips:
+            if (preserve_target_state or overlay_target_state or on_overlay_target_state) and target_ips is not None and ip in target_ips:
                 continue
 
             estado = escena[ip]
@@ -4484,9 +7495,17 @@ def aplicar_escena(nombre_escena):
 
         # Aplicar efectos (solo si realmente hay efectos)
         effect_delay_ms = 300 if preserve_target_state else 10
-        root.after(effect_delay_ms, lambda data=escena: apply_scene_effects_for_execution(data))
+        root.after(
+            effect_delay_ms,
+            lambda data=escena, token=nuevo_token, name=nombre_escena: apply_scene_effects_for_execution(data, token, name)
+        )
+
+        if sequence_finishes_scene:
+            return
 
         escena_en_ejecucion = False
+        set_active_scene_runtime()
+        update_midi_scene_execution_led()
         try: btn_cargar.config(state="normal")
         except: pass
         try: listbox_escenas.config(state="normal")
@@ -4568,11 +7587,17 @@ def aplicar_escena(nombre_escena):
         for t in threads:
             t.join()
 
-        root.after(0, lambda: finalizar_escena(nuevo_token, nombre_escena))
+        if effects.get("transicion_color"):
+            root.after(
+                0,
+                lambda data=escena, token=nuevo_token, name=nombre_escena: apply_scene_effects_for_execution(data, token, name)
+            )
+        else:
+            root.after(0, lambda: finalizar_escena(nuevo_token, nombre_escena))
 
     threading.Thread(target=worker, daemon=True).start()
 
-    if "effects" in escena:
+    if "effects" in escena and not effects.get("transicion_color"):
         root.after(
             0,
             lambda data=escena: apply_scene_effects_for_execution(data)
@@ -4581,18 +7606,21 @@ def aplicar_escena(nombre_escena):
 def marcar_escena_terminada():
     global escena_en_ejecucion
     escena_en_ejecucion = False
+    set_active_scene_runtime()
+    update_midi_scene_execution_led()
 
     try:
         set_estado_escena("Escena finalizada", "#03fc7f")
         scene_progress_var.set(100)
     except:
         pass
+    avanzar_lista_escenas_si_corresponde()
 
 
 def borrar():
     sel = listbox_escenas.curselection()
     if sel:
-        escena = listbox_escenas.get(sel)
+        escena = listbox_escenas.get(sel[0])
         if messagebox.askyesno("Eliminar escena", f"¿Estás seguro que quieres eliminar la escena '{escena}'?"):
             escenas = load_escenas()
             if escena in escenas["datos"]:
@@ -4695,7 +7723,7 @@ def on_actualizar_escena():
 def mostrar_fades_de_escena(event=None):
     sel = listbox_escenas.curselection()
     if sel:
-        escena = listbox_escenas.get(sel)
+        escena = listbox_escenas.get(sel[0])
         escenas = load_escenas()
         datos = escenas["datos"].get(escena, {})
         fade_in_var.set(normalize_fade_seconds(datos.get("fade_in", 0.0)))
@@ -4707,9 +7735,11 @@ def mostrar_fades_de_escena(event=None):
         )
                
 def cargar():
+    global ultima_idx_escena
     sel = listbox_escenas.curselection()
     if sel:
-        escena = listbox_escenas.get(sel)
+        ultima_idx_escena = sel[0]
+        escena = listbox_escenas.get(sel[0])
         aplicar_escena(escena)
 
 
@@ -4770,11 +7800,14 @@ def stop_show_midi():
 
     fade_token[0] = str(uuid.uuid4())
     escena_en_ejecucion = False
+    set_active_scene_runtime()
+    update_midi_scene_execution_led()
     stop_all_active_effects("MIDI stop")
     try:
         btn_cargar.config(state="normal")
         listbox_escenas.config(state="normal")
         scene_progress_var.set(0)
+        reset_scene_timer()
         set_estado_escena("Show detenido desde MIDI", "#ffcc66")
     except Exception:
         pass
@@ -4864,6 +7897,8 @@ from tkinter import ttk
 
 estado_escena_var = tk.StringVar(value="Sin escenas en ejecución")
 scene_progress_var = tk.DoubleVar(value=0.0)
+scene_timer_var = tk.StringVar(value="00:00")
+scene_timer_token = {"value": None, "start": None}
 lbl_estado_escena = tk.Label(
     frame_right,
     textvariable=estado_escena_var,
@@ -4929,6 +7964,37 @@ def actualizar_escena():
 def set_estado_escena(texto, color):
     estado_escena_var.set(texto)
     lbl_estado_escena.config(fg=color)
+
+
+def format_scene_elapsed(seconds):
+    seconds = max(0, int(seconds))
+    minutes = seconds // 60
+    rest = seconds % 60
+    return f"{minutes:02d}:{rest:02d}"
+
+
+def start_scene_timer():
+    token = str(uuid.uuid4())
+    scene_timer_token["value"] = token
+    scene_timer_token["start"] = time.monotonic()
+    scene_timer_var.set("00:00")
+
+    def tick():
+        if scene_timer_token.get("value") != token:
+            return
+        start = scene_timer_token.get("start")
+        if start is None:
+            return
+        scene_timer_var.set(format_scene_elapsed(time.monotonic() - start))
+        root.after(1000, tick)
+
+    tick()
+
+
+def reset_scene_timer():
+    scene_timer_token["value"] = None
+    scene_timer_token["start"] = None
+    scene_timer_var.set("00:00")
 
 
 def start_scene_progress(token, total_seconds):
@@ -5035,7 +8101,7 @@ scene_effect_scope = tk.Frame(frame_scene_effect, bg="#202428")
 scene_effect_scope.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0))
 for label, value in (
     ("Sel.", "seleccion"),
-    ("Efectos", "efectos"),
+    ("Bichos", "efectos"),
     ("Atmos.", "atmosfera"),
     ("Todas", "todas"),
 ):
@@ -5083,7 +8149,20 @@ for i in range(4):
 
 ############ EJECUTAR ESCENA ###############
 
-tk.Label(frame_right, text="Escenas guardadas", bg="#202428", fg="#b9e3f7", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=16, pady=(0, 4))
+frame_saved_scenes_title = tk.Frame(frame_right, bg="#202428")
+frame_saved_scenes_title.pack(fill="x", padx=16, pady=(0, 4))
+tk.Label(
+    frame_saved_scenes_title,
+    text="Escenas guardadas",
+    bg="#202428", fg="#b9e3f7",
+    font=("Segoe UI", 10, "bold")
+).pack(side="left")
+tk.Label(
+    frame_saved_scenes_title,
+    textvariable=scene_timer_var,
+    bg="#202428", fg="#8dfa9f",
+    font=("Consolas", 11, "bold")
+).pack(side="right")
 lista_escenas = tk.StringVar(value=[])
 
 btn_cargar = tk.Button(
@@ -5163,7 +8242,6 @@ scroll_esc = tk.Scrollbar(frame_listbox, orient="vertical")
 scroll_esc.pack(side="right", fill="y")
 
 
-from tablero.helpers_wiz import bloquear_enter
 listbox_escenas = tk.Listbox(
     frame_listbox,
     listvariable=lista_escenas,
@@ -5176,7 +8254,6 @@ listbox_escenas = tk.Listbox(
 )
 listbox_escenas.pack(side="left", fill="both", expand=True)
 
-listbox_escenas.bind("<Return>", bloquear_enter)
 scroll_esc.config(command=listbox_escenas.yview)
 
 # Botonera UP/DOWN al lado derecho del listbox
@@ -5221,6 +8298,17 @@ def on_enter_escena(event):
     
 
 actualizar_lista_escenas()
+
+
+def cargar_ultimo_proyecto_al_iniciar():
+    nombre = obtener_ultimo_proyecto_activo()
+    if nombre:
+        aplicar_proyecto_por_nombre(nombre, mostrar_mensaje=False)
+    else:
+        actualizar_estado_proyecto()
+
+
+cargar_ultimo_proyecto_al_iniciar()
 listbox_escenas.bind("<<ListboxSelect>>", mostrar_fades_de_escena)
 listbox_escenas.bind("<Return>", on_listbox_enter)
 
@@ -5235,7 +8323,7 @@ def escena_seleccionada_en_listbox():
     sel = listbox_escenas.curselection()
     if not sel:
         return None
-    return listbox_escenas.get(sel)
+    return listbox_escenas.get(sel[0])
 
 #____________________________inicio_MIDI______________________________________________________________
 
@@ -5247,10 +8335,27 @@ def handle_midi_event(event):
     vel = event.get("velocity")
     status = event.get("status")
 
+    if event.get("note_off"):
+        if is_apc_espacio_note(note):
+            root.after(0, lambda n=note: handle_espacio_midi_note_off(n))
+            return
+        action = get_midi_action_for_note(note)
+        trigger = MIDI_TRIGGER_DEFS.get(action) if action else None
+        if trigger and trigger.get("hold"):
+            stop_hold_trigger(action)
+            return
+
+
     # ----------------------------
     # NOTE ON → ejecutar acción
     # ----------------------------
     if event.get("note_on"):
+        if capture_midi_learn_note(note):
+            return
+
+        if is_apc_espacio_note(note):
+            root.after(0, lambda n=note: handle_espacio_midi_note(n))
+            return
 
         # Primero: ejecutar la acción asignada
         if note in note_map:
@@ -5281,10 +8386,24 @@ def handle_midi_event(event):
             get_midi_note("all_on"),
             get_midi_note("refresh"),
         }
+        botones_disparadores = {
+            get_midi_note(action)
+            for action in MIDI_TRIGGER_DEFS
+            if get_midi_note(action) is not None
+        }
 
         # Si es efecto: LED verde (activo)
         if note in efectos_validos:
             led_activo(note)
+            return
+
+        if note in botones_disparadores:
+            action = get_midi_action_for_note(note)
+            trigger = MIDI_TRIGGER_DEFS.get(action) if action else None
+            if trigger and trigger.get("hold"):
+                led_activo(note)
+                return
+            midi_led(note, get_midi_led_color(action) if action else 21)
             return
 
         # Si es botón especial (refresh): no tocar LED
@@ -5326,6 +8445,1303 @@ def set_maestro_brillo_from_midi(v):
     maestro_on_brillo(brillo)
 
 
+MIDI_TRIGGER_DEFS = {
+    "trigger_white_impact": {
+        "nombre": "Destello de portal",
+        "descripcion": "Apertura blanca breve, potente y limpia.",
+        "familia": "Golpe",
+        "accent": "#f5fbff",
+        "scope": "efectos",
+        "kind": "flash_white",
+        "levels": (255, 215, 90, 0),
+        "step_ms": 34,
+        "temp": 5000,
+    },
+    "trigger_warm_hit": {
+        "nombre": "Pulso de antorcha",
+        "descripcion": "Golpe ambar con caida organica y teatral.",
+        "familia": "Golpe",
+        "accent": "#ffb347",
+        "scope": "efectos",
+        "kind": "flash_white",
+        "levels": (230, 165, 72, 18, 0),
+        "step_ms": 46,
+        "temp": 2300,
+    },
+    "trigger_fast_chase": {
+        "nombre": "Cometa ascendente",
+        "descripcion": "La luz viaja rapido de menor a mayor.",
+        "familia": "Movimiento",
+        "accent": "#34d6ff",
+        "scope": "efectos",
+        "kind": "chase",
+        "color": (195, 1.0),
+        "step_ms": 28,
+        "tail_pct": 22,
+        "reverse": False,
+    },
+    "trigger_reverse_chase": {
+        "nombre": "Cometa descendente",
+        "descripcion": "El mismo viaje, pero de mayor a menor.",
+        "familia": "Movimiento",
+        "accent": "#34d6ff",
+        "scope": "efectos",
+        "kind": "chase",
+        "color": (195, 1.0),
+        "step_ms": 28,
+        "tail_pct": 22,
+        "reverse": True,
+    },
+    "trigger_blackout_snap": {
+        "nombre": "Sombra instantanea",
+        "descripcion": "Micro apagado general para cortes dramaticos.",
+        "familia": "Corte",
+        "accent": "#0a0d10",
+        "scope": "all",
+        "kind": "blackout",
+        "hold_ms": 110,
+    },
+    "trigger_red_pulse": {
+        "nombre": "Latido rojo",
+        "descripcion": "Doble golpe rojo, seco y profundo.",
+        "familia": "Latido",
+        "accent": "#ff2a2a",
+        "scope": "efectos",
+        "kind": "flash_color",
+        "color": (0, 1.0),
+        "levels": (245, 45, 230, 0),
+        "step_ms": 54,
+    },
+    "trigger_blue_wave": {
+        "nombre": "Ola fria",
+        "descripcion": "Barrido azul con cola suave para transiciones.",
+        "familia": "Movimiento",
+        "accent": "#477bff",
+        "scope": "efectos",
+        "kind": "chase",
+        "color": (220, 1.0),
+        "step_ms": 38,
+        "tail_pct": 32,
+        "reverse": False,
+    },
+    "trigger_short_strobe": {
+        "nombre": "Relampago corto",
+        "descripcion": "Destellos irregulares tipo descarga electrica.",
+        "familia": "Golpe",
+        "accent": "#ffffff",
+        "scope": "efectos",
+        "kind": "flash_white",
+        "levels": (255, 0, 190, 0, 255, 40, 0),
+        "step_ms": 24,
+        "temp": 5200,
+    },
+    "trigger_magenta_heartbeat": {
+        "nombre": "Latido magenta",
+        "descripcion": "Doble latido musical, mas emocional que agresivo.",
+        "familia": "Latido",
+        "accent": "#ff42d6",
+        "scope": "efectos",
+        "kind": "flash_color",
+        "color": (305, 1.0),
+        "levels": (210, 35, 255, 0),
+        "step_ms": 62,
+    },
+    "trigger_center_open": {
+        "nombre": "Apertura solar",
+        "descripcion": "Se abre desde el centro hacia los extremos.",
+        "familia": "Movimiento",
+        "accent": "#ffd04d",
+        "scope": "efectos",
+        "kind": "center_open",
+        "color": (48, 0.9),
+        "step_ms": 38,
+    },
+    "trigger_star_twinkle": {
+        "nombre": "Rocio de estrellas",
+        "descripcion": "Titileo blanco aleatorio, delicado y brillante.",
+        "familia": "Textura",
+        "accent": "#f7fbff",
+        "scope": "efectos",
+        "kind": "sparkle_white",
+        "steps": 9,
+        "step_ms": 58,
+        "density": 0.34,
+        "min_brightness": 25,
+        "max_brightness": 230,
+        "temp": 4300,
+    },
+    "trigger_firefly_field": {
+        "nombre": "Luciernagas",
+        "descripcion": "Puntos verdes que aparecen y desaparecen.",
+        "familia": "Textura",
+        "accent": "#75ff7a",
+        "scope": "efectos",
+        "kind": "sparkle_color",
+        "color": (108, 0.9),
+        "steps": 10,
+        "step_ms": 64,
+        "density": 0.28,
+        "min_brightness": 30,
+        "max_brightness": 180,
+    },
+    "trigger_ghost_breath": {
+        "nombre": "Respiracion fantasma",
+        "descripcion": "Entrada y salida fria, corta y eterea.",
+        "familia": "Textura",
+        "accent": "#b7d7ff",
+        "scope": "efectos",
+        "kind": "breath_white",
+        "levels": (0, 34, 105, 190, 95, 22, 0),
+        "step_ms": 70,
+        "temp": 6200,
+    },
+    "trigger_curtain_close": {
+        "nombre": "Cierre de telon",
+        "descripcion": "Los extremos se cierran hacia el centro.",
+        "familia": "Movimiento",
+        "accent": "#9b111e",
+        "scope": "efectos",
+        "kind": "edges_in",
+        "color": (352, 1.0),
+        "step_ms": 44,
+    },
+    "trigger_northern_glow": {
+        "nombre": "Aurora lateral",
+        "descripcion": "Barrido verde-cian con variacion de tono.",
+        "familia": "Color",
+        "accent": "#4dffd2",
+        "scope": "efectos",
+        "kind": "hue_sweep",
+        "start_hue": 145,
+        "hue_span": 85,
+        "step_ms": 42,
+        "tail_pct": 35,
+    },
+    "trigger_scene_crescendo": {
+        "nombre": "Crescendo de escena",
+        "descripcion": "Sube los colores actuales al maximo y cae lento.",
+        "familia": "Sobre escena",
+        "accent": "#fff4a8",
+        "scope": "scene_selected",
+        "kind": "scene_bloom",
+        "levels": (1.0, 0.86, 0.68, 0.50, 0.34, 0.22, 0.12, 0.05),
+        "step_ms": 145,
+    },
+    "trigger_scene_echo": {
+        "nombre": "Eco de color",
+        "descripcion": "Dos impulsos que respetan el color de cada lampara.",
+        "familia": "Sobre escena",
+        "accent": "#ffd27a",
+        "scope": "scene_selected",
+        "kind": "scene_echo",
+        "levels": (1.0, 0.18, 0.72, 0.10),
+        "step_ms": 120,
+    },
+    "trigger_scene_water_echo": {
+        "nombre": "Eco de agua",
+        "descripcion": "Impacto central con ondas expansivas que rebotan suave sobre la escena.",
+        "familia": "Sobre escena",
+        "accent": "#6fdcff",
+        "scope": "scene_selected",
+        "kind": "scene_water_echo",
+        "step_ms": 82,
+        "echo_gap": 3,
+        "ring_width": 0.72,
+        "amplitudes": (1.0, 0.58, 0.30),
+        "tail_factor": 0.18,
+        "base_dim_factor": 0.34,
+        "impact_floor": 58,
+    },
+    "trigger_scene_wave": {
+        "nombre": "Marea de escena",
+        "descripcion": "Una ola de brillo viaja usando los colores guardados.",
+        "familia": "Sobre escena",
+        "accent": "#49d9ff",
+        "scope": "scene_selected",
+        "kind": "scene_wave",
+        "step_ms": 52,
+        "tail_pct": 34,
+        "reverse": False,
+    },
+    "trigger_scene_constellation": {
+        "nombre": "Constelacion viva",
+        "descripcion": "Titileo aleatorio con el color propio de cada lampara.",
+        "familia": "Sobre escena",
+        "accent": "#e8ddff",
+        "scope": "scene_selected",
+        "kind": "scene_sparkle",
+        "steps": 10,
+        "step_ms": 72,
+        "density": 0.38,
+        "min_factor": 0.18,
+    },
+    "trigger_scene_suspense": {
+        "nombre": "Suspenso tenue",
+        "descripcion": "Baja la escena casi a sombra y vuelve respirando.",
+        "familia": "Sobre escena",
+        "accent": "#7f93ff",
+        "scope": "scene_selected",
+        "kind": "scene_dip",
+        "levels": (0.18, 0.10, 0.22, 0.45, 0.72, 0.92),
+        "step_ms": 135,
+    },
+    "trigger_scene_floor": {
+        "nombre": "Piso de escena",
+        "descripcion": "Deja las luces de escena al minimo visible, sin apagarlas.",
+        "familia": "Sobre escena",
+        "accent": "#6f7fa8",
+        "scope": "scene_selected",
+        "kind": "scene_set_level",
+        "brightness": 8,
+    },
+    "trigger_scene_full": {
+        "nombre": "Pleno de escena",
+        "descripcion": "Lleva las luces de escena a brillo maximo respetando sus colores.",
+        "familia": "Sobre escena",
+        "accent": "#fff2a3",
+        "scope": "scene_selected",
+        "kind": "scene_set_level",
+        "brightness": 255,
+    },
+    "trigger_slow_blackout": {
+        "nombre": "Blackout lento",
+        "descripcion": "Apaga las luces activas juntas con una caida progresiva de brillo.",
+        "familia": "Corte",
+        "accent": "#111519",
+        "scope": "active_lights",
+        "kind": "fade_blackout",
+        "duration_ms": 8000,
+        "steps": 64,
+    },
+    "trigger_hold_scene_rise": {
+        "nombre": "Crecer escena",
+        "descripcion": "Mientras mantenes presionado, la escena sube hasta pleno.",
+        "familia": "Presion",
+        "accent": "#fff2a3",
+        "scope": "scene_selected",
+        "kind": "hold_scene_rise",
+        "hold": True,
+        "step_ms": 70,
+        "ramp_steps": 9,
+    },
+    "trigger_hold_scene_shadow": {
+        "nombre": "Sombra sostenida",
+        "descripcion": "Mientras mantenes presionado, la escena queda casi apagada sin morir.",
+        "familia": "Presion",
+        "accent": "#7385bd",
+        "scope": "scene_selected",
+        "kind": "hold_scene_shadow",
+        "hold": True,
+        "step_ms": 65,
+        "ramp_steps": 5,
+        "floor": 1,
+    },
+    "trigger_hold_scene_shimmer": {
+        "nombre": "Titileo sostenido",
+        "descripcion": "Mientras mantenes presionado, los colores actuales titilan vivos.",
+        "familia": "Presion",
+        "accent": "#e8ddff",
+        "scope": "scene_selected",
+        "kind": "hold_scene_shimmer",
+        "hold": True,
+        "step_ms": 58,
+        "density": 0.42,
+        "min_factor": 0.20,
+    },
+}
+
+
+active_hold_triggers = {}
+
+
+def get_trigger_target_ips(scope="efectos"):
+    ordered = get_sequence_ordered_lamp_ips()
+    if scope == "all":
+        ips = ordered
+    elif scope == "active_lights":
+        ips = [
+            ip for ip in ordered
+            if selected_devices[ip].get()
+            or safe_brightness(getattr(panels.get(ip), "last_brillo", 0)) > 0
+            or safe_brightness(lamp_state.get(ip, {}).get("brightness", 0)) > 0
+        ]
+    elif scope == "scene_selected":
+        ips = [ip for ip in ordered if selected_devices[ip].get()]
+        return [ip for ip in ips if lamp_status.get(ip, True)]
+    elif scope in ("efectos", "atmosfera"):
+        ips = [ip for ip in ordered if get_lamp_group(ip) == scope]
+    else:
+        ips = [ip for ip in ordered if selected_devices[ip].get()]
+
+    if not ips:
+        ips = [ip for ip in ordered if selected_devices[ip].get()]
+    if not ips:
+        ips = ordered
+
+    return [ip for ip in ips if lamp_status.get(ip, True)]
+
+
+def snapshot_trigger_state(ips):
+    snapshot = {}
+    for ip in ips:
+        panel = panels.get(ip)
+        snapshot[ip] = {
+            "on": bool(selected_devices[ip].get()),
+            "mode": getattr(panel, "last_mode", "colour") if panel else "colour",
+            "h": getattr(panel, "last_hue", 0) if panel else 0,
+            "s": getattr(panel, "last_sat", 1) if panel else 1,
+            "brillo": safe_brightness(getattr(panel, "last_brillo", 0) if panel else 0),
+            "temp": getattr(panel, "last_temp", 255) if panel else 255,
+        }
+    return snapshot
+
+
+def restore_trigger_state(snapshot):
+    for ip, state in snapshot.items():
+        panel = panels.get(ip)
+        is_on = state["on"] and safe_brightness(state["brillo"]) > 0
+        selected_devices[ip].set(is_on)
+
+        if panel:
+            panel.mode_var.set(state["mode"])
+            panel.last_mode = state["mode"]
+            panel.last_hue = state["h"]
+            panel.last_sat = state["s"]
+            panel.last_brillo = state["brillo"]
+            panel.last_temp = state["temp"]
+            try:
+                panel.brillo_var.set(state["brillo"])
+                panel.temp_var.set(state["temp"])
+            except Exception:
+                pass
+
+        if not is_on:
+            send_off(ip)
+        elif state["mode"] == "white":
+            send_lamp_white_scene(ip, state["brillo"], state["temp"])
+        else:
+            send_lamp_color_safe(ip, state["h"], state["s"], state["brillo"])
+
+        if panel:
+            update_panel_visual(panel)
+
+
+def trigger_send_color(ip, hue, sat, brightness):
+    if safe_brightness(brightness) <= 0:
+        send_off(ip)
+    else:
+        send_lamp_color_safe(ip, hue, sat, brightness)
+
+
+def trigger_send_white(ip, brightness, temp):
+    if safe_brightness(brightness) <= 0:
+        send_off(ip)
+    else:
+        send_lamp_white_scene(ip, brightness, temp)
+
+
+def trigger_send_scene_state(ip, state, brightness):
+    brightness = safe_brightness(brightness)
+    if brightness <= 0:
+        send_off(ip)
+        return
+    if state.get("mode") == "white":
+        send_lamp_white_scene(ip, brightness, state.get("temp", 255))
+    else:
+        send_lamp_color_safe(
+            ip,
+            state.get("h", 0),
+            state.get("s", 1),
+            brightness,
+        )
+
+
+def scene_brightness_from_factor(state, factor):
+    base = safe_brightness(state.get("brillo", 0))
+    factor = max(0.0, min(1.0, float(factor)))
+    if factor >= 1.0:
+        return 255
+    return safe_brightness(base + (255 - base) * factor)
+
+
+def scene_brightness_scaled(state, factor):
+    base = safe_brightness(state.get("brillo", 0))
+    factor = max(0.0, min(1.2, float(factor)))
+    return safe_brightness(base * factor)
+
+
+def run_flash_trigger(ips, levels, step_ms=40, color=None, temp=4600):
+    snapshot = snapshot_trigger_state(ips)
+
+    def step(index=0):
+        if index >= len(levels):
+            root.after(35, lambda: restore_trigger_state(snapshot))
+            return
+        level = safe_brightness(levels[index])
+        for ip in ips:
+            if color is None:
+                trigger_send_white(ip, level, temp)
+            else:
+                trigger_send_color(ip, color[0], color[1], level)
+        root.after(max(20, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_blackout_trigger(ips, hold_ms=120):
+    snapshot = snapshot_trigger_state(ips)
+    for ip in ips:
+        send_off(ip)
+    root.after(max(40, int(hold_ms)), lambda: restore_trigger_state(snapshot))
+
+
+def run_fade_blackout_trigger(ips, duration_ms=3500, steps=28):
+    if "stop_all_active_effects" in globals():
+        stop_all_active_effects("blackout lento")
+    snapshot = snapshot_trigger_state(ips)
+    for ip in ips:
+        panel = panels.get(ip)
+        panel_brightness = safe_brightness(getattr(panel, "last_brillo", 0) if panel else 0)
+        state_brightness = safe_brightness(lamp_state.get(ip, {}).get("brightness", 0))
+        snapshot[ip]["brillo"] = max(snapshot[ip].get("brillo", 0), panel_brightness, state_brightness)
+        snapshot[ip]["on"] = snapshot[ip]["on"] or snapshot[ip]["brillo"] > 0
+
+    active_ips = [
+        ip for ip in ips
+        if safe_brightness(snapshot.get(ip, {}).get("brillo", 0)) > 0
+    ]
+    if not active_ips:
+        return
+
+    steps = max(3, int(steps))
+    duration_ms = max(250, int(duration_ms))
+    step_ms = max(30, duration_ms // steps)
+
+    def step(index=0):
+        factor = max(0.0, 1.0 - (index / steps))
+        for ip in active_ips:
+            state = snapshot[ip]
+            brightness = safe_brightness(state.get("brillo", 0) * factor)
+            if brightness <= 0 or index >= steps:
+                send_off(ip)
+                selected_devices[ip].set(False)
+                panel = panels.get(ip)
+                if panel:
+                    panel.last_brillo = 0
+                    try:
+                        panel.brillo_var.set(0)
+                    except Exception:
+                        pass
+                    update_panel_visual(panel)
+                continue
+            trigger_send_scene_state(ip, state, brightness)
+        if index >= steps:
+            sync_espacio_laberintos_current_state(active_ips)
+            return
+        root.after(step_ms, lambda: step(index + 1))
+
+    step()
+
+
+def _chase_brightness(distance, tail_pct):
+    if distance == 0:
+        return 255
+    if distance == 1:
+        return safe_brightness(255 * tail_pct / 100)
+    return 0
+
+
+def run_chase_trigger(ips, color=(190, 1.0), step_ms=36, tail_pct=18, reverse=False):
+    snapshot = snapshot_trigger_state(ips)
+    travel_ips = list(reversed(ips)) if reverse else list(ips)
+    total_steps = len(travel_ips) + 1
+
+    def step(index=0):
+        if index >= total_steps:
+            root.after(25, lambda: restore_trigger_state(snapshot))
+            return
+        for pos, ip in enumerate(travel_ips):
+            brightness = _chase_brightness(abs(pos - index), tail_pct)
+            trigger_send_color(ip, color[0], color[1], brightness)
+        root.after(max(18, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_center_open_trigger(ips, color=(48, 0.9), step_ms=46):
+    snapshot = snapshot_trigger_state(ips)
+    count = len(ips)
+    if count == 0:
+        return
+    center = (count - 1) / 2
+    max_distance = int(center) + 1
+
+    def step(distance=0):
+        if distance > max_distance:
+            root.after(30, lambda: restore_trigger_state(snapshot))
+            return
+        for pos, ip in enumerate(ips):
+            brightness = 255 if int(abs(pos - center) + 0.5) == distance else 0
+            trigger_send_color(ip, color[0], color[1], brightness)
+        root.after(max(20, int(step_ms)), lambda: step(distance + 1))
+
+    step()
+
+
+def run_sparkle_trigger(
+    ips,
+    steps=8,
+    step_ms=60,
+    color=None,
+    temp=4300,
+    density=0.33,
+    min_brightness=25,
+    max_brightness=220,
+):
+    snapshot = snapshot_trigger_state(ips)
+    density = max(0.05, min(1.0, float(density)))
+
+    def step(index=0):
+        if index >= int(steps):
+            root.after(45, lambda: restore_trigger_state(snapshot))
+            return
+
+        for ip in ips:
+            if random.random() <= density:
+                level = random.randint(int(min_brightness), int(max_brightness))
+            else:
+                level = 0
+
+            if color is None:
+                trigger_send_white(ip, level, temp)
+            else:
+                trigger_send_color(ip, color[0], color[1], level)
+
+        root.after(max(28, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_breath_trigger(ips, levels, step_ms=70, color=None, temp=6000):
+    snapshot = snapshot_trigger_state(ips)
+
+    def step(index=0):
+        if index >= len(levels):
+            root.after(40, lambda: restore_trigger_state(snapshot))
+            return
+
+        level = safe_brightness(levels[index])
+        for ip in ips:
+            if color is None:
+                trigger_send_white(ip, level, temp)
+            else:
+                trigger_send_color(ip, color[0], color[1], level)
+
+        root.after(max(35, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_edges_in_trigger(ips, color=(352, 1.0), step_ms=44):
+    snapshot = snapshot_trigger_state(ips)
+    count = len(ips)
+    if count == 0:
+        return
+    max_step = (count + 1) // 2
+
+    def step(index=0):
+        if index >= max_step + 1:
+            root.after(35, lambda: restore_trigger_state(snapshot))
+            return
+
+        left = index
+        right = count - 1 - index
+        for pos, ip in enumerate(ips):
+            distance = min(abs(pos - left), abs(pos - right))
+            brightness = 245 if distance == 0 else 58 if distance == 1 else 0
+            trigger_send_color(ip, color[0], color[1], brightness)
+
+        root.after(max(28, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_hue_sweep_trigger(ips, start_hue=145, hue_span=85, step_ms=42, tail_pct=35):
+    snapshot = snapshot_trigger_state(ips)
+    count = len(ips)
+    if count == 0:
+        return
+    total_steps = count + 2
+
+    def step(index=0):
+        if index >= total_steps:
+            root.after(35, lambda: restore_trigger_state(snapshot))
+            return
+
+        for pos, ip in enumerate(ips):
+            distance = abs(pos - index)
+            brightness = _chase_brightness(distance, tail_pct)
+            hue = (float(start_hue) + (float(hue_span) * pos / max(1, count - 1))) % 360
+            trigger_send_color(ip, hue, 0.88, brightness)
+
+        root.after(max(28, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_bloom_trigger(ips, levels, step_ms=140):
+    snapshot = snapshot_trigger_state(ips)
+
+    def step(index=0):
+        if index >= len(levels):
+            root.after(45, lambda: restore_trigger_state(snapshot))
+            return
+        for ip in ips:
+            state = snapshot[ip]
+            trigger_send_scene_state(ip, state, scene_brightness_from_factor(state, levels[index]))
+        root.after(max(45, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_echo_trigger(ips, levels, step_ms=115):
+    snapshot = snapshot_trigger_state(ips)
+
+    def step(index=0):
+        if index >= len(levels):
+            root.after(45, lambda: restore_trigger_state(snapshot))
+            return
+        for ip in ips:
+            state = snapshot[ip]
+            trigger_send_scene_state(ip, state, scene_brightness_from_factor(state, levels[index]))
+        root.after(max(40, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_water_echo_trigger(
+    ips,
+    step_ms=82,
+    echo_gap=3,
+    ring_width=0.72,
+    amplitudes=(1.0, 0.58, 0.30),
+    tail_factor=0.18,
+    base_dim_factor=0.34,
+    impact_floor=58,
+):
+    snapshot = snapshot_trigger_state(ips)
+    count = len(ips)
+    if count == 0:
+        return
+
+    center = (count - 1) / 2
+    max_distance = max(abs(pos - center) for pos in range(count))
+    echo_gap = max(1, int(echo_gap))
+    ring_width = max(0.25, float(ring_width))
+    amplitudes = tuple(max(0.0, min(1.0, float(value))) for value in amplitudes) or (1.0,)
+    tail_factor = max(0.0, min(1.0, float(tail_factor)))
+    base_dim_factor = max(0.05, min(0.95, float(base_dim_factor)))
+    impact_floor = safe_brightness(impact_floor)
+    total_steps = int(max_distance + echo_gap * (len(amplitudes) - 1) + 3)
+
+    def ripple_factor(distance, radius, amplitude):
+        delta = abs(distance - radius)
+        if delta <= ring_width:
+            return amplitude * (1.0 - (delta / max(0.01, ring_width)) * 0.35)
+        if 0 < radius - distance <= 1.25:
+            return amplitude * tail_factor
+        return 0.0
+
+    def water_echo_brightness(state, factor):
+        base = safe_brightness(state.get("brillo", 0))
+        dimmed = max(1, safe_brightness(base * base_dim_factor))
+        if factor <= 0:
+            return dimmed
+
+        peak = max(impact_floor, dimmed)
+        return safe_brightness(peak + (255 - peak) * factor)
+
+    def step(index=0):
+        if index > total_steps:
+            root.after(55, lambda: restore_trigger_state(snapshot))
+            return
+
+        for pos, ip in enumerate(ips):
+            state = snapshot[ip]
+            distance = abs(pos - center)
+            factor = 0.0
+
+            for echo_index, amplitude in enumerate(amplitudes):
+                radius = index - echo_index * echo_gap
+                if radius < 0:
+                    continue
+                factor = max(factor, ripple_factor(distance, radius, amplitude))
+
+            trigger_send_scene_state(ip, state, water_echo_brightness(state, factor))
+
+        root.after(max(35, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_wave_trigger(ips, step_ms=52, tail_pct=34, reverse=False):
+    snapshot = snapshot_trigger_state(ips)
+    travel_ips = list(reversed(ips)) if reverse else list(ips)
+    total_steps = len(travel_ips) + 1
+
+    def step(index=0):
+        if index >= total_steps:
+            root.after(45, lambda: restore_trigger_state(snapshot))
+            return
+        for pos, ip in enumerate(travel_ips):
+            state = snapshot[ip]
+            distance = abs(pos - index)
+            factor = 1.0 if distance == 0 else float(tail_pct) / 100 if distance == 1 else 0.0
+            trigger_send_scene_state(ip, state, scene_brightness_from_factor(state, factor))
+        root.after(max(28, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_sparkle_trigger(ips, steps=10, step_ms=72, density=0.38, min_factor=0.18):
+    snapshot = snapshot_trigger_state(ips)
+    density = max(0.05, min(1.0, float(density)))
+    min_factor = max(0.0, min(1.0, float(min_factor)))
+
+    def step(index=0):
+        if index >= int(steps):
+            root.after(45, lambda: restore_trigger_state(snapshot))
+            return
+        for ip in ips:
+            state = snapshot[ip]
+            if random.random() <= density:
+                factor = random.uniform(min_factor, 1.0)
+                brightness = scene_brightness_from_factor(state, factor)
+            else:
+                brightness = scene_brightness_scaled(state, min_factor)
+            trigger_send_scene_state(ip, state, brightness)
+        root.after(max(35, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_dip_trigger(ips, levels, step_ms=135):
+    snapshot = snapshot_trigger_state(ips)
+
+    def step(index=0):
+        if index >= len(levels):
+            root.after(45, lambda: restore_trigger_state(snapshot))
+            return
+        for ip in ips:
+            state = snapshot[ip]
+            trigger_send_scene_state(ip, state, scene_brightness_scaled(state, levels[index]))
+        root.after(max(45, int(step_ms)), lambda: step(index + 1))
+
+    step()
+
+
+def run_scene_set_level_trigger(ips, brightness):
+    snapshot = snapshot_trigger_state(ips)
+    brightness = max(8, safe_brightness(brightness))
+
+    for ip in ips:
+        state = snapshot[ip]
+        panel = panels.get(ip)
+        selected_devices[ip].set(True)
+
+        trigger_send_scene_state(ip, state, brightness)
+
+        if panel:
+            panel.last_brillo = brightness
+            panel.mode_var.set(state.get("mode", getattr(panel, "last_mode", "colour")))
+            panel.last_mode = state.get("mode", getattr(panel, "last_mode", "colour"))
+            panel.last_hue = state.get("h", getattr(panel, "last_hue", 0))
+            panel.last_sat = state.get("s", getattr(panel, "last_sat", 1))
+            panel.last_temp = state.get("temp", getattr(panel, "last_temp", 255))
+            try:
+                panel.brillo_var.set(brightness)
+                panel.temp_var.set(panel.last_temp)
+            except Exception:
+                pass
+            update_panel_visual(panel)
+
+
+def stop_hold_trigger(trigger_name):
+    state = active_hold_triggers.get(trigger_name)
+    if not state:
+        return
+
+    state["active"] = False
+    snapshot = state.get("snapshot", {})
+    active_hold_triggers.pop(trigger_name, None)
+    restore_trigger_state(snapshot)
+
+    note = get_midi_note(trigger_name)
+    if note is not None:
+        midi_led(note, get_midi_led_color(trigger_name))
+
+
+def start_hold_trigger(trigger_name, trigger, ips):
+    stop_hold_trigger(trigger_name)
+    snapshot = snapshot_trigger_state(ips)
+    state = {
+        "active": True,
+        "snapshot": snapshot,
+        "step": 0,
+    }
+    active_hold_triggers[trigger_name] = state
+
+    note = get_midi_note(trigger_name)
+    if note is not None:
+        led_activo(note)
+
+    kind = trigger.get("kind")
+    step_ms = max(28, int(trigger.get("step_ms", 70)))
+    ramp_steps = max(1, int(trigger.get("ramp_steps", 8)))
+
+    def loop():
+        current = active_hold_triggers.get(trigger_name)
+        if not current or not current.get("active"):
+            return
+
+        step_index = int(current.get("step", 0))
+
+        if kind == "hold_scene_rise":
+            factor = min(1.0, (step_index + 1) / ramp_steps)
+            for ip in ips:
+                scene_state = snapshot[ip]
+                trigger_send_scene_state(ip, scene_state, scene_brightness_from_factor(scene_state, factor))
+
+        elif kind == "hold_scene_shadow":
+            floor = max(1, safe_brightness(trigger.get("floor", 1)))
+            dim_factor = max(0.05, 1.0 - min(1.0, (step_index + 1) / ramp_steps))
+            for ip in ips:
+                scene_state = snapshot[ip]
+                brightness = max(floor, scene_brightness_scaled(scene_state, dim_factor))
+                trigger_send_scene_state(ip, scene_state, brightness)
+
+        elif kind == "hold_scene_shimmer":
+            density = max(0.05, min(1.0, float(trigger.get("density", 0.42))))
+            min_factor = max(0.0, min(1.0, float(trigger.get("min_factor", 0.20))))
+            for ip in ips:
+                scene_state = snapshot[ip]
+                if random.random() <= density:
+                    factor = random.uniform(0.45, 1.0)
+                    brightness = scene_brightness_from_factor(scene_state, factor)
+                else:
+                    brightness = scene_brightness_scaled(scene_state, min_factor)
+                trigger_send_scene_state(ip, scene_state, brightness)
+
+        current["step"] = step_index + 1
+        root.after(step_ms, loop)
+
+    loop()
+
+
+def ejecutar_disparador_midi(trigger_name):
+    trigger = MIDI_TRIGGER_DEFS.get(trigger_name)
+    if not trigger:
+        return
+    ips = get_trigger_target_ips(trigger.get("scope", "efectos"))
+    if not ips:
+        return
+
+    if trigger.get("hold"):
+        start_hold_trigger(trigger_name, trigger, ips)
+        return
+
+    kind = trigger.get("kind")
+    if kind == "flash_white":
+        run_flash_trigger(
+            ips,
+            trigger.get("levels", (255, 0)),
+            trigger.get("step_ms", 40),
+            temp=trigger.get("temp", 4600),
+        )
+    elif kind == "flash_color":
+        run_flash_trigger(
+            ips,
+            trigger.get("levels", (255, 0)),
+            trigger.get("step_ms", 40),
+            color=trigger.get("color", (0, 1.0)),
+        )
+    elif kind == "chase":
+        run_chase_trigger(
+            ips,
+            trigger.get("color", (190, 1.0)),
+            trigger.get("step_ms", 36),
+            trigger.get("tail_pct", 18),
+            trigger.get("reverse", False),
+        )
+    elif kind == "blackout":
+        run_blackout_trigger(ips, trigger.get("hold_ms", 120))
+    elif kind == "fade_blackout":
+        run_fade_blackout_trigger(
+            ips,
+            trigger.get("duration_ms", 3500),
+            trigger.get("steps", 28),
+        )
+    elif kind == "center_open":
+        run_center_open_trigger(
+            ips,
+            trigger.get("color", (48, 0.9)),
+            trigger.get("step_ms", 46),
+        )
+    elif kind == "sparkle_white":
+        run_sparkle_trigger(
+            ips,
+            trigger.get("steps", 8),
+            trigger.get("step_ms", 60),
+            temp=trigger.get("temp", 4300),
+            density=trigger.get("density", 0.33),
+            min_brightness=trigger.get("min_brightness", 25),
+            max_brightness=trigger.get("max_brightness", 220),
+        )
+    elif kind == "sparkle_color":
+        run_sparkle_trigger(
+            ips,
+            trigger.get("steps", 8),
+            trigger.get("step_ms", 60),
+            color=trigger.get("color", (120, 0.9)),
+            density=trigger.get("density", 0.33),
+            min_brightness=trigger.get("min_brightness", 25),
+            max_brightness=trigger.get("max_brightness", 220),
+        )
+    elif kind == "breath_white":
+        run_breath_trigger(
+            ips,
+            trigger.get("levels", (0, 80, 180, 0)),
+            trigger.get("step_ms", 70),
+            temp=trigger.get("temp", 6000),
+        )
+    elif kind == "edges_in":
+        run_edges_in_trigger(
+            ips,
+            trigger.get("color", (352, 1.0)),
+            trigger.get("step_ms", 44),
+        )
+    elif kind == "hue_sweep":
+        run_hue_sweep_trigger(
+            ips,
+            trigger.get("start_hue", 145),
+            trigger.get("hue_span", 85),
+            trigger.get("step_ms", 42),
+            trigger.get("tail_pct", 35),
+        )
+    elif kind == "scene_bloom":
+        run_scene_bloom_trigger(
+            ips,
+            trigger.get("levels", (1.0, 0.6, 0.2)),
+            trigger.get("step_ms", 140),
+        )
+    elif kind == "scene_echo":
+        run_scene_echo_trigger(
+            ips,
+            trigger.get("levels", (1.0, 0.2, 0.7, 0.1)),
+            trigger.get("step_ms", 115),
+        )
+    elif kind == "scene_water_echo":
+        run_scene_water_echo_trigger(
+            ips,
+            trigger.get("step_ms", 82),
+            trigger.get("echo_gap", 3),
+            trigger.get("ring_width", 0.72),
+            trigger.get("amplitudes", (1.0, 0.58, 0.30)),
+            trigger.get("tail_factor", 0.18),
+            trigger.get("base_dim_factor", 0.34),
+            trigger.get("impact_floor", 58),
+        )
+    elif kind == "scene_wave":
+        run_scene_wave_trigger(
+            ips,
+            trigger.get("step_ms", 52),
+            trigger.get("tail_pct", 34),
+            trigger.get("reverse", False),
+        )
+    elif kind == "scene_sparkle":
+        run_scene_sparkle_trigger(
+            ips,
+            trigger.get("steps", 10),
+            trigger.get("step_ms", 72),
+            trigger.get("density", 0.38),
+            trigger.get("min_factor", 0.18),
+        )
+    elif kind == "scene_dip":
+        run_scene_dip_trigger(
+            ips,
+            trigger.get("levels", (0.18, 0.1, 0.5, 0.9)),
+            trigger.get("step_ms", 135),
+        )
+    elif kind == "scene_set_level":
+        run_scene_set_level_trigger(
+            ips,
+            trigger.get("brightness", 8),
+        )
+
+
+def open_midi_triggers_panel():
+    win = tk.Toplevel(root)
+    win.title("Disparadores MIDI")
+    win.configure(bg="#181b1e")
+    win.geometry("940x720")
+    win.minsize(760, 560)
+
+    shell = tk.Frame(win, bg="#181b1e")
+    shell.pack(fill="both", expand=True, padx=14, pady=14)
+    shell.grid_rowconfigure(1, weight=1)
+    shell.grid_columnconfigure(0, weight=1)
+
+    header = tk.Frame(shell, bg="#181b1e")
+    header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+    header.grid_columnconfigure(0, weight=1)
+
+    tk.Label(
+        header,
+        text="Disparadores MIDI",
+        bg="#181b1e",
+        fg="#20bdec",
+        font=("Segoe UI", 18, "bold"),
+    ).grid(row=0, column=0, sticky="w")
+
+    tk.Label(
+        header,
+        text="Acentos momentaneos para vivo: golpean, respiran, titilan o viajan y luego restauran la escena activa.",
+        bg="#181b1e",
+        fg="#b9e3f7",
+        font=("Segoe UI", 10),
+    ).grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+    status_var = tk.StringVar(value="Edita una nota y guarda solo ese disparador.")
+    tk.Label(
+        header,
+        textvariable=status_var,
+        bg="#181b1e",
+        fg="#f1c40f",
+        font=("Segoe UI", 10, "bold"),
+        anchor="e",
+    ).grid(row=0, column=1, rowspan=2, sticky="e", padx=(12, 0))
+
+    canvas = tk.Canvas(shell, bg="#181b1e", highlightthickness=0)
+    scroll = tk.Scrollbar(shell, orient="vertical", command=canvas.yview)
+    body = tk.Frame(canvas, bg="#181b1e")
+    body.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
+    body_window = canvas.create_window((0, 0), window=body, anchor="nw")
+    canvas.bind("<Configure>", lambda event: canvas.itemconfigure(body_window, width=event.width))
+    canvas.configure(yscrollcommand=scroll.set)
+    canvas.grid(row=1, column=0, sticky="nsew")
+    scroll.grid(row=1, column=1, sticky="ns")
+    bind_mousewheel_scroll(canvas, canvas, body)
+
+    for col in range(2):
+        body.grid_columnconfigure(col, weight=1, uniform="trigger_cards")
+
+    note_vars = {}
+    color_vars = {}
+
+    def test_trigger(action):
+        ejecutar_disparador_midi(action)
+        if MIDI_TRIGGER_DEFS[action].get("hold"):
+            root.after(1100, lambda: stop_hold_trigger(action))
+        note = get_midi_note(action)
+        if note is not None:
+            midi_led(note, get_midi_led_color(action))
+        status_var.set(f"Probando: {MIDI_TRIGGER_DEFS[action]['nombre']}")
+
+    def save_trigger(action):
+        note_var = note_vars[action]
+        color_var = color_vars[action]
+        if save_single_midi_mapping(action, note_var.get(), color_var.get()):
+            note = get_midi_note(action)
+            note_var.set("" if note is None else str(note))
+            color_var.set(get_midi_led_color_name(action))
+            status_var.set(f"Guardado: {MIDI_TRIGGER_DEFS[action]['nombre']}")
+
+    grid_row = 0
+    grid_col = 0
+    last_category = None
+
+    for trigger_name, trigger in MIDI_TRIGGER_DEFS.items():
+        if trigger.get("hold"):
+            category = "Presion"
+        elif trigger.get("scope") == "scene_selected":
+            category = "Sobre escena"
+        else:
+            category = "Color propio"
+        if category != last_category:
+            if grid_col != 0:
+                grid_row += 1
+                grid_col = 0
+
+            title = (
+                "PRESION"
+                if category == "Presion"
+                else "SOBRE ESCENA"
+                if category == "Sobre escena"
+                else "COLOR PROPIO"
+            )
+            if category == "Presion":
+                subtitle = "Actua mientras mantenes el boton MIDI presionado y libera al soltar."
+            elif category == "Sobre escena":
+                subtitle = "Respeta color, blanco y brillo configurado en la escena o seleccion actual."
+            else:
+                subtitle = "Usa un color o textura propia para acentos generales."
+            section = tk.Frame(body, bg="#181b1e")
+            section.grid(row=grid_row, column=0, columnspan=2, sticky="ew", padx=6, pady=(10, 2))
+            section.grid_columnconfigure(0, weight=1)
+            tk.Label(
+                section,
+                text=title,
+                bg="#181b1e",
+                fg="#20bdec",
+                font=("Segoe UI", 10, "bold"),
+                anchor="w",
+            ).grid(row=0, column=0, sticky="w")
+            tk.Label(
+                section,
+                text=subtitle,
+                bg="#181b1e",
+                fg="#8fb8c9",
+                font=("Segoe UI", 9),
+                anchor="w",
+            ).grid(row=1, column=0, sticky="w")
+            grid_row += 1
+            last_category = category
+
+        row = grid_row
+        col = grid_col
+        card = tk.Frame(
+            body,
+            bg="#232b32",
+            highlightthickness=1,
+            highlightbackground="#3a4650",
+            padx=0,
+            pady=0,
+        )
+        card.grid(row=row, column=col, sticky="nsew", padx=6, pady=6)
+        card.grid_columnconfigure(1, weight=1)
+
+        accent = trigger.get("accent", "#20bdec")
+        tk.Frame(card, bg=accent, width=7).grid(row=0, column=0, rowspan=5, sticky="nsw")
+
+        tk.Label(
+            card,
+            text=trigger.get("familia", "Disparador").upper(),
+            bg="#232b32",
+            fg=accent,
+            font=("Segoe UI", 8, "bold"),
+            anchor="w",
+        ).grid(row=0, column=1, sticky="ew", padx=10, pady=(9, 0))
+
+        tk.Label(
+            card,
+            text=trigger["nombre"],
+            bg="#232b32",
+            fg="#ffffff",
+            font=("Segoe UI", 12, "bold"),
+            anchor="w",
+        ).grid(row=1, column=1, sticky="ew", padx=10, pady=(1, 0))
+
+        tk.Label(
+            card,
+            text=trigger["descripcion"],
+            bg="#232b32",
+            fg="#b9e3f7",
+            font=("Segoe UI", 9),
+            anchor="w",
+            wraplength=320,
+            justify="left",
+        ).grid(row=2, column=1, columnspan=2, sticky="ew", padx=10, pady=(2, 8))
+
+        controls = tk.Frame(card, bg="#232b32")
+        controls.grid(row=3, column=1, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+        controls.grid_columnconfigure(3, weight=1)
+
+        note = get_midi_note(trigger_name)
+        note_var = tk.StringVar(value="" if note is None else str(note))
+        color_var = tk.StringVar(value=get_midi_led_color_name(trigger_name))
+        note_vars[trigger_name] = note_var
+        color_vars[trigger_name] = color_var
+
+        tk.Label(controls, text="Nota", bg="#232b32", fg="#8fb8c9",
+                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+        note_entry = tk.Entry(
+            controls,
+            textvariable=note_var,
+            width=6,
+            bg="#111519",
+            fg="#e6e6e6",
+            insertbackground="#20bdec",
+            relief="flat",
+            font=("Segoe UI", 10, "bold"),
+        )
+        note_entry.grid(row=1, column=0, sticky="w", padx=(0, 8))
+        note_entry.bind(
+            "<FocusIn>",
+            lambda _e, v=note_var, action=trigger_name: set_midi_learn_target(
+                v,
+                status_var,
+                MIDI_TRIGGER_DEFS[action]["nombre"],
+            ),
+            add="+",
+        )
+
+        tk.Label(controls, text="LED", bg="#232b32", fg="#8fb8c9",
+                 font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w")
+        ttk.Combobox(
+            controls,
+            textvariable=color_var,
+            values=list(MIDI_LED_COLOR_OPTIONS.keys()),
+            state="readonly",
+            width=15,
+            font=("Segoe UI", 9),
+        ).grid(row=1, column=1, sticky="w", padx=(0, 8))
+
+        tk.Button(
+            controls,
+            text="Guardar",
+            command=lambda action=trigger_name: save_trigger(action),
+            bg="#27ae60",
+            fg="#ffffff",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            width=9,
+        ).grid(row=1, column=2, sticky="w", padx=(0, 6))
+
+        tk.Button(
+            controls,
+            text="Probar",
+            command=lambda action=trigger_name: test_trigger(action),
+            bg="#20bdec",
+            fg="#001018",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            width=8,
+        ).grid(row=1, column=3, sticky="w")
+
+        grid_col += 1
+        if grid_col >= 2:
+            grid_col = 0
+            grid_row += 1
+
+    footer = tk.Frame(shell, bg="#181b1e")
+    footer.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+    tk.Button(
+        footer,
+        text="Reiniciar LEDs MIDI",
+        command=inicializar_leds_midi,
+        bg="#2b343b",
+        fg="#d9f3ff",
+        relief="flat",
+        font=("Segoe UI", 10, "bold"),
+    ).pack(side="right")
+
+
+try:
+    midi_menu.add_command(label="Disparadores MIDI", command=open_midi_triggers_panel)
+except Exception:
+    pass
+
+
 
 from tablero.midi_listener import led_activo, led_inactivo
 from tablero.helpers_wiz import restore_lamp_state
@@ -5342,6 +9758,10 @@ midi_estado_efectos = {
 }
 
 def actualizar_led_efecto(note):
+    if is_apc_espacio_note(note):
+        refresh_espacio_midi_leds()
+        return
+
     BOTONES_ESPECIALES = {
         get_midi_note("refresh"),
         get_midi_note("all_off"),
@@ -5462,6 +9882,11 @@ def rebuild_midi_mappings():
         )),
     }
 
+    for trigger_name in MIDI_TRIGGER_DEFS:
+        action_callbacks[trigger_name] = (
+            lambda name=trigger_name: root.after(0, lambda: ejecutar_disparador_midi(name))
+        )
+
     midi_estado_efectos = {
         note: var
         for note, var in {
@@ -5473,14 +9898,14 @@ def rebuild_midi_mappings():
             get_midi_note("effect_strobe"): estrobo_var,
             get_midi_note("effect_sunset"): atardecer_var,
         }.items()
-        if note is not None
+        if note is not None and not is_apc_espacio_note(note)
     }
 
     note_map = {}
     for action in MIDI_ACTION_DEFAULT_NOTES:
         callback = action_callbacks.get(action)
         note = get_midi_note(action)
-        if callback is not None and note is not None:
+        if callback is not None and note is not None and not is_apc_espacio_note(note):
             note_map[note] = callback
 
 
@@ -5495,7 +9920,11 @@ def inicializar_leds_midi():
     inicializar_leds(note_map.keys())
 
     for action in MIDI_ACTION_DEFAULT_NOTES:
-        midi_led(get_midi_note(action), get_midi_led_color(action))
+        note = get_midi_note(action)
+        if not is_apc_espacio_note(note):
+            midi_led(note, get_midi_led_color(action))
+    update_midi_scene_execution_led()
+    refresh_espacio_midi_leds()
 
 # --- activar el listener MIDI ---
 # 1) Iniciar MIDI
@@ -5525,9 +9954,13 @@ root.after(800, refresh_lamp_status)
 def on_app_close():
     if not confirmar_cambios_proyecto_pendientes("salir"):
         return
+    if proyecto_activo.get("dirty"):
+        guardar_ultimo_proyecto_activo(None)
     stop_midi()
     root.destroy()
 
 
 root.protocol("WM_DELETE_WINDOW", on_app_close)
+print("[APP] Interfaz iniciada. Si no ves la ventana, revisa si quedo detras de la terminal.")
 root.mainloop()
+

@@ -78,6 +78,31 @@ def infer_scene_kind(LAMP_IPS, selected_devices, effects_layers):
     return "look"
 
 
+def is_sequence_on_effect(effects_state):
+    return bool(
+        (effects_state or {}).get("secuencia_on")
+        or (effects_state or {}).get("secuencia_on_overlay")
+    )
+
+
+def scene_brightness_for_sequence_on(panel, fallback=180):
+    try:
+        value = int(getattr(panel, "last_brillo", fallback))
+    except Exception:
+        value = fallback
+    if value > 0:
+        return max(1, min(255, value))
+
+    try:
+        value = int(panel.brillo_var.get())
+    except Exception:
+        value = fallback
+    if value > 0:
+        return max(1, min(255, value))
+
+    return fallback
+
+
 # ============================= ESCENAS =============================
 
 def load_escenas():
@@ -149,42 +174,20 @@ def guardar_escena(
         "lamparas": {},
     }
 
-    usa_secuencia_on = effects_state.get("secuencia_on", False)
-
     for ip in LAMP_IPS:
         panel = panels[ip]
 
-        # Si usa secuencia_on, entonces siempre guardamos state="off"
-        if usa_secuencia_on:
-            escena_lampara = {
-                "state": "off",
-                "modo": panel.last_mode,
-                "brillo": panel.last_brillo,
-            }
-
-            if panel.last_mode == "colour":
-                escena_lampara.update({
-                    "h": panel.last_hue,
-                    "s": panel.last_sat,
-                })
-            else:
-                escena_lampara.update({
-                    "temp": getattr(panel, "last_temp", 4000),
-                })
-
-            escenas["datos"][nombre_escena][ip] = escena_lampara
-            lamp_id = ip_to_lamp_id.get(ip, ip)
-            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = dict(escena_lampara, ip=ip)
-            continue  # saltamos al siguiente IP
-
-
-        # --- COMPORTAMIENTO NORMAL (sin secuencia_on) ---
         if selected_devices[ip].get():
+            brillo = panel.last_brillo
+            if is_sequence_on_effect(effects_state):
+                brillo = scene_brightness_for_sequence_on(panel)
             estado = {
                 "state": "on",
                 "modo": panel.last_mode,
-                "brillo": panel.last_brillo,
+                "brillo": brillo,
             }
+            if is_sequence_on_effect(effects_state):
+                estado["initial_state"] = "off"
             if panel.last_mode == "colour":
                 estado.update({
                     "h": panel.last_hue,
@@ -249,43 +252,20 @@ def actualizar_escena_completa(
         effect_layers_data,
     )
 
-        # --- NUEVO: si la escena usa SECUENCIA_ON, entonces forzamos state="off" ---
-    usa_secuencia_on = effects_state.get("secuencia_on", False)
-
     for ip in LAMP_IPS:
         panel = panels[ip]
 
-        if usa_secuencia_on:
-            # Guardamos siempre en OFF pero conservamos los valores
-            estado = {
-                "state": "off",
-                "modo": panel.last_mode,
-                "brillo": panel.last_brillo,
-            }
-
-            if panel.last_mode == "colour":
-                estado.update({
-                    "h": panel.last_hue,
-                    "s": panel.last_sat,
-                })
-            else:
-                estado.update({
-                    "temp": getattr(panel, "last_temp", 4000),
-                })
-
-            escenas["datos"][nombre_escena][ip] = estado
-            lamp_id = ip_to_lamp_id.get(ip, ip)
-            escenas["datos"][nombre_escena]["lamparas"][lamp_id] = dict(estado, ip=ip)
-            continue  # Pasamos al siguiente IP
-
-
-        # --- MODO NORMAL (cuando NO hay secuencia_on) ---
         if selected_devices[ip].get():
+            brillo = panel.last_brillo
+            if is_sequence_on_effect(effects_state):
+                brillo = scene_brightness_for_sequence_on(panel)
             estado = {
                 "state": "on",
                 "modo": panel.last_mode,
-                "brillo": panel.last_brillo,
+                "brillo": brillo,
             }
+            if is_sequence_on_effect(effects_state):
+                estado["initial_state"] = "off"
             if panel.last_mode == "colour":
                 estado.update({
                     "h": panel.last_hue,
