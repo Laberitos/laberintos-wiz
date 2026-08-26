@@ -4,6 +4,7 @@ import time
 import rtmidi
 
 midi_in = None
+midi_inputs = []
 midi_out = None
 running = False
 midi_thread = None
@@ -56,30 +57,52 @@ def get_midi_status():
     return dict(midi_status)
 
 
-def init_midi():
-    global midi_in, midi_out
+def init_midi(input_port_name=None, output_port_name=None):
+    global midi_in, midi_inputs, midi_out
 
     try:
         midi_status["last_error"] = ""
 
-        midi_in = rtmidi.MidiIn()
-        input_ports = midi_in.get_ports()
+        input_probe = rtmidi.MidiIn()
+        input_ports = input_probe.get_ports()
         midi_status["input_ports"] = input_ports
-        input_port_index = _find_port_index(input_ports, "APC")
 
-        if input_port_index is None:
-            midi_status["last_error"] = "No se encontro APC Mini como entrada."
-            print("[MIDI] No se encontro APC Mini como entrada.")
+        input_indexes = []
+        if input_port_name:
+            preferred_index = _find_port_index(input_ports, input_port_name)
+            if preferred_index is not None:
+                input_indexes.append(preferred_index)
+
+        apc_index = _find_port_index(input_ports, "APC")
+        if apc_index is not None and apc_index not in input_indexes:
+            input_indexes.append(apc_index)
+
+        if not input_indexes:
+            midi_status["last_error"] = "No se encontro entrada MIDI compatible."
+            print("[MIDI] No se encontro entrada MIDI compatible.")
             return False
 
-        midi_in.open_port(input_port_index)
-        midi_status["input_port"] = input_ports[input_port_index]
-        print("[MIDI] Entrada MIDI conectada:", input_ports[input_port_index])
+        midi_inputs = []
+        for input_port_index in input_indexes:
+            midi_input = rtmidi.MidiIn()
+            midi_input.open_port(input_port_index)
+            midi_inputs.append(midi_input)
+
+        midi_in = midi_inputs[0] if midi_inputs else None
+        midi_status["input_port"] = " + ".join(input_ports[index] for index in input_indexes)
+        print("[MIDI] Entrada MIDI conectada:", midi_status["input_port"])
 
         midi_out = rtmidi.MidiOut()
         output_ports = midi_out.get_ports()
         midi_status["output_ports"] = output_ports
-        output_port_index = _find_port_index(output_ports, "APC mini mk2", "MIDIOUT2")
+        if output_port_name and "microsoft gs wavetable" in output_port_name.lower():
+            output_port_name = None
+
+        output_port_index = None
+        if output_port_name:
+            output_port_index = _find_port_index(output_ports, output_port_name)
+        if output_port_index is None:
+            output_port_index = _find_port_index(output_ports, "APC mini mk2", "MIDIOUT2")
         if output_port_index is None:
             output_port_index = _find_port_index(output_ports, "APC")
 
@@ -153,32 +176,34 @@ def procesar_mensaje_crudo(msg):
 
 
 def midi_loop(handle_event_callback):
-    global midi_in, running
+    global midi_in, midi_inputs, running
 
     while running:
-        try:
-            msg = midi_in.get_message()
-        except Exception as exc:
-            midi_status["last_error"] = str(exc)
-            print(f"[MIDI ERROR] Leyendo mensaje: {exc}")
-            time.sleep(0.1)
-            continue
+        active_inputs = midi_inputs or ([midi_in] if midi_in else [])
+        for midi_input in active_inputs:
+            try:
+                msg = midi_input.get_message()
+            except Exception as exc:
+                midi_status["last_error"] = str(exc)
+                print(f"[MIDI ERROR] Leyendo mensaje: {exc}")
+                time.sleep(0.1)
+                continue
 
-        if msg:
-            event = procesar_mensaje_crudo(msg)
-            if event:
-                handle_event_callback(event)
+            if msg:
+                event = procesar_mensaje_crudo(msg)
+                if event:
+                    handle_event_callback(event)
 
         time.sleep(0.003)
 
 
-def start_midi_thread(handle_event_callback):
+def start_midi_thread(handle_event_callback, input_port_name=None, output_port_name=None):
     global running, midi_thread
 
     if running:
         return True
 
-    ok = init_midi()
+    ok = init_midi(input_port_name=input_port_name, output_port_name=output_port_name)
     if not ok:
         print("[MIDI] No se iniciara el hilo MIDI.")
         running = False
@@ -200,10 +225,16 @@ def start_midi_thread(handle_event_callback):
 
 
 def stop_midi():
-    global running, midi_in, midi_out
+    global running, midi_in, midi_inputs, midi_out
     running = False
     midi_status["running"] = False
     try:
+        for midi_input in midi_inputs:
+            try:
+                midi_input.close_port()
+            except Exception:
+                pass
+        midi_inputs = []
         if midi_in:
             midi_in.close_port()
     except Exception:

@@ -246,6 +246,8 @@ def get_sequence_ordered_lamp_ips():
 
 
 ESPACIO_LABERINTOS_FILE = "espacio_laberintos.json"
+SOUND_CONFIG_FILE = "sound_config.json"
+BANK_SCENES_FILE = "banco_escenas.json"
 ESPACIO_DEFAULT_ROWS = 4
 ESPACIO_DEFAULT_COLS = 6
 ESPACIO_MAX_ROWS = 4
@@ -297,6 +299,47 @@ def save_espacio_laberintos(data):
         return True
     except Exception as e:
         messagebox.showerror("ESPACIO LABERINTOS", f"No se pudo guardar el espacio:\n{e}")
+        return False
+
+
+def load_sound_config():
+    default_data = {
+        "version": 1,
+        "enabled": False,
+        "scope": "efectos",
+        "mode": "escena_viva",
+        "sensitivity": 1.7,
+        "threshold": 0.28,
+        "floor": 14,
+        "ceiling": 220,
+        "smoothing": 0.34,
+        "update_ms": 140,
+        "peak_cooldown_ms": 850,
+        "peak_trigger": "trigger_white_impact",
+        "manual_level": 0.0,
+    }
+    if not os.path.exists(SOUND_CONFIG_FILE):
+        return default_data
+    try:
+        with open(SOUND_CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return default_data
+        merged = dict(default_data)
+        merged.update(data)
+        return merged
+    except Exception as e:
+        print(f"[SONIDO] No se pudo leer {SOUND_CONFIG_FILE}: {e}")
+        return default_data
+
+
+def save_sound_config(data):
+    try:
+        with open(SOUND_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        messagebox.showerror("SONIDO", f"No se pudo guardar la configuracion de sonido:\n{e}")
         return False
 
 
@@ -3226,6 +3269,8 @@ MIDI_ACTION_LABELS = {
     "refresh": "Refrescar lamparas",
     "all_on": "Encender todo",
     "all_off": "Apagar todo",
+    "control_buttons_bichos": "Control Buttons - Bichos",
+    "control_buttons_atmosfera": "Control Buttons - Atmosfera",
     "effect_strobe": "Estrobo",
     "effect_blink": "Parpadeo",
     "effect_sequence_off": "Secuencia OFF",
@@ -3271,6 +3316,8 @@ MIDI_ACTION_DEFAULT_NOTES = {
     "refresh": 0,
     "all_on": 7,
     "all_off": 6,
+    "control_buttons_bichos": None,
+    "control_buttons_atmosfera": None,
     "effect_strobe": 16,
     "effect_blink": 24,
     "effect_sequence_off": 32,
@@ -3330,6 +3377,8 @@ MIDI_ACTION_DEFAULT_LED_COLORS = {
     "refresh": 53,
     "all_on": 12,
     "all_off": 12,
+    "control_buttons_bichos": 21,
+    "control_buttons_atmosfera": 13,
     "effect_strobe": 5,
     "effect_blink": 5,
     "effect_sequence_off": 5,
@@ -3373,6 +3422,7 @@ MIDI_LED_COLOR_NAMES = {
 midi_action_notes = {}
 midi_action_led_colors = {}
 midi_learn_target = {"var": None, "status_var": None, "label": ""}
+midi_last_event_var = tk.StringVar(value="Ultima nota MIDI: sin datos")
 
 
 def set_midi_learn_target(var, status_var=None, label=""):
@@ -3380,7 +3430,7 @@ def set_midi_learn_target(var, status_var=None, label=""):
     midi_learn_target["status_var"] = status_var
     midi_learn_target["label"] = label
     if status_var is not None:
-        status_var.set(f"Escuchando MIDI para: {label}. Presiona un boton de la APC.")
+        status_var.set(f"Escuchando MIDI para: {label}. Envia una nota desde Ableton o presiona un boton MIDI.")
 
 
 def capture_midi_learn_note(note):
@@ -3396,6 +3446,9 @@ def capture_midi_learn_note(note):
         label = midi_learn_target.get("label") or "accion"
         if status_var is not None:
             status_var.set(f"Nota {note} capturada para {label}. Guarda el mapa para confirmar.")
+        midi_learn_target["var"] = None
+        midi_learn_target["status_var"] = None
+        midi_learn_target["label"] = ""
 
     root.after(0, apply_note)
     return True
@@ -3435,12 +3488,16 @@ def update_midi_scene_execution_led():
 def load_midi_config():
     actions = {}
     colors = {}
+    scene_triggers = {}
+    settings = {}
     if os.path.exists(MIDI_CONFIG_FILE):
         try:
             with open(MIDI_CONFIG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 actions = data.get("actions", {})
                 colors = data.get("colors", {})
+                scene_triggers = data.get("scene_triggers", {})
+                settings = data.get("settings", {})
         except Exception as exc:
             print(f"[MIDI CONFIG] No se pudo leer {MIDI_CONFIG_FILE}: {exc}")
 
@@ -3466,7 +3523,26 @@ def load_midi_config():
             except Exception:
                 led_colors[action] = MIDI_ACTION_DEFAULT_LED_COLORS[action]
 
-    return sanitize_midi_action_notes(notes), led_colors
+    clean_scene_triggers = {}
+    for scene_name, value in scene_triggers.items():
+        scene_name = str(scene_name).strip()
+        if not scene_name:
+            continue
+        try:
+            if value in ("", None):
+                clean_scene_triggers[scene_name] = None
+            else:
+                note = int(value)
+                clean_scene_triggers[scene_name] = note if 0 <= note <= 127 else None
+        except Exception:
+            clean_scene_triggers[scene_name] = None
+
+    clean_settings = {
+        "input_port": str(settings.get("input_port", "") or ""),
+        "output_port": str(settings.get("output_port", "") or ""),
+    }
+
+    return sanitize_midi_action_notes(notes), led_colors, clean_scene_triggers, clean_settings
 
 
 def save_midi_action_notes():
@@ -3476,6 +3552,8 @@ def save_midi_action_notes():
                 "version": 1,
                 "actions": midi_action_notes,
                 "colors": midi_action_led_colors,
+                "scene_triggers": midi_scene_notes,
+                "settings": midi_settings,
             },
             f,
             ensure_ascii=False,
@@ -3507,7 +3585,7 @@ def get_midi_led_color_name(action):
     return MIDI_LED_COLOR_NAMES.get(get_midi_led_color(action), "Rojo")
 
 
-midi_action_notes, midi_action_led_colors = load_midi_config()
+midi_action_notes, midi_action_led_colors, midi_scene_notes, midi_settings = load_midi_config()
 
 
 def describe_midi_action(note):
@@ -3527,6 +3605,64 @@ def get_midi_action_for_note(note):
         except Exception:
             continue
     return None
+
+
+def get_midi_scene_for_note(note):
+    if note is None:
+        return None
+    try:
+        note = int(note)
+    except Exception:
+        return None
+    for scene_name, scene_note in midi_scene_notes.items():
+        try:
+            if scene_note is not None and int(scene_note) == note:
+                return scene_name
+        except Exception:
+            continue
+    return None
+
+
+def set_midi_scene_note(scene_name, raw_note):
+    scene_name = str(scene_name).strip()
+    raw = str(raw_note).strip()
+    if not scene_name:
+        return False
+    if raw == "":
+        midi_scene_notes[scene_name] = None
+        return True
+    try:
+        note = int(raw)
+    except Exception:
+        messagebox.showwarning("Nota invalida", f"'{raw}' no es una nota MIDI valida.")
+        return False
+    if note < 0 or note > 127:
+        messagebox.showwarning("Nota invalida", "Las notas MIDI deben estar entre 0 y 127.")
+        return False
+    for action, action_note in midi_action_notes.items():
+        try:
+            if action_note is not None and int(action_note) == note:
+                messagebox.showwarning(
+                    "Nota ocupada",
+                    f"La nota {note} ya esta asignada a {MIDI_ACTION_LABELS.get(action, action)}."
+                )
+                return False
+        except Exception:
+            continue
+    for other_scene, scene_note in midi_scene_notes.items():
+        if other_scene == scene_name:
+            continue
+        try:
+            if scene_note is not None and int(scene_note) == note:
+                messagebox.showwarning(
+                    "Nota ocupada",
+                    f"La nota {note} ya dispara la escena {other_scene}."
+                )
+                return False
+        except Exception:
+            continue
+    midi_scene_notes[scene_name] = note
+    return True
 
 
 def save_single_midi_mapping(action, raw_note, color_name=None):
@@ -3720,6 +3856,8 @@ def open_midi_config_panel():
             return "ESCENAS / SHOW"
         if action in ("all_on", "all_off", "refresh", "drum_hit"):
             return "CONTROL GENERAL"
+        if action.startswith("control_buttons_"):
+            return "CONTROL BUTTONS MIDI"
         if action.startswith("effect_"):
             return "EFECTOS"
         if action.startswith("trigger_hold"):
@@ -3733,6 +3871,7 @@ def open_midi_config_panel():
     category_order = (
         "ESCENAS / SHOW",
         "CONTROL GENERAL",
+        "CONTROL BUTTONS MIDI",
         "EFECTOS",
         "DISPARADORES - SOBRE ESCENA",
         "DISPARADORES - PRESION",
@@ -3964,6 +4103,935 @@ def open_midi_config_panel():
     refresh_scene_indicator_loop()
 
 
+ableton_midi_window = None
+
+
+def restart_midi_listener_from_settings():
+    try:
+        stop_midi()
+    except Exception:
+        pass
+    try:
+        ok = start_midi_thread(
+            handle_midi_event,
+            midi_settings.get("input_port") or None,
+            midi_settings.get("output_port") or None,
+        )
+        if ok:
+            root.after(1200, inicializar_leds_midi)
+        return ok
+    except Exception as exc:
+        print(f"[MIDI] No se pudo reiniciar MIDI: {exc}")
+        return False
+
+
+def open_ableton_scene_midi_panel():
+    global ableton_midi_window
+
+    if ableton_midi_window and ableton_midi_window.winfo_exists():
+        ableton_midi_window.lift()
+        ableton_midi_window.focus_force()
+        return
+
+    win = tk.Toplevel(root)
+    ableton_midi_window = win
+    win.title("Ableton / Escenas MIDI")
+    win.configure(bg="#181b1e")
+    win.geometry("760x620")
+    win.minsize(660, 500)
+
+    def on_close():
+        global ableton_midi_window
+        ableton_midi_window = None
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", on_close)
+
+    shell = tk.Frame(win, bg="#181b1e")
+    shell.pack(fill="both", expand=True, padx=12, pady=12)
+    shell.grid_columnconfigure(0, weight=1)
+    shell.grid_rowconfigure(2, weight=1)
+
+    tk.Label(
+        shell,
+        text="Ableton / Disparo de escenas",
+        bg="#181b1e",
+        fg="#20bdec",
+        font=("Segoe UI", 16, "bold"),
+    ).grid(row=0, column=0, sticky="w")
+
+    status_var = tk.StringVar(value="Elige el puerto MIDI de Ableton y asigna una nota a cada escena.")
+
+    ports_box = tk.LabelFrame(shell, text="Puerto MIDI", bg="#181b1e", fg="#20bdec",
+                              font=("Segoe UI", 10, "bold"), padx=8, pady=8)
+    ports_box.grid(row=1, column=0, sticky="ew", pady=(10, 8))
+    ports_box.grid_columnconfigure(1, weight=1)
+
+    ports = get_available_ports()
+    input_values = [""] + ports.get("inputs", [])
+    output_values = [
+        ""
+    ] + [
+        port for port in ports.get("outputs", [])
+        if "microsoft gs wavetable" not in str(port).lower()
+    ]
+    input_var = tk.StringVar(value=midi_settings.get("input_port", ""))
+    output_var = tk.StringVar(value=midi_settings.get("output_port", ""))
+
+    tk.Label(ports_box, text="Entrada desde Ableton", bg="#181b1e", fg="#b9e3f7",
+             font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=3)
+    input_combo = ttk.Combobox(ports_box, textvariable=input_var, values=input_values,
+                               state="readonly", font=("Segoe UI", 10))
+    input_combo.grid(row=0, column=1, sticky="ew", pady=3)
+
+    tk.Label(ports_box, text="Salida LEDs APC", bg="#181b1e", fg="#b9e3f7",
+             font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=3)
+    output_combo = ttk.Combobox(ports_box, textvariable=output_var, values=output_values,
+                                state="readonly", font=("Segoe UI", 10))
+    output_combo.grid(row=1, column=1, sticky="ew", pady=3)
+
+    tk.Label(
+        ports_box,
+        text="Para Ableton lo normal es elegir una entrada tipo loopMIDI. La salida puede quedar en APC para LEDs.",
+        bg="#181b1e",
+        fg="#8fb8c9",
+        font=("Segoe UI", 9),
+        anchor="w",
+    ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+    tk.Label(
+        ports_box,
+        textvariable=midi_last_event_var,
+        bg="#181b1e",
+        fg="#f1c40f",
+        font=("Segoe UI", 10, "bold"),
+        anchor="w",
+    ).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+
+    scenes_box = tk.LabelFrame(shell, text="Escenas disparadas por nota", bg="#181b1e", fg="#20bdec",
+                               font=("Segoe UI", 10, "bold"), padx=8, pady=8)
+    scenes_box.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
+    scenes_box.grid_rowconfigure(0, weight=1)
+    scenes_box.grid_columnconfigure(0, weight=1)
+
+    canvas = tk.Canvas(scenes_box, bg="#181b1e", highlightthickness=0)
+    scroll = tk.Scrollbar(scenes_box, orient="vertical", command=canvas.yview)
+    inner = tk.Frame(canvas, bg="#181b1e")
+    inner.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
+    inner_window = canvas.create_window((0, 0), window=inner, anchor="nw")
+    canvas.bind("<Configure>", lambda event: canvas.itemconfigure(inner_window, width=event.width))
+    canvas.configure(yscrollcommand=scroll.set)
+    canvas.grid(row=0, column=0, sticky="nsew")
+    scroll.grid(row=0, column=1, sticky="ns")
+    bind_mousewheel_scroll(canvas, canvas, inner)
+
+    note_vars = {}
+
+    header = tk.Frame(inner, bg="#202832", padx=8, pady=5)
+    header.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+    header.grid_columnconfigure(0, weight=1)
+    header.grid_columnconfigure(1, minsize=100)
+    header.grid_columnconfigure(2, minsize=100)
+    tk.Label(header, text="Escena", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+    tk.Label(header, text="Nota Ableton", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w", padx=(8, 0))
+    tk.Label(header, text="Prueba", bg="#202832", fg="#8fb8c9",
+             font=("Segoe UI", 9, "bold")).grid(row=0, column=2, sticky="w", padx=(8, 0))
+
+    escenas = load_escenas()
+    order = escenas.get("orden", [])
+    for row_index, scene_name in enumerate(order, start=1):
+        row_bg = "#181f25" if row_index % 2 else "#151a1f"
+        row = tk.Frame(inner, bg=row_bg, padx=8, pady=4, highlightthickness=1, highlightbackground=row_bg)
+        row.grid(row=row_index, column=0, sticky="ew", pady=1)
+        row.grid_columnconfigure(0, weight=1)
+        row.grid_columnconfigure(1, minsize=100)
+        row.grid_columnconfigure(2, minsize=100)
+        tk.Label(row, text=scene_name, bg=row_bg, fg="#d9f3ff",
+                 font=("Segoe UI", 10), anchor="w").grid(row=0, column=0, sticky="ew")
+        note = midi_scene_notes.get(scene_name)
+        note_var = tk.StringVar(value="" if note is None else str(note))
+        note_vars[scene_name] = note_var
+        entry = tk.Entry(row, textvariable=note_var, width=8, bg="#111519", fg="#e6e6e6",
+                         insertbackground="#20bdec", relief="flat", font=("Segoe UI", 10, "bold"))
+        entry.grid(row=0, column=1, sticky="w", padx=(8, 0))
+        entry.bind(
+            "<FocusIn>",
+            lambda _e, v=note_var, name=scene_name: set_midi_learn_target(v, status_var, f"escena {name}"),
+            add="+",
+        )
+        tk.Button(
+            row,
+            text="Play",
+            command=lambda name=scene_name: play_scene_from_midi(name),
+            bg="#20bdec",
+            fg="#001018",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            width=8,
+        ).grid(row=0, column=2, sticky="w", padx=(8, 0))
+
+    actions = tk.Frame(shell, bg="#181b1e")
+    actions.grid(row=3, column=0, sticky="ew")
+    for col in range(4):
+        actions.grid_columnconfigure(col, weight=1)
+
+    tk.Label(actions, textvariable=status_var, bg="#181b1e", fg="#f1c40f",
+             font=("Segoe UI", 9, "bold"), anchor="w").grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 8))
+
+    def refresh_ports():
+        current_ports = get_available_ports()
+        input_combo.configure(values=[""] + current_ports.get("inputs", []))
+        output_combo.configure(values=[
+            ""
+        ] + [
+            port for port in current_ports.get("outputs", [])
+            if "microsoft gs wavetable" not in str(port).lower()
+        ])
+        status_var.set("Puertos actualizados.")
+
+    def save_ableton_settings():
+        used = {}
+        for scene_name, var in note_vars.items():
+            raw = var.get().strip()
+            if raw:
+                try:
+                    note = int(raw)
+                except Exception:
+                    messagebox.showwarning("Nota invalida", f"'{raw}' no es una nota MIDI valida.")
+                    return
+                used.setdefault(note, []).append(scene_name)
+
+        duplicates = {note: names for note, names in used.items() if len(names) > 1}
+        if duplicates:
+            detail = "\n".join(f"Nota {note}: " + ", ".join(names) for note, names in duplicates.items())
+            messagebox.showwarning("Notas duplicadas", "Cada nota debe disparar una sola escena.\n\n" + detail)
+            return
+
+        next_scene_notes = {}
+        for scene_name, var in note_vars.items():
+            if not set_midi_scene_note(scene_name, var.get()):
+                return
+            next_scene_notes[scene_name] = midi_scene_notes.get(scene_name)
+
+        midi_scene_notes.clear()
+        midi_scene_notes.update(next_scene_notes)
+        midi_settings["input_port"] = input_var.get().strip()
+        midi_settings["output_port"] = output_var.get().strip()
+        save_midi_action_notes()
+        rebuild_midi_mappings()
+        ok = restart_midi_listener_from_settings()
+        status_var.set("Guardado y MIDI reiniciado." if ok else "Guardado, pero no se pudo abrir el puerto MIDI.")
+
+    tk.Button(actions, text="Actualizar puertos", command=refresh_ports,
+              bg="#20bdec", fg="#001018", relief="flat",
+              font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="ew", padx=(0, 5))
+    tk.Button(actions, text="Guardar y reiniciar MIDI", command=save_ableton_settings,
+              bg="#27ae60", fg="#ffffff", relief="flat",
+              font=("Segoe UI", 10, "bold")).grid(row=1, column=1, sticky="ew", padx=5)
+    tk.Button(actions, text="Cerrar", command=on_close,
+              bg="#5c6a73", fg="#ffffff", relief="flat",
+              font=("Segoe UI", 10, "bold")).grid(row=1, column=3, sticky="ew", padx=(5, 0))
+
+
+sound_config = load_sound_config()
+sound_panel_window = None
+sound_panel_status_var = tk.StringVar(value="Modulo de sonido detenido")
+sound_panel_level_var = tk.StringVar(value="Nivel: 0%")
+sound_manual_level_var = tk.DoubleVar(value=float(sound_config.get("manual_level", 0.0)))
+sound_runtime = {
+    "running": False,
+    "stream": None,
+    "raw_level": 0.0,
+    "smooth_level": 0.0,
+    "source": "detenido",
+    "last_targets": 0,
+    "last_peak_at": 0.0,
+    "after_id": None,
+    "error": "",
+}
+
+SOUND_SCOPE_LABELS = {
+    "efectos": "Bichos",
+    "atmosfera": "Atmosfera",
+    "seleccion": "Seleccion actual",
+    "scene_selected": "Escena seleccionada",
+    "all": "Todas",
+}
+
+SOUND_MODE_LABELS = {
+    "escena_viva": "Escena viva",
+    "impactos": "Impactos controlados",
+    "respiracion": "Respiracion musical",
+}
+
+SOUND_MODE_DESCRIPTIONS = {
+    "escena_viva": "El volumen conduce el brillo de las lamparas sin cambiar sus colores.",
+    "impactos": "Los picos de sonido disparan un acento elegido, con tiempo de descanso.",
+    "respiracion": "El sonido mueve una respiracion suave sobre el color actual.",
+}
+
+
+def clamp_float(value, min_value=0.0, max_value=1.0):
+    try:
+        value = float(value)
+    except Exception:
+        value = min_value
+    return max(min_value, min(max_value, value))
+
+
+def clamp_config_int(value, min_value, max_value, fallback):
+    try:
+        value = int(float(value))
+    except Exception:
+        value = fallback
+    return max(min_value, min(max_value, value))
+
+
+def update_sound_panel_status():
+    level = clamp_float(sound_runtime.get("smooth_level", 0.0))
+    sound_panel_level_var.set(f"Nivel: {int(level * 100):02d}%")
+    targets = int(sound_runtime.get("last_targets", 0))
+    if not sound_runtime.get("running"):
+        sound_panel_status_var.set("Modulo de sonido detenido")
+    elif sound_runtime.get("source") == "microfono":
+        sound_panel_status_var.set(f"Escuchando audio en vivo - {targets} lamparas objetivo")
+    else:
+        error = sound_runtime.get("error") or "Sin entrada de audio detectada"
+        sound_panel_status_var.set(f"Modo prueba manual - {targets} lamparas objetivo - {error}")
+
+
+def get_sound_target_ips(scope=None):
+    scope = scope or sound_config.get("scope", "efectos")
+    ordered = get_sequence_ordered_lamp_ips()
+    if scope == "all":
+        ips = list(ordered)
+    elif scope == "scene_selected":
+        ips = [ip for ip in ordered if selected_devices[ip].get()]
+    elif scope in ("efectos", "atmosfera"):
+        ips = [ip for ip in ordered if get_lamp_group(ip) == scope]
+    else:
+        ips = [ip for ip in ordered if selected_devices[ip].get()]
+    return [ip for ip in ips if lamp_status.get(ip, True)]
+
+
+def sound_level_to_brightness(level):
+    level = clamp_float(level)
+    if level <= 0.01:
+        return 0
+    floor = clamp_config_int(sound_config.get("floor", 14), 0, 255, 14)
+    ceiling = clamp_config_int(sound_config.get("ceiling", 220), 1, 255, 220)
+    if ceiling < floor:
+        floor, ceiling = ceiling, floor
+    return safe_brightness(floor + ((ceiling - floor) * level))
+
+
+def apply_sound_brightness(level):
+    ips = get_sound_target_ips()
+    sound_runtime["last_targets"] = len(ips)
+    if not ips:
+        sound_panel_status_var.set("Sonido activo, pero no hay lamparas objetivo conectadas")
+        return
+    brightness = sound_level_to_brightness(level)
+    for ip in ips:
+        panel = panels.get(ip)
+        if not panel:
+            continue
+        panel.last_brillo = brightness
+        try:
+            panel.brillo_var.set(brightness)
+        except Exception:
+            pass
+        if brightness <= 0:
+            send_off(ip)
+            selected_devices[ip].set(False)
+        else:
+            selected_devices[ip].set(True)
+            if getattr(panel, "last_mode", "colour") == "white":
+                send_lamp_white_scene(ip, brightness, getattr(panel, "last_temp", 4000))
+            else:
+                send_lamp_color_safe(
+                    ip,
+                    getattr(panel, "last_hue", 0),
+                    getattr(panel, "last_sat", 1),
+                    brightness,
+                )
+        update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ips)
+
+
+def apply_sound_manual_preview(level=None):
+    if level is None:
+        level = sound_manual_level_var.get() / 100.0
+    level = clamp_float(level)
+    sound_runtime["source"] = "manual"
+    sound_runtime["raw_level"] = level
+    sound_runtime["smooth_level"] = level
+    apply_sound_brightness(level)
+    update_sound_panel_status()
+
+
+def apply_sound_breath(level):
+    breath = (math.sin(time.time() * (1.1 + clamp_float(level) * 2.4)) + 1.0) / 2.0
+    apply_sound_brightness(clamp_float((level * 0.72) + (breath * 0.28)))
+
+
+def trigger_sound_peak(level):
+    if level < clamp_float(sound_config.get("threshold", 0.28)):
+        return
+    now = time.time()
+    cooldown = clamp_config_int(sound_config.get("peak_cooldown_ms", 850), 120, 10000, 850) / 1000.0
+    if now - sound_runtime.get("last_peak_at", 0.0) < cooldown:
+        return
+    sound_runtime["last_peak_at"] = now
+    trigger_name = sound_config.get("peak_trigger", "trigger_white_impact")
+    if trigger_name in globals().get("MIDI_TRIGGER_DEFS", {}):
+        ejecutar_disparador_midi(trigger_name)
+
+
+def process_sound_tick():
+    if not sound_runtime.get("running"):
+        sound_runtime["after_id"] = None
+        update_sound_panel_status()
+        return
+
+    raw_level = clamp_float(sound_runtime.get("raw_level", 0.0))
+    if sound_runtime.get("source") == "manual":
+        raw_level = clamp_float(sound_manual_level_var.get() / 100.0)
+        sound_runtime["raw_level"] = raw_level
+
+    sensitivity = max(0.1, min(8.0, float(sound_config.get("sensitivity", 1.7))))
+    threshold = clamp_float(sound_config.get("threshold", 0.28))
+    normalized = clamp_float((raw_level * sensitivity - threshold) / max(0.08, 1.0 - threshold))
+    smoothing = clamp_float(sound_config.get("smoothing", 0.34), 0.02, 0.95)
+    previous = clamp_float(sound_runtime.get("smooth_level", 0.0))
+    smooth = (previous * (1.0 - smoothing)) + (normalized * smoothing)
+    sound_runtime["smooth_level"] = smooth
+
+    mode = sound_config.get("mode", "escena_viva")
+    if mode == "impactos":
+        trigger_sound_peak(smooth)
+    elif mode == "respiracion":
+        apply_sound_breath(smooth)
+    else:
+        apply_sound_brightness(smooth)
+
+    update_sound_panel_status()
+    update_ms = clamp_config_int(sound_config.get("update_ms", 140), 60, 1000, 140)
+    sound_runtime["after_id"] = root.after(update_ms, process_sound_tick)
+
+
+def start_sound_input_stream():
+    try:
+        import sounddevice as sd
+
+        def audio_callback(indata, _frames, _time_info, _status):
+            try:
+                level = float((indata ** 2).mean() ** 0.5)
+            except Exception:
+                level = 0.0
+            sound_runtime["raw_level"] = clamp_float(level * 12.0)
+
+        stream = sd.InputStream(channels=1, callback=audio_callback, blocksize=1024, samplerate=44100)
+        stream.start()
+        sound_runtime["stream"] = stream
+        sound_runtime["source"] = "microfono"
+        sound_runtime["error"] = ""
+        return True
+    except Exception as exc:
+        sound_runtime["stream"] = None
+        sound_runtime["source"] = "manual"
+        sound_runtime["error"] = "instala sounddevice o usa el deslizador de prueba"
+        print(f"[SONIDO] Entrada de audio no disponible: {exc}")
+        return False
+
+
+def stop_sound_module():
+    after_id = sound_runtime.get("after_id")
+    if after_id:
+        try:
+            root.after_cancel(after_id)
+        except Exception:
+            pass
+    sound_runtime["after_id"] = None
+    stream = sound_runtime.get("stream")
+    if stream is not None:
+        try:
+            stream.stop()
+            stream.close()
+        except Exception as exc:
+            print(f"[SONIDO] No se pudo cerrar la entrada de audio: {exc}")
+    sound_runtime["stream"] = None
+    sound_runtime["running"] = False
+    sound_runtime["source"] = "detenido"
+    sound_runtime["smooth_level"] = 0.0
+    update_sound_panel_status()
+
+
+def start_sound_module(config=None):
+    global sound_config
+    if config:
+        sound_config.update(config)
+        save_sound_config(sound_config)
+    if sound_runtime.get("running"):
+        stop_sound_module()
+    sound_runtime["running"] = True
+    sound_runtime["last_peak_at"] = 0.0
+    start_sound_input_stream()
+    process_sound_tick()
+
+
+def test_sound_now():
+    sound_runtime["running"] = True
+    sound_runtime["source"] = "manual"
+    if sound_manual_level_var.get() < 5:
+        sound_manual_level_var.set(80)
+    apply_sound_manual_preview()
+
+
+def open_sound_panel():
+    global sound_panel_window, sound_config
+    if sound_panel_window and sound_panel_window.winfo_exists():
+        sound_panel_window.lift()
+        sound_panel_window.focus_force()
+        return
+
+    win = tk.Toplevel(root)
+    sound_panel_window = win
+    win.title("Modulo de sonido")
+    win.configure(bg="#181b1e")
+    win.geometry("760x620")
+    win.minsize(700, 540)
+
+    def on_close():
+        global sound_panel_window
+        sound_panel_window = None
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", on_close)
+
+    frame = tk.Frame(win, bg="#181b1e", padx=14, pady=14)
+    frame.pack(fill="both", expand=True)
+
+    tk.Label(frame, text="SONIDO / LABERINTOS", bg="#181b1e", fg="#20bdec",
+             font=("Segoe UI", 18, "bold")).pack(anchor="w")
+    tk.Label(
+        frame,
+        text="La musica conduce energia, picos y respiracion sin convertir la puesta en un cambiador automatico de colores.",
+        bg="#181b1e",
+        fg="#d8f6ff",
+        wraplength=710,
+        justify="left",
+        font=("Segoe UI", 9),
+    ).pack(anchor="w", pady=(2, 12))
+
+    controls = tk.LabelFrame(frame, text="Respuesta sonora", bg="#181b1e", fg="#20bdec", padx=10, pady=10)
+    controls.pack(fill="x")
+    controls.grid_columnconfigure(1, weight=1)
+    controls.grid_columnconfigure(2, weight=1)
+
+    scope_var = tk.StringVar(value=sound_config.get("scope", "efectos"))
+    mode_var = tk.StringVar(value=sound_config.get("mode", "escena_viva"))
+    sensitivity_var = tk.DoubleVar(value=float(sound_config.get("sensitivity", 1.7)))
+    threshold_var = tk.DoubleVar(value=float(sound_config.get("threshold", 0.28)) * 100)
+    floor_var = tk.IntVar(value=int(sound_config.get("floor", 14)))
+    ceiling_var = tk.IntVar(value=int(sound_config.get("ceiling", 220)))
+    update_var = tk.IntVar(value=int(sound_config.get("update_ms", 140)))
+    cooldown_var = tk.IntVar(value=int(sound_config.get("peak_cooldown_ms", 850)))
+    peak_trigger_var = tk.StringVar(value=sound_config.get("peak_trigger", "trigger_white_impact"))
+
+    def row_label(text, row):
+        tk.Label(controls, text=text, bg="#181b1e", fg="#d8f6ff", anchor="w").grid(
+            row=row, column=0, sticky="w", pady=4, padx=(0, 8)
+        )
+
+    row_label("Alcance", 0)
+    ttk.Combobox(controls, textvariable=scope_var, values=list(SOUND_SCOPE_LABELS.keys()),
+                 state="readonly", width=20).grid(row=0, column=1, sticky="ew", pady=4)
+    tk.Label(controls, text="Bichos / Atmosfera / escena / todo", bg="#181b1e", fg="#8fb4c4").grid(
+        row=0, column=2, sticky="w", padx=8
+    )
+
+    row_label("Modo", 1)
+    mode_combo = ttk.Combobox(controls, textvariable=mode_var, values=list(SOUND_MODE_LABELS.keys()),
+                              state="readonly", width=20)
+    mode_combo.grid(row=1, column=1, sticky="ew", pady=4)
+    mode_help_var = tk.StringVar(value=SOUND_MODE_DESCRIPTIONS.get(mode_var.get(), ""))
+    tk.Label(controls, textvariable=mode_help_var, bg="#181b1e", fg="#8fb4c4",
+             wraplength=330, justify="left").grid(row=1, column=2, sticky="w", padx=8)
+    mode_combo.bind("<<ComboboxSelected>>", lambda _e: mode_help_var.set(SOUND_MODE_DESCRIPTIONS.get(mode_var.get(), "")))
+
+    row_label("Sensibilidad", 2)
+    tk.Scale(controls, from_=0.2, to=5.0, resolution=0.1, orient="horizontal", variable=sensitivity_var,
+             bg="#181b1e", fg="#d8f6ff", troughcolor="#2b343a", highlightthickness=0).grid(row=2, column=1, sticky="ew")
+
+    row_label("Umbral", 3)
+    tk.Scale(controls, from_=0, to=90, orient="horizontal", variable=threshold_var,
+             bg="#181b1e", fg="#d8f6ff", troughcolor="#2b343a", highlightthickness=0).grid(row=3, column=1, sticky="ew")
+
+    row_label("Brillo minimo", 4)
+    tk.Spinbox(controls, from_=0, to=255, textvariable=floor_var, width=7,
+               bg="#111519", fg="#d8f6ff").grid(row=4, column=1, sticky="w", pady=4)
+    row_label("Brillo maximo", 5)
+    tk.Spinbox(controls, from_=1, to=255, textvariable=ceiling_var, width=7,
+               bg="#111519", fg="#d8f6ff").grid(row=5, column=1, sticky="w", pady=4)
+
+    row_label("Velocidad", 6)
+    tk.Spinbox(controls, from_=60, to=1000, increment=20, textvariable=update_var, width=7,
+               bg="#111519", fg="#d8f6ff").grid(row=6, column=1, sticky="w", pady=4)
+    tk.Label(controls, text="ms entre actualizaciones", bg="#181b1e", fg="#8fb4c4").grid(row=6, column=2, sticky="w", padx=8)
+
+    row_label("Disparo por pico", 7)
+    trigger_values = [name for name, trigger in MIDI_TRIGGER_DEFS.items() if not trigger.get("hold")]
+    ttk.Combobox(controls, textvariable=peak_trigger_var, values=trigger_values, state="readonly").grid(
+        row=7, column=1, sticky="ew", pady=4
+    )
+
+    row_label("Descanso", 8)
+    tk.Spinbox(controls, from_=120, to=10000, increment=50, textvariable=cooldown_var, width=7,
+               bg="#111519", fg="#d8f6ff").grid(row=8, column=1, sticky="w", pady=4)
+    tk.Label(controls, text="ms entre picos", bg="#181b1e", fg="#8fb4c4").grid(row=8, column=2, sticky="w", padx=8)
+
+    monitor = tk.LabelFrame(frame, text="Monitor y prueba", bg="#181b1e", fg="#20bdec", padx=10, pady=10)
+    monitor.pack(fill="x", pady=(12, 0))
+    tk.Label(monitor, textvariable=sound_panel_status_var, bg="#181b1e", fg="#d8f6ff",
+             font=("Segoe UI", 11, "bold")).pack(anchor="w")
+    tk.Label(monitor, textvariable=sound_panel_level_var, bg="#181b1e", fg="#54ff8c",
+             font=("Segoe UI", 22, "bold")).pack(anchor="w", pady=(4, 0))
+    tk.Label(monitor, text="Prueba manual", bg="#181b1e", fg="#8fb4c4").pack(anchor="w", pady=(6, 0))
+    def on_manual_level_change(_value):
+        sound_runtime["source"] = "manual"
+        if sound_runtime.get("running"):
+            apply_sound_manual_preview()
+        else:
+            sound_runtime["raw_level"] = clamp_float(sound_manual_level_var.get() / 100.0)
+            sound_runtime["smooth_level"] = sound_runtime["raw_level"]
+            update_sound_panel_status()
+
+    tk.Scale(monitor, from_=0, to=100, orient="horizontal", variable=sound_manual_level_var,
+             command=on_manual_level_change, bg="#181b1e", fg="#d8f6ff",
+             troughcolor="#2b343a", highlightthickness=0).pack(fill="x")
+
+    def collect_panel_config():
+        return {
+            "version": 1,
+            "enabled": sound_runtime.get("running", False),
+            "scope": scope_var.get(),
+            "mode": mode_var.get(),
+            "sensitivity": round(float(sensitivity_var.get()), 2),
+            "threshold": round(float(threshold_var.get()) / 100.0, 3),
+            "floor": clamp_config_int(floor_var.get(), 0, 255, 14),
+            "ceiling": clamp_config_int(ceiling_var.get(), 1, 255, 220),
+            "smoothing": float(sound_config.get("smoothing", 0.34)),
+            "update_ms": clamp_config_int(update_var.get(), 60, 1000, 140),
+            "peak_cooldown_ms": clamp_config_int(cooldown_var.get(), 120, 10000, 850),
+            "peak_trigger": peak_trigger_var.get(),
+            "manual_level": round(float(sound_manual_level_var.get()), 1),
+        }
+
+    def save_from_panel():
+        global sound_config
+        sound_config = collect_panel_config()
+        if save_sound_config(sound_config):
+            sound_panel_status_var.set("Configuracion de sonido guardada")
+
+    def start_from_panel():
+        start_sound_module(collect_panel_config())
+
+    def test_now_from_panel():
+        global sound_config
+        sound_config.update(collect_panel_config())
+        test_sound_now()
+
+    actions = tk.Frame(frame, bg="#181b1e")
+    actions.pack(fill="x", pady=(12, 0))
+    tk.Button(actions, text="Iniciar sonido", command=start_from_panel, bg="#20bdec", fg="#000",
+              font=("Segoe UI", 10, "bold"), width=16).pack(side="left", padx=(0, 6))
+    tk.Button(actions, text="Probar ahora", command=test_now_from_panel, bg="#ffc247", fg="#000",
+              font=("Segoe UI", 10, "bold"), width=14).pack(side="left", padx=(0, 6))
+    tk.Button(actions, text="Detener", command=stop_sound_module, bg="#ef5350", fg="#fff",
+              font=("Segoe UI", 10, "bold"), width=12).pack(side="left", padx=(0, 6))
+    tk.Button(actions, text="Guardar", command=save_from_panel, bg="#2bbf6a", fg="#fff",
+              font=("Segoe UI", 10, "bold"), width=12).pack(side="left", padx=(0, 6))
+
+    update_sound_panel_status()
+
+
+bank_scenes_window = None
+
+
+def load_bank_scenes():
+    default_data = {"version": 1, "orden": [], "datos": {}}
+    if not os.path.exists(BANK_SCENES_FILE):
+        return default_data
+    try:
+        with open(BANK_SCENES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return default_data
+        data.setdefault("version", 1)
+        data.setdefault("orden", [])
+        data.setdefault("datos", {})
+        return data
+    except Exception as exc:
+        print(f"[BANCO ESCENAS] No se pudo leer {BANK_SCENES_FILE}: {exc}")
+        return default_data
+
+
+def save_bank_scenes(data):
+    try:
+        with open(BANK_SCENES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as exc:
+        messagebox.showerror("Banco de escenas", f"No se pudo guardar el banco:\n{exc}")
+        return False
+
+
+def unique_scene_name(base_name, existing_names):
+    base_name = str(base_name or "Escena banco").strip() or "Escena banco"
+    if base_name not in existing_names:
+        return base_name
+    index = 2
+    while f"{base_name}_{index}" in existing_names:
+        index += 1
+    return f"{base_name}_{index}"
+
+
+def bank_scene_summary(scene_data):
+    scripted = scene_data.get("scripted_scene", {}) if isinstance(scene_data, dict) else {}
+    if scripted:
+        return scripted.get("summary", "Escena programada Laberintos")
+
+    lamps = scene_data.get("lamparas", {}) if isinstance(scene_data, dict) else {}
+    on_count = sum(1 for state in lamps.values() if state.get("state") == "on")
+    layers = scene_data.get("effects_layers", []) if isinstance(scene_data, dict) else []
+    effect_names = [
+        layer.get("display_name") or layer.get("name")
+        for layer in layers
+        if layer.get("enabled", True)
+    ]
+    parts = [f"{on_count} lamparas activas"]
+    if effect_names:
+        parts.append("Efectos: " + ", ".join(effect_names[:3]))
+    return " | ".join(parts)
+
+
+def add_bank_scene_to_project(bank_name):
+    if not bank_name:
+        messagebox.showwarning("Banco de escenas", "Selecciona una escena del banco.")
+        return False
+    bank = load_bank_scenes()
+    entry = bank.get("datos", {}).get(bank_name)
+    if not entry:
+        messagebox.showwarning("Banco de escenas", "No se encontro la escena en el banco.")
+        return False
+
+    scene_data = json.loads(json.dumps(entry.get("scene_data", {})))
+    if not scene_data:
+        messagebox.showwarning("Banco de escenas", "La escena del banco no tiene datos de luces.")
+        return False
+
+    escenas = load_escenas()
+    target_name = str(scene_data.get("nombre") or bank_name).strip() or bank_name
+    scene_data["nombre"] = target_name
+    scene_data["from_bank"] = bank_name
+    scene_data["bank_description"] = entry.get("description", "")
+    scene_data["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    escenas.setdefault("orden", [])
+    escenas.setdefault("datos", {})[target_name] = scene_data
+    if target_name not in escenas["orden"]:
+        escenas["orden"].append(target_name)
+    save_escenas(escenas)
+    actualizar_lista_escenas()
+    marcar_proyecto_modificado()
+    try:
+        listbox_escenas.selection_clear(0, tk.END)
+        idx = escenas["orden"].index(target_name)
+        listbox_escenas.selection_set(idx)
+        listbox_escenas.activate(idx)
+        listbox_escenas.see(idx)
+    except Exception:
+        pass
+    messagebox.showinfo("Banco de escenas", f"'{target_name}' quedo sincronizada en el proyecto actual.")
+    return True
+
+
+def save_current_scene_to_bank(bank_name, description):
+    bank_name = str(bank_name or "").strip()
+    description = str(description or "").strip()
+    if not bank_name:
+        messagebox.showwarning("Banco de escenas", "Escribe un nombre para guardar en el banco.")
+        return False
+
+    try:
+        selected = listbox_escenas.curselection()
+    except Exception:
+        selected = ()
+    if not selected:
+        messagebox.showwarning("Banco de escenas", "Selecciona primero una escena del listado actual.")
+        return False
+
+    scene_name = listbox_escenas.get(selected[0])
+    escenas = load_escenas()
+    scene_data = escenas.get("datos", {}).get(scene_name)
+    if not scene_data:
+        messagebox.showwarning("Banco de escenas", "No se encontro la escena seleccionada.")
+        return False
+
+    bank = load_bank_scenes()
+    if bank_name not in bank["orden"]:
+        bank["orden"].append(bank_name)
+    scene_copy = json.loads(json.dumps(scene_data))
+    scene_copy["nombre"] = bank_name
+    bank["datos"][bank_name] = {
+        "name": bank_name,
+        "source_scene": scene_name,
+        "description": description,
+        "summary": bank_scene_summary(scene_copy),
+        "created_at": bank.get("datos", {}).get(bank_name, {}).get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "scene_data": scene_copy,
+    }
+    if save_bank_scenes(bank):
+        messagebox.showinfo("Banco de escenas", f"'{bank_name}' quedó guardada en el banco.")
+        return True
+    return False
+
+
+def open_bank_scenes_panel():
+    global bank_scenes_window
+    if bank_scenes_window and bank_scenes_window.winfo_exists():
+        bank_scenes_window.lift()
+        bank_scenes_window.focus_force()
+        return
+
+    win = tk.Toplevel(root)
+    bank_scenes_window = win
+    win.title("Banco de escenas Laberintos")
+    win.configure(bg="#181b1e")
+    win.geometry("860x560")
+    win.minsize(760, 500)
+
+    def on_close():
+        global bank_scenes_window
+        bank_scenes_window = None
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", on_close)
+
+    shell = tk.Frame(win, bg="#181b1e", padx=14, pady=14)
+    shell.pack(fill="both", expand=True)
+    shell.grid_columnconfigure(0, weight=1)
+    shell.grid_columnconfigure(1, weight=2)
+    shell.grid_rowconfigure(1, weight=1)
+
+    tk.Label(shell, text="BANCO DE ESCENAS LABERINTOS", bg="#181b1e", fg="#20bdec",
+             font=("Segoe UI", 17, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+
+    list_frame = tk.LabelFrame(shell, text="Escenas guardadas", bg="#181b1e", fg="#20bdec",
+                               font=("Segoe UI", 10, "bold"), padx=8, pady=8)
+    list_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0), padx=(0, 10))
+    list_frame.grid_rowconfigure(0, weight=1)
+    list_frame.grid_columnconfigure(0, weight=1)
+
+    bank_list = tk.Listbox(list_frame, bg="#111519", fg="#d8f6ff", selectbackground="#20bdec",
+                           selectforeground="#001018", relief="flat", font=("Segoe UI", 10))
+    bank_list.grid(row=0, column=0, sticky="nsew")
+    bank_scroll = tk.Scrollbar(list_frame, orient="vertical", command=bank_list.yview)
+    bank_scroll.grid(row=0, column=1, sticky="ns")
+    bank_list.config(yscrollcommand=bank_scroll.set)
+
+    detail = tk.LabelFrame(shell, text="Detalle", bg="#181b1e", fg="#20bdec",
+                           font=("Segoe UI", 10, "bold"), padx=10, pady=10)
+    detail.grid(row=1, column=1, sticky="nsew", pady=(12, 0))
+    detail.grid_columnconfigure(0, weight=1)
+
+    selected_name_var = tk.StringVar(value="Sin escena seleccionada")
+    summary_var = tk.StringVar(value="")
+    tk.Label(detail, textvariable=selected_name_var, bg="#181b1e", fg="#ffffff",
+             font=("Segoe UI", 15, "bold"), anchor="w").grid(row=0, column=0, sticky="ew")
+    tk.Label(detail, textvariable=summary_var, bg="#181b1e", fg="#8dfa9f",
+             font=("Segoe UI", 9, "italic"), anchor="w").grid(row=1, column=0, sticky="ew", pady=(2, 8))
+
+    description_box = tk.Text(detail, height=8, bg="#111519", fg="#d8f6ff", relief="flat",
+                              wrap="word", font=("Segoe UI", 10))
+    description_box.grid(row=2, column=0, sticky="nsew")
+    description_box.config(state="disabled")
+
+    form = tk.LabelFrame(detail, text="Guardar escena actual en banco", bg="#181b1e", fg="#20bdec",
+                         padx=8, pady=8, font=("Segoe UI", 9, "bold"))
+    form.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+    form.grid_columnconfigure(1, weight=1)
+
+    tk.Label(form, text="Nombre", bg="#181b1e", fg="#b9e3f7").grid(row=0, column=0, sticky="w", padx=(0, 8))
+    bank_name_var = tk.StringVar()
+    tk.Entry(form, textvariable=bank_name_var, bg="#111519", fg="#d8f6ff", insertbackground="#20bdec",
+             relief="flat").grid(row=0, column=1, sticky="ew")
+    tk.Label(form, text="Descripcion", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=0, sticky="nw", padx=(0, 8), pady=(6, 0))
+    bank_desc = tk.Text(form, height=3, bg="#111519", fg="#d8f6ff", insertbackground="#20bdec",
+                        relief="flat", wrap="word", font=("Segoe UI", 9))
+    bank_desc.grid(row=1, column=1, sticky="ew", pady=(6, 0))
+
+    current_bank = {"data": load_bank_scenes()}
+
+    def selected_bank_name():
+        sel = bank_list.curselection()
+        if not sel:
+            return None
+        return bank_list.get(sel[0])
+
+    def render_selected(_event=None):
+        name = selected_bank_name()
+        description_box.config(state="normal")
+        description_box.delete("1.0", tk.END)
+        if not name:
+            selected_name_var.set("Sin escena seleccionada")
+            summary_var.set("")
+            description_box.config(state="disabled")
+            return
+        entry = current_bank["data"].get("datos", {}).get(name, {})
+        selected_name_var.set(name)
+        summary_var.set(entry.get("summary") or bank_scene_summary(entry.get("scene_data", {})))
+        description_box.insert("1.0", entry.get("description", "Sin descripcion."))
+        description_box.config(state="disabled")
+
+    def refresh_bank_list(select_name=None):
+        current_bank["data"] = load_bank_scenes()
+        bank_list.delete(0, tk.END)
+        for name in current_bank["data"].get("orden", []):
+            if name in current_bank["data"].get("datos", {}):
+                bank_list.insert(tk.END, name)
+        if select_name:
+            try:
+                idx = current_bank["data"]["orden"].index(select_name)
+                bank_list.selection_set(idx)
+                bank_list.activate(idx)
+                bank_list.see(idx)
+            except Exception:
+                pass
+        render_selected()
+
+    def save_form_to_bank():
+        name = bank_name_var.get().strip()
+        description = bank_desc.get("1.0", tk.END).strip()
+        if save_current_scene_to_bank(name, description):
+            refresh_bank_list(name)
+
+    actions = tk.Frame(shell, bg="#181b1e")
+    actions.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+    tk.Button(actions, text="Agregar al proyecto actual", command=lambda: add_bank_scene_to_project(selected_bank_name()),
+              bg="#20bdec", fg="#001018", relief="flat", font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 8))
+    tk.Button(actions, text="Guardar escena actual en banco", command=save_form_to_bank,
+              bg="#27ae60", fg="#ffffff", relief="flat", font=("Segoe UI", 10, "bold")).pack(side="left", padx=(0, 8))
+    tk.Button(actions, text="Actualizar banco", command=refresh_bank_list,
+              bg="#2b343b", fg="#d9f3ff", relief="flat", font=("Segoe UI", 10, "bold")).pack(side="left")
+
+    bank_list.bind("<<ListboxSelect>>", render_selected)
+    refresh_bank_list()
+
+
 app_menu = tk.Menu(root)
 file_menu = tk.Menu(app_menu, tearoff=0)
 file_menu.add_command(label="Salir", command=lambda: on_app_close())
@@ -3980,7 +5048,18 @@ app_menu.add_cascade(label="Efectos", menu=effects_menu)
 
 midi_menu = tk.Menu(app_menu, tearoff=0)
 midi_menu.add_command(label="Configuracion MIDI", command=open_midi_config_panel)
+midi_menu.add_command(label="Ableton / Escenas MIDI", command=open_ableton_scene_midi_panel)
 app_menu.add_cascade(label="MIDI", menu=midi_menu)
+
+bank_menu = tk.Menu(app_menu, tearoff=0)
+bank_menu.add_command(label="Banco de escenas", command=open_bank_scenes_panel)
+app_menu.add_cascade(label="Banco Laberintos", menu=bank_menu)
+
+sound_menu = tk.Menu(app_menu, tearoff=0)
+sound_menu.add_command(label="Modulo de sonido", command=open_sound_panel)
+sound_menu.add_command(label="Probar sonido ahora", command=test_sound_now)
+sound_menu.add_command(label="Detener sonido", command=stop_sound_module)
+app_menu.add_cascade(label="Sonido", menu=sound_menu)
 root.config(menu=app_menu)
 
 maestro_hsv = {"h": 0, "s": 1}
@@ -4443,7 +5522,7 @@ frame_maestro = tk.LabelFrame(
     padx=4,
     pady=4,
     width=185,
-    height=330
+    height=365
 )
 frame_maestro.pack(side="top", fill="x", expand=False, pady=(0, 12))
 frame_maestro.pack_propagate(False)
@@ -4454,6 +5533,8 @@ maestro_temp = tk.IntVar(value=128)
 maestro_mode = tk.StringVar(value="colour")
 maestro_scope_effects = tk.BooleanVar(value=True)
 maestro_scope_atmos = tk.BooleanVar(value=True)
+maestro_color_code_var = tk.StringVar(value="")
+maestro_color_hex_var = tk.StringVar(value="")
 
 
 def get_ips_by_scope(include_offline=False):
@@ -4499,6 +5580,40 @@ def _colour_preview_hex(h, s):
         h, s = 0.0, 1.0
     r, g, b = colorsys.hsv_to_rgb(h / 360.0, s, 1.0)
     return _rgb_to_hex((int(r * 255), int(g * 255), int(b * 255)))
+
+
+def update_maestro_color_code():
+    try:
+        mode = maestro_mode.get()
+        brightness = safe_brightness(maestro_brillo.get())
+        if mode == "white":
+            temp = int(maestro_temp.get())
+            preview_hex = _white_preview_hex(temp)
+            code = f"B-T{temp:03d}-I{brightness:03d}"
+        else:
+            hue = int(round(float(maestro_hsv.get("h", 0)))) % 360
+            sat = int(round(max(0.0, min(1.0, float(maestro_hsv.get("s", 1)))) * 100))
+            preview_hex = _colour_preview_hex(hue, sat / 100.0)
+            code = f"C-H{hue:03d}-S{sat:03d}-I{brightness:03d}"
+        maestro_color_code_var.set(code)
+        maestro_color_hex_var.set(preview_hex.upper())
+        swatch = globals().get("maestro_code_swatch")
+        if swatch is not None:
+            swatch.config(bg=preview_hex)
+    except Exception:
+        pass
+
+
+def copy_maestro_color_code():
+    try:
+        code = maestro_color_code_var.get().strip()
+        hex_value = maestro_color_hex_var.get().strip()
+        text = f"{code} {hex_value}".strip()
+        root.clipboard_clear()
+        root.clipboard_append(text)
+        root.update()
+    except Exception as exc:
+        messagebox.showerror("Color maestro", f"No se pudo copiar el codigo:\n{exc}")
 
 
 def set_panel_preview_swatch(panel, mode=None, h=None, s=None, temp=None, is_on=None):
@@ -4721,15 +5836,18 @@ def maestro_on_color(h, s, v):
     maestro_hsv["h"] = h
     maestro_hsv["s"] = s
     set_master_mode("colour")
+    update_maestro_color_code()
 
 
 def maestro_on_temp(value):
     maestro_temp.set(int(float(value)))
     set_master_mode("white")
+    update_maestro_color_code()
 
 
 def maestro_on_brillo(value):
     maestro_brillo.set(safe_brightness(value))
+    update_maestro_color_code()
 
 
 def set_master_mode(mode):
@@ -4743,6 +5861,7 @@ def set_master_mode(mode):
             colorwheel_maestro.pack()
     except Exception:
         pass
+    update_maestro_color_code()
 
 
 def aplicar_maestro():
@@ -4808,8 +5927,44 @@ tk.Scale(maestro_sliders, from_=255, to=0, orient="vertical", variable=maestro_t
          length=92, width=4, sliderlength=10, showvalue=False, bg="#181b1e", fg="#f1c40f",
          highlightthickness=0, command=maestro_on_temp).grid(row=1, column=1, padx=1)
 
+maestro_code_box = tk.Frame(frame_maestro, bg="#111519", highlightthickness=1, highlightbackground="#2e3a42")
+maestro_code_box.pack(fill="x", padx=6, pady=(5, 0))
+maestro_code_swatch = tk.Label(maestro_code_box, text="", width=2, bg="#ff0000", relief="flat")
+maestro_code_swatch.pack(side="left", fill="y", padx=(4, 5), pady=4)
+maestro_code_text = tk.Frame(maestro_code_box, bg="#111519")
+maestro_code_text.pack(side="left", fill="x", expand=True, pady=2)
+tk.Label(
+    maestro_code_text,
+    textvariable=maestro_color_code_var,
+    bg="#111519",
+    fg="#d8f6ff",
+    anchor="w",
+    font=("Consolas", 8, "bold"),
+).pack(fill="x")
+tk.Label(
+    maestro_code_text,
+    textvariable=maestro_color_hex_var,
+    bg="#111519",
+    fg="#8fb8c9",
+    anchor="w",
+    font=("Consolas", 8),
+).pack(fill="x")
+tk.Button(
+    maestro_code_box,
+    text="⧉",
+    command=copy_maestro_color_code,
+    bg="#2b8db3",
+    fg="#ffffff",
+    relief="flat",
+    width=3,
+    font=("Segoe UI Symbol", 10, "bold"),
+    padx=0,
+    pady=0,
+).pack(side="right", padx=(4, 4), pady=5)
+update_maestro_color_code()
+
 master_actions = tk.Frame(frame_maestro, bg="#181b1e")
-master_actions.pack(fill="x", pady=(7, 0), padx=6)
+master_actions.pack(fill="x", pady=(5, 0), padx=6)
 for col in range(2):
     master_actions.grid_columnconfigure(col, weight=1)
 tk.Button(master_actions, text="Aplicar", command=aplicar_maestro,
@@ -4823,7 +5978,7 @@ tk.Button(master_actions, text="Off", command=apagar_todo,
           font=("Segoe UI", 9, "bold")).grid(row=1, column=1, sticky="ew", padx=(3, 0))
 tk.Button(master_actions, text="Refrescar", command=refresh_lamp_status,
           bg="#27ae60", fg="#fff", relief="flat",
-          font=("Segoe UI", 8)).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+          font=("Segoe UI", 8), pady=0).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(3, 0))
 
 
 frame_center = tk.Frame(frame_main, bg="#181b1e")
@@ -4850,9 +6005,14 @@ espacio_palette_items = {}
 espacio_status_var = tk.StringVar(value="Elige una lampara y ubicala en la matriz.")
 espacio_midi_action_var = tk.StringVar(value="toggle")
 espacio_midi_trigger_var = tk.StringVar(value="Pulso color")
+espacio_midi_fade_seconds_var = tk.DoubleVar(value=5.0)
 ESPACIO_MIDI_ACTIONS = {
     "toggle": "Alternar",
     "pulse": "Pulso",
+    "pulse_fadeout": "Pulso fadeout",
+    "fade_in": "Fade entrada",
+    "fade_out": "Fade salida",
+    "fade_release": "Fade soltar",
     "hold": "Sostener",
     "solo": "Solo",
     "master": "Copiar maestro",
@@ -4862,6 +6022,8 @@ ESPACIO_MIDI_ACTIONS = {
 ESPACIO_MIDI_TRIGGERS = ("Pulso color", "Pulso blanco", "Flash rojo")
 espacio_midi_hold_states = {}
 espacio_midi_pulse_states = {}
+espacio_midi_fade_states = {}
+espacio_midi_group_states = {}
 
 
 def normalize_espacio_laberintos():
@@ -5270,6 +6432,7 @@ def start_espacio_midi_pulse(note, ip):
         levels = current["levels"]
         level = levels[current["step"] % len(levels)]
         current["step"] += 1
+        current["last_level"] = level
         espacio_midi_send_pulse_level(ip, level)
         root.after(115, loop)
 
@@ -5295,6 +6458,591 @@ def stop_espacio_midi_pulse(note, turn_off=True):
         sync_espacio_laberintos_current_state(ip)
     refresh_espacio_midi_leds()
     return True
+
+
+def stop_espacio_midi_pulse_with_fadeout(note, duration_ms=5000):
+    state = espacio_midi_pulse_states.pop(int(note), None)
+    if not state:
+        return False
+    state["active"] = False
+    ip = state.get("ip")
+    panel = panels.get(ip)
+    if panel is None:
+        return True
+    brightness = safe_brightness(getattr(panel, "last_brillo", state.get("last_level", 180)))
+    if brightness <= 0:
+        espacio_midi_force_off(ip)
+        return True
+    espacio_midi_fade_states[int(note)] = {
+        "type": "fade_out",
+        "ip": ip,
+        "active": True,
+        "brightness": brightness,
+        "after_id": None,
+    }
+    start_espacio_midi_release_fade(note, duration_ms=duration_ms)
+    return True
+
+
+def cancel_espacio_midi_fade(note):
+    state = espacio_midi_fade_states.pop(int(note), None)
+    if not state:
+        return False
+    after_id = state.get("after_id")
+    if after_id:
+        try:
+            root.after_cancel(after_id)
+        except Exception:
+            pass
+    state["active"] = False
+    return True
+
+
+def espacio_midi_force_off(ip):
+    panel = panels.get(ip)
+    if panel is not None:
+        selected_devices[ip].set(False)
+        panel.last_brillo = 0
+        try:
+            panel.brillo_var.set(0)
+        except Exception:
+            pass
+        update_panel_visual(panel)
+    try:
+        lamp_state[ip] = {
+            **lamp_state.get(ip, {}),
+            "brightness": 0,
+        }
+    except Exception:
+        pass
+    send_off(ip)
+    root.after(140, lambda target_ip=ip: send_off(target_ip))
+    root.after(420, lambda target_ip=ip: send_off(target_ip))
+    sync_espacio_laberintos_current_state(ip)
+
+
+def espacio_midi_send_current_color(ip, brightness, selected_state=None):
+    panel = panels.get(ip)
+    if panel is None:
+        return
+    brightness = safe_brightness(brightness)
+    if selected_state is None:
+        selected_state = brightness > 0
+    selected_devices[ip].set(bool(selected_state))
+    panel.last_brillo = brightness
+    try:
+        panel.brillo_var.set(brightness)
+    except Exception:
+        pass
+    if brightness <= 0:
+        espacio_midi_force_off(ip)
+    elif getattr(panel, "last_mode", "colour") == "white":
+        send_lamp_white(ip, brightness, getattr(panel, "last_temp", 4000))
+    else:
+        send_lamp_color_safe(
+            ip,
+            getattr(panel, "last_hue", 0),
+            getattr(panel, "last_sat", 1),
+            brightness,
+        )
+    update_panel_visual(panel)
+    sync_espacio_laberintos_current_state(ip)
+
+
+def start_espacio_midi_fade_release_press(note, ip):
+    note = int(note)
+    cancel_espacio_midi_fade(note)
+    if is_ip_in_active_scene_effect(ip):
+        remove_ip_from_active_scene_effect(ip, turn_off=False)
+    else:
+        claim_lamps_for_manual_control(ip)
+
+    panel = panels.get(ip)
+    if panel is None:
+        return
+
+    brightness = 255
+
+    espacio_midi_fade_states[note] = {
+        "type": "fade_release",
+        "ip": ip,
+        "active": True,
+        "brightness": brightness,
+        "after_id": None,
+    }
+    midi_led(note, 63)
+    espacio_midi_send_current_color(ip, brightness)
+
+
+def start_espacio_midi_release_fade(note, duration_ms=5000, steps=40):
+    note = int(note)
+    state = espacio_midi_fade_states.get(note)
+    if not state or state.get("type") not in ("fade_release", "fade_out"):
+        return False
+    ip = state.get("ip")
+    panel = panels.get(ip)
+    if panel is None:
+        cancel_espacio_midi_fade(note)
+        return True
+
+    start_brightness = safe_brightness(getattr(panel, "last_brillo", state.get("brightness", 180)))
+    effect_retired_ips.setdefault("atardecer", set()).add(ip)
+    espacio_midi_effect_ips.add(ip)
+    selected_devices[ip].set(False)
+    duration_ms = max(500, int(duration_ms))
+    steps = max(5, int(steps))
+    step_ms = max(30, duration_ms // steps)
+    state["active"] = True
+
+    def step(index=0):
+        current = espacio_midi_fade_states.get(note)
+        if not current or not current.get("active"):
+            return
+        factor = max(0.0, 1.0 - (index / steps))
+        brightness = safe_brightness(start_brightness * factor)
+        if index >= steps or brightness <= 0:
+            espacio_midi_force_off(ip)
+            espacio_midi_fade_states.pop(note, None)
+            refresh_espacio_midi_leds()
+            return
+        espacio_midi_send_current_color(ip, brightness, selected_state=False)
+        current["after_id"] = root.after(step_ms, lambda: step(index + 1))
+
+    step()
+    return True
+
+
+def start_espacio_midi_fade_out(note, ip, duration_ms=None):
+    note = int(note)
+    cancel_espacio_midi_fade(note)
+    if is_ip_in_active_scene_effect(ip):
+        remove_ip_from_active_scene_effect(ip, turn_off=False)
+    else:
+        claim_lamps_for_manual_control(ip)
+
+    panel = panels.get(ip)
+    if panel is None:
+        return
+
+    brightness = safe_brightness(getattr(panel, "last_brillo", 0))
+    if brightness <= 0:
+        brightness = safe_brightness(lamp_state.get(ip, {}).get("brightness", 0))
+    if brightness <= 0:
+        espacio_midi_force_off(ip)
+        return
+
+    espacio_midi_fade_states[note] = {
+        "type": "fade_out",
+        "ip": ip,
+        "active": True,
+        "brightness": brightness,
+        "after_id": None,
+    }
+    midi_led(note, 63)
+    start_espacio_midi_release_fade(note, duration_ms=duration_ms or get_espacio_midi_fade_duration_ms())
+
+
+def start_espacio_midi_fade_in(note, ip, duration_ms=None, steps=40):
+    note = int(note)
+    cancel_espacio_midi_fade(note)
+    if is_ip_in_active_scene_effect(ip):
+        remove_ip_from_active_scene_effect(ip, turn_off=False)
+    else:
+        claim_lamps_for_manual_control(ip)
+
+    panel = panels.get(ip)
+    if panel is None:
+        return
+
+    start_brightness = safe_brightness(getattr(panel, "last_brillo", 0))
+    if not selected_devices[ip].get():
+        start_brightness = 0
+        panel.last_brillo = 0
+        try:
+            panel.brillo_var.set(0)
+        except Exception:
+            pass
+
+    target_brightness = 255
+    duration_ms = duration_ms or get_espacio_midi_fade_duration_ms()
+    duration_ms = max(500, int(duration_ms))
+    steps = max(5, int(steps))
+    step_ms = max(30, duration_ms // steps)
+    state = {
+        "type": "fade_in",
+        "ip": ip,
+        "active": True,
+        "after_id": None,
+    }
+    espacio_midi_fade_states[note] = state
+    midi_led(note, 63)
+    selected_devices[ip].set(True)
+
+    def step(index=0):
+        current = espacio_midi_fade_states.get(note)
+        if not current or not current.get("active") or current.get("type") != "fade_in":
+            return
+        factor = min(1.0, index / steps)
+        brightness = safe_brightness(start_brightness + ((target_brightness - start_brightness) * factor))
+        if index >= steps:
+            espacio_midi_send_current_color(ip, target_brightness, selected_state=True)
+            espacio_midi_fade_states.pop(note, None)
+            midi_led(note, get_midi_led_color(get_midi_action_for_note(note)) or 21)
+            refresh_espacio_midi_leds()
+            return
+        espacio_midi_send_current_color(ip, brightness, selected_state=True)
+        current["after_id"] = root.after(step_ms, lambda: step(index + 1))
+
+    step()
+
+
+def get_espacio_midi_fade_duration_ms():
+    try:
+        seconds = float(espacio_midi_fade_seconds_var.get())
+    except Exception:
+        seconds = 5.0
+    seconds = max(0.5, min(30.0, seconds))
+    try:
+        espacio_midi_fade_seconds_var.set(seconds)
+    except Exception:
+        pass
+    return int(seconds * 1000)
+
+
+def get_espacio_group_ips(group_key):
+    return [
+        ip for ip in get_sequence_ordered_lamp_ips()
+        if get_lamp_group(ip) == group_key and is_espacio_lamp_connected(ip)
+    ]
+
+
+def espacio_midi_group_key_from_action(action):
+    if action == "control_buttons_bichos":
+        return "efectos"
+    if action == "control_buttons_atmosfera":
+        return "atmosfera"
+    return None
+
+
+def espacio_midi_group_label(group_key):
+    return "Bichos" if group_key == "efectos" else "Atmosfera" if group_key == "atmosfera" else "Grupo"
+
+
+def start_espacio_midi_group_pulse(note, ips):
+    note = int(note)
+    stop_espacio_midi_group_action(note)
+    for ip in ips:
+        if not is_ip_in_active_scene_effect(ip):
+            claim_lamps_for_manual_control(ip)
+    state = {
+        "type": "pulse",
+        "ips": list(ips),
+        "active": True,
+        "step": 0,
+        "levels": (18, 70, 145, 235, 255, 180, 80, 18),
+    }
+    espacio_midi_group_states[note] = state
+    midi_led(note, 63)
+
+    def loop():
+        current = espacio_midi_group_states.get(note)
+        if not current or not current.get("active") or current.get("type") not in ("pulse", "pulse_fadeout"):
+            return
+        levels = current["levels"]
+        level = levels[current["step"] % len(levels)]
+        current["step"] += 1
+        current["last_level"] = level
+        for ip in current.get("ips", []):
+            espacio_midi_send_pulse_level(ip, level)
+        current["after_id"] = root.after(115, loop)
+
+    loop()
+
+
+def start_espacio_midi_group_fade_press(note, ips):
+    note = int(note)
+    stop_espacio_midi_group_action(note)
+    states = {}
+    for ip in ips:
+        if is_ip_in_active_scene_effect(ip):
+            remove_ip_from_active_scene_effect(ip, turn_off=False)
+        else:
+            claim_lamps_for_manual_control(ip)
+        panel = panels.get(ip)
+        if panel is None:
+            continue
+        brightness = 255
+        states[ip] = brightness
+        espacio_midi_send_current_color(ip, brightness)
+
+    espacio_midi_group_states[note] = {
+        "type": "fade_release",
+        "ips": list(states.keys()),
+        "brightness": states,
+        "active": True,
+        "after_ids": [],
+    }
+    midi_led(note, 63)
+
+
+def start_espacio_midi_group_fade_release(note, duration_ms=None, steps=40):
+    note = int(note)
+    state = espacio_midi_group_states.get(note)
+    if not state or state.get("type") not in ("fade_release", "fade_out"):
+        return False
+    duration_ms = duration_ms or get_espacio_midi_fade_duration_ms()
+    duration_ms = max(500, int(duration_ms))
+    steps = max(5, int(steps))
+    step_ms = max(30, duration_ms // steps)
+    brightness_map = dict(state.get("brightness", {}))
+    state["active"] = True
+    state["after_ids"] = []
+
+    for ip in brightness_map:
+        effect_retired_ips.setdefault("atardecer", set()).add(ip)
+        espacio_midi_effect_ips.add(ip)
+        selected_devices[ip].set(False)
+
+    def step(index=0):
+        current = espacio_midi_group_states.get(note)
+        if not current or not current.get("active") or current.get("type") not in ("fade_release", "fade_out"):
+            return
+        factor = max(0.0, 1.0 - (index / steps))
+        if index >= steps:
+            for ip in brightness_map:
+                espacio_midi_force_off(ip)
+            espacio_midi_group_states.pop(note, None)
+            midi_led(note, get_midi_led_color(get_midi_action_for_note(note)) or 21)
+            refresh_espacio_midi_leds()
+            return
+        for ip, start_brightness in brightness_map.items():
+            brightness = safe_brightness(start_brightness * factor)
+            if brightness <= 0:
+                espacio_midi_force_off(ip)
+            else:
+                espacio_midi_send_current_color(ip, brightness, selected_state=False)
+        after_id = root.after(step_ms, lambda: step(index + 1))
+        current.setdefault("after_ids", []).append(after_id)
+
+    step()
+    return True
+
+
+def start_espacio_midi_group_fade_out(note, ips, duration_ms=None):
+    note = int(note)
+    stop_espacio_midi_group_action(note)
+    brightness_map = {}
+    for ip in ips:
+        if is_ip_in_active_scene_effect(ip):
+            remove_ip_from_active_scene_effect(ip, turn_off=False)
+        else:
+            claim_lamps_for_manual_control(ip)
+        panel = panels.get(ip)
+        if panel is None:
+            continue
+        brightness = safe_brightness(getattr(panel, "last_brillo", 0))
+        if brightness <= 0:
+            brightness = safe_brightness(lamp_state.get(ip, {}).get("brightness", 0))
+        if brightness > 0:
+            brightness_map[ip] = brightness
+
+    if not brightness_map:
+        for ip in ips:
+            espacio_midi_force_off(ip)
+        return
+
+    espacio_midi_group_states[note] = {
+        "type": "fade_out",
+        "ips": list(brightness_map.keys()),
+        "brightness": brightness_map,
+        "active": True,
+        "after_ids": [],
+    }
+    midi_led(note, 63)
+    start_espacio_midi_group_fade_release(note, duration_ms=duration_ms or get_espacio_midi_fade_duration_ms())
+
+
+def start_espacio_midi_group_fade_in(note, ips, duration_ms=None, steps=40):
+    note = int(note)
+    stop_espacio_midi_group_action(note)
+    brightness_map = {}
+    for ip in ips:
+        if is_ip_in_active_scene_effect(ip):
+            remove_ip_from_active_scene_effect(ip, turn_off=False)
+        else:
+            claim_lamps_for_manual_control(ip)
+        panel = panels.get(ip)
+        if panel is None:
+            continue
+        start_brightness = safe_brightness(getattr(panel, "last_brillo", 0))
+        if not selected_devices[ip].get():
+            start_brightness = 0
+            panel.last_brillo = 0
+            try:
+                panel.brillo_var.set(0)
+            except Exception:
+                pass
+        brightness_map[ip] = start_brightness
+        selected_devices[ip].set(True)
+
+    if not brightness_map:
+        return
+
+    duration_ms = duration_ms or get_espacio_midi_fade_duration_ms()
+    duration_ms = max(500, int(duration_ms))
+    steps = max(5, int(steps))
+    step_ms = max(30, duration_ms // steps)
+    state = {
+        "type": "fade_in",
+        "ips": list(brightness_map.keys()),
+        "brightness": brightness_map,
+        "active": True,
+        "after_ids": [],
+    }
+    espacio_midi_group_states[note] = state
+    midi_led(note, 63)
+
+    def step(index=0):
+        current = espacio_midi_group_states.get(note)
+        if not current or not current.get("active") or current.get("type") != "fade_in":
+            return
+        factor = min(1.0, index / steps)
+        if index >= steps:
+            for ip in brightness_map:
+                espacio_midi_send_current_color(ip, 255, selected_state=True)
+            espacio_midi_group_states.pop(note, None)
+            midi_led(note, get_midi_led_color(get_midi_action_for_note(note)) or 21)
+            refresh_espacio_midi_leds()
+            return
+        for ip, start_brightness in brightness_map.items():
+            brightness = safe_brightness(start_brightness + ((255 - start_brightness) * factor))
+            espacio_midi_send_current_color(ip, brightness, selected_state=True)
+        after_id = root.after(step_ms, lambda: step(index + 1))
+        current.setdefault("after_ids", []).append(after_id)
+
+    step()
+
+
+def start_espacio_midi_group_hold(note, ips):
+    note = int(note)
+    stop_espacio_midi_group_action(note)
+    snapshots = {}
+    for ip in ips:
+        snapshot = espacio_midi_snapshot_lamp(ip)
+        if snapshot is None:
+            continue
+        snapshots[ip] = snapshot
+        espacio_midi_trigger_lamp(ip, restore_after_ms=None, snapshot=snapshot)
+    espacio_midi_group_states[note] = {
+        "type": "hold",
+        "ips": list(snapshots.keys()),
+        "snapshots": snapshots,
+        "active": True,
+    }
+    midi_led(note, 63)
+
+
+def stop_espacio_midi_group_action(note, release_fade=False):
+    note = int(note)
+    state = espacio_midi_group_states.get(note)
+    if not state:
+        return False
+    state_type = state.get("type")
+    if state_type == "pulse_fadeout" and release_fade:
+        brightness_map = {}
+        for ip in state.get("ips", []):
+            panel = panels.get(ip)
+            if panel is None:
+                continue
+            brightness = safe_brightness(getattr(panel, "last_brillo", state.get("last_level", 180)))
+            if brightness > 0:
+                brightness_map[ip] = brightness
+        state["type"] = "fade_out"
+        state["brightness"] = brightness_map
+        state["after_ids"] = []
+        if not brightness_map:
+            espacio_midi_group_states.pop(note, None)
+            return True
+        return start_espacio_midi_group_fade_release(note, duration_ms=5000)
+    if state_type == "fade_release" and release_fade:
+        return start_espacio_midi_group_fade_release(note)
+    if state_type == "fade_out" and release_fade:
+        return True
+    if state_type == "fade_in" and release_fade:
+        return True
+
+    espacio_midi_group_states.pop(note, None)
+    state["active"] = False
+    for after_id in state.get("after_ids", []):
+        try:
+            root.after_cancel(after_id)
+        except Exception:
+            pass
+
+    if state_type == "pulse":
+        for ip in state.get("ips", []):
+            espacio_midi_force_off(ip)
+    elif state_type == "hold":
+        for ip, snapshot in state.get("snapshots", {}).items():
+            espacio_midi_restore_lamp(ip, snapshot)
+
+    midi_led(note, get_midi_led_color(get_midi_action_for_note(note)) or 21)
+    refresh_espacio_midi_leds()
+    return True
+
+
+def execute_espacio_midi_group_action(action):
+    group_key = espacio_midi_group_key_from_action(action)
+    if not group_key:
+        return
+    ips = get_espacio_group_ips(group_key)
+    label = espacio_midi_group_label(group_key)
+    if not ips:
+        espacio_status_var.set(f"{label}: no hay lamparas conectadas.")
+        return
+
+    mode = espacio_midi_action_var.get()
+    note = get_midi_note(action)
+    if mode == "pulse":
+        start_espacio_midi_group_pulse(note, ips)
+        espacio_status_var.set(f"{label}: pulso vivo hasta soltar.")
+    elif mode == "pulse_fadeout":
+        start_espacio_midi_group_pulse(note, ips)
+        if note in espacio_midi_group_states:
+            espacio_midi_group_states[note]["type"] = "pulse_fadeout"
+        espacio_status_var.set(f"{label}: pulso vivo; al soltar baja en 5 segundos.")
+    elif mode == "fade_in":
+        start_espacio_midi_group_fade_in(note, ips)
+        espacio_status_var.set(f"{label}: subiendo a brillo maximo en {espacio_midi_fade_seconds_var.get():g} segundos.")
+    elif mode == "fade_out":
+        start_espacio_midi_group_fade_out(note, ips)
+        espacio_status_var.set(f"{label}: bajando hasta apagar en {espacio_midi_fade_seconds_var.get():g} segundos.")
+    elif mode == "fade_release":
+        start_espacio_midi_group_fade_press(note, ips)
+        espacio_status_var.set(f"{label}: encendido; al soltar baja en {espacio_midi_fade_seconds_var.get():g} segundos.")
+    elif mode == "hold":
+        start_espacio_midi_group_hold(note, ips)
+        espacio_status_var.set(f"{label}: sosteniendo {espacio_midi_trigger_var.get()}.")
+    elif mode == "master":
+        apply_master_to_ips(ips)
+        espacio_status_var.set(f"{label}: copio el control maestro.")
+    elif mode == "scene_mark":
+        should_select = any(not selected_devices[ip].get() for ip in ips)
+        for ip in ips:
+            selected_devices[ip].set(should_select)
+            update_panel_visual(panels[ip])
+        sync_espacio_laberintos_current_state(ips)
+        espacio_status_var.set(f"{label}: {'sumado a' if should_select else 'retirado de'} la seleccion de escena.")
+    elif mode == "freeze":
+        for ip in ips:
+            espacio_midi_freeze_lamp(ip)
+        espacio_status_var.set(f"{label}: congelado fuera de la seleccion viva.")
+    else:
+        should_power = any(not selected_devices[ip].get() for ip in ips)
+        for ip in ips:
+            espacio_midi_set_lamp_power(ip, should_power)
+        espacio_status_var.set(f"{label}: {'encendido' if should_power else 'apagado'} desde MIDI.")
+    refresh_espacio_midi_leds()
 
 
 def espacio_midi_solo_lamp(ip):
@@ -5364,7 +7112,14 @@ def espacio_midi_apply_master_to_scene_ip(ip):
 
 
 def handle_espacio_midi_note_off(note):
+    pulse_state = espacio_midi_pulse_states.get(int(note))
+    if pulse_state and pulse_state.get("type") == "pulse_fadeout":
+        if stop_espacio_midi_pulse_with_fadeout(note, duration_ms=5000):
+            return True
     if stop_espacio_midi_pulse(note, turn_off=True):
+        return True
+    fade_state = espacio_midi_fade_states.get(int(note))
+    if fade_state and fade_state.get("type") == "fade_release" and start_espacio_midi_release_fade(note, duration_ms=get_espacio_midi_fade_duration_ms()):
         return True
     state = espacio_midi_hold_states.pop(int(note), None)
     if not state:
@@ -5398,6 +7153,20 @@ def handle_espacio_midi_note(note):
     if mode == "pulse":
         start_espacio_midi_pulse(note, ip)
         espacio_status_var.set(f"{lamp_id}: pulso vivo hasta soltar.")
+    elif mode == "pulse_fadeout":
+        start_espacio_midi_pulse(note, ip)
+        if int(note) in espacio_midi_pulse_states:
+            espacio_midi_pulse_states[int(note)]["type"] = "pulse_fadeout"
+        espacio_status_var.set(f"{lamp_id}: pulso vivo; al soltar baja en 5 segundos.")
+    elif mode == "fade_in":
+        start_espacio_midi_fade_in(note, ip)
+        espacio_status_var.set(f"{lamp_id}: subiendo a brillo maximo en {espacio_midi_fade_seconds_var.get():g} segundos.")
+    elif mode == "fade_out":
+        start_espacio_midi_fade_out(note, ip)
+        espacio_status_var.set(f"{lamp_id}: bajando hasta apagar en {espacio_midi_fade_seconds_var.get():g} segundos.")
+    elif mode == "fade_release":
+        start_espacio_midi_fade_release_press(note, ip)
+        espacio_status_var.set(f"{lamp_id}: encendida; al soltar baja en {espacio_midi_fade_seconds_var.get():g} segundos.")
     elif mode == "hold":
         snapshot = espacio_midi_snapshot_lamp(ip)
         espacio_midi_trigger_lamp(ip, restore_after_ms=None, snapshot=snapshot)
@@ -5657,6 +7426,36 @@ ttk.Combobox(
     width=13,
     font=("Segoe UI", 8),
 ).pack(side="left")
+
+tk.Label(
+    espacio_midi_trigger_box,
+    text="Fade:",
+    bg="#212529",
+    fg="#8fb8c9",
+    font=("Segoe UI", 8, "bold"),
+).pack(side="left", padx=(10, 4))
+
+tk.Spinbox(
+    espacio_midi_trigger_box,
+    from_=0.5,
+    to=30.0,
+    increment=0.5,
+    width=5,
+    textvariable=espacio_midi_fade_seconds_var,
+    bg="#111519",
+    fg="#d8f6ff",
+    buttonbackground="#30363d",
+    relief="flat",
+    font=("Segoe UI", 8),
+).pack(side="left")
+
+tk.Label(
+    espacio_midi_trigger_box,
+    text="seg",
+    bg="#212529",
+    fg="#8fb8c9",
+    font=("Segoe UI", 8),
+).pack(side="left", padx=(3, 0))
 
 espacio_palette = tk.Frame(frame_espacio, bg="#212529")
 espacio_palette.pack(fill="x", pady=(0, 6))
@@ -7284,6 +9083,1197 @@ def fade_scene_lamps_outside_effect_target(scene_data, target_ips, fade_out_val,
         t.join()
 
 
+def get_scripted_scene_target_ips(scene_data):
+    scripted = scene_data.get("scripted_scene", {})
+    target_group = scripted.get("target_group", "efectos")
+    return [
+        ip for ip in get_sequence_ordered_lamp_ips()
+        if get_lamp_group(ip) == target_group and lamp_status.get(ip, True)
+    ]
+
+
+def interpolate_value(a, b, t):
+    return a + ((b - a) * t)
+
+
+def interpolate_hue(a, b, t):
+    delta = ((b - a + 180) % 360) - 180
+    return (a + delta * t) % 360
+
+
+def scripted_color_at(keyframes, elapsed):
+    if not keyframes:
+        return {"h": 285, "s": 1.0, "brillo": 255}
+    if elapsed <= keyframes[0]["t"]:
+        return keyframes[0]
+    for idx in range(len(keyframes) - 1):
+        a = keyframes[idx]
+        b = keyframes[idx + 1]
+        if a["t"] <= elapsed <= b["t"]:
+            span = max(0.001, b["t"] - a["t"])
+            local = max(0.0, min(1.0, (elapsed - a["t"]) / span))
+            return {
+                "h": interpolate_hue(float(a["h"]), float(b["h"]), local),
+                "s": interpolate_value(float(a["s"]), float(b["s"]), local),
+                "brillo": interpolate_value(float(a["brillo"]), float(b["brillo"]), local),
+            }
+    return keyframes[-1]
+
+
+def run_scripted_flower_wither_scene(scene_data, token, scene_name):
+    scripted = scene_data.get("scripted_scene", {})
+    target_ips = get_scripted_scene_target_ips(scene_data)
+    if not target_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    fade_in_ms = int(scripted.get("fade_in_ms", 5000))
+    transition_ms = int(scripted.get("transition_ms", 90000))
+    final_fade_ms = int(scripted.get("final_fade_ms", 2500))
+    final_hold_brightness = safe_brightness(scripted.get("final_hold_brightness", 0))
+    tick_ms = int(scripted.get("tick_ms", 250))
+    tick_ms = max(80, min(1000, tick_ms))
+
+    keyframes = scripted.get("keyframes") or [
+        {"t": 0, "h": 285, "s": 1.0, "brillo": 255},
+        {"t": 18000, "h": 300, "s": 0.86, "brillo": 228},
+        {"t": 36000, "h": 330, "s": 0.72, "brillo": 190},
+        {"t": 54000, "h": 25, "s": 0.70, "brillo": 150},
+        {"t": 72000, "h": 52, "s": 0.60, "brillo": 90},
+        {"t": 90000, "h": 82, "s": 0.38, "brillo": 24},
+    ]
+
+    initial_color = scripted_color_at(keyframes, 0)
+    initial_brightness = 0 if fade_in_ms > 0 else safe_brightness(initial_color.get("brillo", 255))
+
+    for ip in target_ips:
+        panel = panels.get(ip)
+        if panel is None:
+            continue
+        selected_devices[ip].set(True)
+        panel.last_mode = "colour"
+        panel.last_hue = initial_color.get("h", 285)
+        panel.last_sat = initial_color.get("s", 1.0)
+        panel.last_brillo = initial_brightness
+        try:
+            panel.brillo_var.set(initial_brightness)
+            panel.colorwheel_lamp.set_color(panel.last_hue, panel.last_sat, max(0.01, initial_brightness / 255))
+        except Exception:
+            pass
+        set_panel_mode(panel, "colour", send=False)
+        update_panel_visual(panel)
+
+    total_seconds = (fade_in_ms + transition_ms + final_fade_ms) / 1000.0
+    try:
+        start_scene_progress(token, total_seconds)
+    except Exception:
+        pass
+
+    start_time = time.monotonic()
+
+    def apply_to_targets(h, s, brightness, selected_state=True):
+        brightness = safe_brightness(brightness)
+        for ip in target_ips:
+            if not lamp_status.get(ip, True):
+                continue
+            panel = panels.get(ip)
+            if panel is not None:
+                selected_devices[ip].set(bool(selected_state and brightness > 0))
+                panel.last_mode = "colour"
+                panel.last_hue = h
+                panel.last_sat = max(0.0, min(1.0, float(s)))
+                panel.last_brillo = brightness
+                try:
+                    panel.brillo_var.set(brightness)
+                    panel.colorwheel_lamp.set_color(panel.last_hue, panel.last_sat, max(0.01, brightness / 255))
+                except Exception:
+                    pass
+                update_panel_visual(panel)
+            if brightness <= 0:
+                send_off(ip)
+                update_lamp_state(ip, "colour", h, s, 4000, 0)
+            else:
+                send_lamp_color_safe(ip, h, s, brightness)
+                update_lamp_state(ip, "colour", h, s, 4000, brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def finish():
+        end_color = scripted_color_at(keyframes, transition_ms)
+        for ip in target_ips:
+            selected_devices[ip].set(final_hold_brightness > 0)
+            panel = panels.get(ip)
+            if panel is not None:
+                panel.last_mode = "colour"
+                panel.last_hue = end_color["h"]
+                panel.last_sat = end_color["s"]
+                panel.last_brillo = final_hold_brightness
+                try:
+                    panel.brillo_var.set(final_hold_brightness)
+                    panel.colorwheel_lamp.set_color(end_color["h"], end_color["s"], max(0.01, final_hold_brightness / 255))
+                except Exception:
+                    pass
+                set_panel_mode(panel, "colour", send=False)
+                update_panel_visual(panel)
+            if final_hold_brightness > 0:
+                send_lamp_color_safe(ip, end_color["h"], end_color["s"], final_hold_brightness)
+                update_lamp_state(ip, "colour", end_color["h"], end_color["s"], 4000, final_hold_brightness)
+            else:
+                send_off(ip)
+                update_lamp_state(ip, "colour", end_color["h"], end_color["s"], 4000, 0)
+        sync_espacio_laberintos_current_state(target_ips)
+        finalizar_escena(token, scene_name)
+
+    def tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+
+        if fade_in_ms > 0 and elapsed_ms <= fade_in_ms:
+            progress = max(0.0, min(1.0, elapsed_ms / max(1, fade_in_ms)))
+            brightness = 255 * (-(math.cos(math.pi * progress) - 1) / 2)
+            apply_to_targets(285, 1.0, brightness, selected_state=True)
+            root.after(tick_ms, tick)
+            return
+
+        transition_elapsed = elapsed_ms - fade_in_ms
+        if transition_elapsed <= transition_ms:
+            color = scripted_color_at(keyframes, transition_elapsed)
+            apply_to_targets(color["h"], color["s"], color["brillo"], selected_state=True)
+            root.after(tick_ms, tick)
+            return
+
+        final_elapsed = elapsed_ms - fade_in_ms - transition_ms
+        if final_elapsed <= final_fade_ms:
+            end_color = scripted_color_at(keyframes, transition_ms)
+            progress = max(0.0, min(1.0, final_elapsed / max(1, final_fade_ms)))
+            brightness = safe_brightness(float(end_color["brillo"]) + ((final_hold_brightness - float(end_color["brillo"])) * progress))
+            apply_to_targets(end_color["h"], end_color["s"], brightness, selected_state=final_hold_brightness > 0)
+            root.after(tick_ms, tick)
+            return
+
+        finish()
+
+    tick()
+    return True
+
+
+def get_scripted_lamp_ip(lamp_id):
+    lamp_id = str(lamp_id).strip().upper()
+    if not lamp_id:
+        return None
+    normalized = lamp_id if lamp_id.startswith("L") else f"L{lamp_id}"
+    numeric = normalized[1:] if normalized.startswith("L") else normalized
+    for ip in LAMP_IPS:
+        candidate = str(get_lamp_id(ip)).strip().upper()
+        candidate_normalized = candidate if candidate.startswith("L") else f"L{candidate}"
+        candidate_numeric = candidate_normalized[1:] if candidate_normalized.startswith("L") else candidate_normalized
+        if normalized == candidate_normalized or numeric == candidate_numeric:
+            return ip
+    return None
+
+
+def run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = int(scripted.get("duration_ms", 60000))
+    start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
+    tick_ms = max(80, min(1000, int(scripted.get("tick_ms", 250))))
+    steps = scripted.get("steps") or []
+    if not steps:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    scheduled_steps = []
+    target_ips = []
+    final_steps_by_ip = {}
+    for step in steps:
+        color = step.get("color", {})
+        mode = str(step.get("mode", color.get("mode", "colour"))).strip().lower()
+        if mode not in ("colour", "white", "off"):
+            mode = "colour"
+        at_ms = int(step.get("at_ms", 0))
+        fade_ms = max(0, int(step.get("fade_ms", 5000)))
+        step_ips = []
+        for lamp_id in step.get("lamps", []):
+            ip = get_scripted_lamp_ip(lamp_id)
+            if not ip or not lamp_status.get(ip, True):
+                continue
+            step_ips.append(ip)
+            if ip not in target_ips:
+                target_ips.append(ip)
+        if step_ips:
+            scheduled_steps.append({
+                "ips": step_ips,
+                "lamp_id": str(lamp_id).strip().upper(),
+                "at_ms": at_ms,
+                "fade_ms": fade_ms,
+                "mode": mode,
+                "h": float(color.get("h", 30)) % 360,
+                "s": max(0.0, min(1.0, float(color.get("s", 1.0)))),
+                "temp": int(color.get("temp", step.get("temp", 255))),
+                "brillo_inicio": safe_brightness(color.get("brillo_inicio", step.get("brillo_inicio", 0))),
+                "brillo": safe_brightness(color.get("brillo", 255)),
+            })
+            for ip in step_ips:
+                final_steps_by_ip[ip] = scheduled_steps[-1]
+
+    if not target_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    claim_lamps_for_manual_control(target_ips)
+    for ip in target_ips:
+        panel = panels.get(ip)
+        selected_devices[ip].set(False)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_brillo = 0
+            try:
+                panel.brillo_var.set(0)
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+        send_off(ip)
+        update_lamp_state(ip, "colour", getattr(panel, "last_hue", 0) if panel else 0, getattr(panel, "last_sat", 1) if panel else 1, 4000, 0)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+    except Exception:
+        pass
+
+    def apply_scripted_lamp(ip, step, brightness):
+        if fade_token[0] != token:
+            return
+        brightness = safe_brightness(brightness)
+        panel = panels.get(ip)
+        mode = step.get("mode", "colour")
+        if mode == "off":
+            selected_devices[ip].set(False)
+            if panel is not None:
+                panel.last_brillo = 0
+                try:
+                    panel.brillo_var.set(0)
+                except Exception:
+                    pass
+                update_panel_visual(panel)
+            send_off(ip)
+            update_lamp_state(
+                ip,
+                getattr(panel, "last_mode", "colour") if panel else "colour",
+                getattr(panel, "last_hue", step.get("h", 0)) if panel else step.get("h", 0),
+                getattr(panel, "last_sat", step.get("s", 1)) if panel else step.get("s", 1),
+                getattr(panel, "last_temp", step.get("temp", 4000)) if panel else step.get("temp", 4000),
+                0,
+            )
+            return
+        selected_devices[ip].set(brightness > 0)
+        if panel is not None:
+            panel.last_mode = mode
+            panel.mode_var.set(mode)
+            if mode == "white":
+                panel.last_temp = step["temp"]
+                try:
+                    panel.temp_var.set(step["temp"])
+                    panel.whitewheel_lamp.set_temp_value(step["temp"])
+                except Exception:
+                    pass
+                set_panel_mode(panel, "white", send=False)
+            else:
+                panel.last_hue = step["h"]
+                panel.last_sat = step["s"]
+                set_panel_mode(panel, "colour", send=False)
+            panel.last_brillo = brightness
+            try:
+                panel.brillo_var.set(brightness)
+                if mode == "colour":
+                    panel.colorwheel_lamp.set_color(step["h"], step["s"], max(0.01, brightness / 255))
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        if brightness > 0:
+            if mode == "white":
+                send_lamp_white_scene(ip, brightness, step["temp"])
+            else:
+                send_lamp_color_safe(ip, step["h"], step["s"], brightness)
+        else:
+            send_off(ip)
+        update_lamp_state(ip, mode, step["h"], step["s"], step["temp"], brightness)
+
+    def schedule_step(step):
+        def start_step():
+            if fade_token[0] != token:
+                return
+            if step["fade_ms"] <= 0:
+                for ip in step["ips"]:
+                    apply_scripted_lamp(ip, step, step["brillo"])
+                sync_espacio_laberintos_current_state(step["ips"])
+                return
+            steps_count = max(1, int(step["fade_ms"] / tick_ms))
+
+            def fade_tick(index=0):
+                if fade_token[0] != token:
+                    return
+                local = max(0.0, min(1.0, index / steps_count))
+                eased = -(math.cos(math.pi * local) - 1) / 2
+                brightness = step["brillo_inicio"] + ((step["brillo"] - step["brillo_inicio"]) * eased)
+                for ip in step["ips"]:
+                    apply_scripted_lamp(ip, step, brightness)
+                sync_espacio_laberintos_current_state(step["ips"])
+                if index < steps_count:
+                    root.after(tick_ms, lambda: fade_tick(index + 1))
+                else:
+                    for ip in step["ips"]:
+                        apply_scripted_lamp(ip, step, step["brillo"])
+
+            fade_tick(0)
+
+        root.after(max(0, int(step["at_ms"])), start_step)
+
+    def step_brightness_at(step, absolute_ms):
+        if absolute_ms < step["at_ms"]:
+            return None
+        if step["fade_ms"] <= 0 or absolute_ms >= step["at_ms"] + step["fade_ms"]:
+            return step["brillo"]
+        local = max(0.0, min(1.0, (absolute_ms - step["at_ms"]) / max(1, step["fade_ms"])))
+        eased = -(math.cos(math.pi * local) - 1) / 2
+        return step["brillo_inicio"] + ((step["brillo"] - step["brillo_inicio"]) * eased)
+
+    def apply_rehearsal_snapshot():
+        if start_at_ms <= 0:
+            return
+        touched_ips = []
+        for step in scheduled_steps:
+            brightness = step_brightness_at(step, start_at_ms)
+            if brightness is None:
+                continue
+            for ip in step["ips"]:
+                apply_scripted_lamp(ip, step, brightness)
+                if ip not in touched_ips:
+                    touched_ips.append(ip)
+        if touched_ips:
+            sync_espacio_laberintos_current_state(touched_ips)
+
+    dance_config = scripted.get("dance", {}) if isinstance(scripted.get("dance", {}), dict) else {}
+    chase_config = scripted.get("clockwise_chase", {}) if isinstance(scripted.get("clockwise_chase", {}), dict) else {}
+    epilogue_config = scripted.get("color_epilogue", {}) if isinstance(scripted.get("color_epilogue", {}), dict) else {}
+    final_fade_out_config = scripted.get("final_fade_out", {}) if isinstance(scripted.get("final_fade_out", {}), dict) else {}
+
+    def dance_brightness(step, index, elapsed_ms):
+        base = safe_brightness(step.get("brillo", 180))
+        min_pct = float(dance_config.get("min_pct", 0.56))
+        max_pct = float(dance_config.get("max_pct", 1.0))
+        min_floor = safe_brightness(dance_config.get("min_floor", 8))
+        min_b = max(min_floor, safe_brightness(base * min_pct))
+        max_b = min(255, safe_brightness(base * max_pct))
+        if max_b < min_b:
+            min_b, max_b = min_b, min_b
+        period_options = dance_config.get("periods_ms") or []
+        if period_options:
+            period_a = float(period_options[index % len(period_options)])
+            period_b = float(period_options[(index * 2 + 3) % len(period_options)])
+            period_c = float(period_options[(index * 3 + 1) % len(period_options)])
+        else:
+            period_a = float(dance_config.get("period_a_ms", 5200))
+            period_b = float(dance_config.get("period_b_ms", 8700))
+            period_c = float(dance_config.get("period_c_ms", 3100))
+        phase = index * 0.73
+        wave_a = (math.sin((elapsed_ms / period_a) * math.pi * 2 + phase) + 1.0) / 2.0
+        wave_b = (math.sin((elapsed_ms / period_b) * math.pi * 2 + (index * 1.17)) + 1.0) / 2.0
+        wave_c = (math.sin((elapsed_ms / period_c) * math.pi * 2 + (index * 2.11)) + 1.0) / 2.0
+        sparkle = (math.sin((elapsed_ms / 1300.0) * math.pi * 2 + (index * 1.91)) + 1.0) / 2.0
+        sparkle_amount = float(dance_config.get("sparkle", 0.12))
+        wave = (wave_a * 0.42) + (wave_b * 0.31) + (wave_c * 0.19) + (sparkle * sparkle_amount)
+        wave = max(0.0, min(1.0, wave))
+        return min_b + ((max_b - min_b) * wave)
+
+    def dance_color(step, elapsed_ms):
+        dance_duration_ms = max(1, int(dance_config.get("duration_ms", 60000)))
+        progress = max(0.0, min(1.0, elapsed_ms / dance_duration_ms))
+        target = dance_config.get("target_color", {})
+        target_h = float(target.get("h", step.get("h", 297))) % 360
+        target_s = max(0.0, min(1.0, float(target.get("s", step.get("s", 1.0)))))
+        return {
+            "h": interpolate_hue(float(step.get("h", target_h)), target_h, progress),
+            "s": interpolate_value(float(step.get("s", target_s)), target_s, progress),
+        }
+
+    def start_dance():
+        if fade_token[0] != token or not dance_config:
+            return
+        dance_start_ms = int(dance_config.get("start_ms", 60000))
+        dance_duration_ms = int(dance_config.get("duration_ms", 60000))
+        initial_elapsed_ms = max(0, start_at_ms - dance_start_ms)
+        dance_tick_ms = max(120, min(1200, int(dance_config.get("tick_ms", 420))))
+        dance_start_time = time.monotonic() - (initial_elapsed_ms / 1000.0)
+
+        def dance_tick():
+            if fade_token[0] != token:
+                return
+            elapsed_ms = int((time.monotonic() - dance_start_time) * 1000)
+            if elapsed_ms >= dance_duration_ms:
+                return
+            for index, ip in enumerate(target_ips):
+                step = final_steps_by_ip.get(ip)
+                if not step:
+                    continue
+                color = dance_color(step, elapsed_ms)
+                dance_step = dict(step, h=color["h"], s=color["s"])
+                apply_scripted_lamp(ip, dance_step, dance_brightness(step, index, elapsed_ms))
+            sync_espacio_laberintos_current_state(target_ips)
+            root.after(dance_tick_ms, dance_tick)
+
+        print(f"[ESCENA PROGRAMADA] {scene_name}: danza de brillo desde {dance_start_ms}ms")
+        dance_tick()
+
+    def start_clockwise_chase():
+        if fade_token[0] != token or not chase_config:
+            return
+        chase_lamps = chase_config.get("lamps") or []
+        chase_ips = []
+        for lamp_id in chase_lamps:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip and ip in target_ips and lamp_status.get(ip, True):
+                chase_ips.append(ip)
+        if not chase_ips:
+            return
+
+        chase_duration_ms = max(1, int(chase_config.get("duration_ms", 64000)))
+        chase_tick_ms = max(120, min(1000, int(chase_config.get("tick_ms", 280))))
+        chase_start_ms = int(chase_config.get("start_ms", 210000))
+        initial_elapsed_ms = max(0, start_at_ms - chase_start_ms)
+        cycle_ms = max(1000, int(chase_config.get("cycle_ms", 6400)))
+        base_brightness = safe_brightness(chase_config.get("base_brightness", 115))
+        peak_brightness = safe_brightness(chase_config.get("peak_brightness", 255))
+        tail_brightness = safe_brightness(chase_config.get("tail_brightness", 180))
+        temp = int(chase_config.get("temp", 4))
+        warm_step = {
+            "mode": "white",
+            "h": 30,
+            "s": 1.0,
+            "temp": temp,
+            "brillo": peak_brightness,
+        }
+        chase_start_time = time.monotonic() - (initial_elapsed_ms / 1000.0)
+
+        def chase_brightness(index, elapsed_ms):
+            position = (elapsed_ms / cycle_ms) * len(chase_ips)
+            distance = abs((index - position + (len(chase_ips) / 2.0)) % len(chase_ips) - (len(chase_ips) / 2.0))
+            if distance < 0.45:
+                return peak_brightness
+            if distance < 1.45:
+                local = 1.0 - ((distance - 0.45) / 1.0)
+                return base_brightness + ((tail_brightness - base_brightness) * local)
+            return base_brightness
+
+        def chase_tick():
+            if fade_token[0] != token:
+                return
+            elapsed_ms = int((time.monotonic() - chase_start_time) * 1000)
+            if elapsed_ms >= chase_duration_ms:
+                for ip in chase_ips:
+                    apply_scripted_lamp(ip, warm_step, base_brightness)
+                sync_espacio_laberintos_current_state(chase_ips)
+                return
+            for index, ip in enumerate(chase_ips):
+                apply_scripted_lamp(ip, warm_step, chase_brightness(index, elapsed_ms))
+            sync_espacio_laberintos_current_state(chase_ips)
+            root.after(chase_tick_ms, chase_tick)
+
+        print(f"[ESCENA PROGRAMADA] {scene_name}: rectangulo horario desde {chase_config.get('start_ms', 210000)}ms")
+        chase_tick()
+
+    def start_color_epilogue():
+        if fade_token[0] != token or not epilogue_config:
+            return
+        epilogue_lamps = epilogue_config.get("lamps") or []
+        epilogue_ips = []
+        for lamp_id in epilogue_lamps:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip and ip in target_ips and lamp_status.get(ip, True):
+                epilogue_ips.append(ip)
+        if not epilogue_ips:
+            return
+
+        start_color = epilogue_config.get("start_color", {})
+        end_color = epilogue_config.get("end_color", {})
+        fade_from_color = epilogue_config.get("fade_from_color", {}) if isinstance(epilogue_config.get("fade_from_color", {}), dict) else {}
+        keep_on_color = epilogue_config.get("keep_on_color", {}) if isinstance(epilogue_config.get("keep_on_color", {}), dict) else {}
+        fade_in_ms = max(0, int(epilogue_config.get("fade_in_ms", 2000)))
+        inhale_ms = max(0, int(epilogue_config.get("inhale_ms", fade_in_ms)))
+        breathe_until_ms = max(0, int(epilogue_config.get("breathe_until_ms", 306000)))
+        transition_until_ms = max(breathe_until_ms, int(epilogue_config.get("transition_until_ms", 324000)))
+        fade_out_until_ms = max(transition_until_ms, int(epilogue_config.get("fade_out_until_ms", 352000)))
+        tick = max(120, min(1000, int(epilogue_config.get("tick_ms", 280))))
+        pulse_ms = max(900, int(epilogue_config.get("pulse_ms", 3200)))
+        keep_on = {str(item).strip().upper() for item in epilogue_config.get("keep_on_lamps", [])}
+        keep_on_after_fade = bool(epilogue_config.get("keep_on_after_fade", False))
+        keep_on_fade_ms = max(0, int(epilogue_config.get("keep_on_fade_ms", 0)))
+        warm_exit = {str(item).strip().upper() for item in epilogue_config.get("warm_exit_lamps", [])}
+        warm_exit_start = max(0.0, min(1.0, float(epilogue_config.get("warm_exit_start", 0.78))))
+
+        start_h = float(start_color.get("h", 6)) % 360
+        start_s = max(0.0, min(1.0, float(start_color.get("s", 0.89))))
+        start_b = safe_brightness(start_color.get("brillo", 255))
+        breathe_peak = safe_brightness(epilogue_config.get("breathe_peak", start_b))
+        from_h = float(fade_from_color.get("h", 24)) % 360
+        from_s = max(0.0, min(1.0, float(fade_from_color.get("s", 0.70))))
+        from_b = safe_brightness(fade_from_color.get("brillo", start_b))
+        end_h = float(end_color.get("h", 349)) % 360
+        end_s = max(0.0, min(1.0, float(end_color.get("s", 0.96))))
+        end_b = safe_brightness(end_color.get("brillo", 255))
+        keep_mode = str(keep_on_color.get("mode", "colour")).strip().lower()
+        if keep_mode not in ("colour", "white"):
+            keep_mode = "colour"
+        keep_h = float(keep_on_color.get("h", end_h)) % 360
+        keep_s = max(0.0, min(1.0, float(keep_on_color.get("s", end_s))))
+        keep_temp = int(keep_on_color.get("temp", 4))
+        keep_b = safe_brightness(keep_on_color.get("brillo", end_b))
+        epilogue_start_ms = int(epilogue_config.get("start_ms", 274000))
+        initial_elapsed_ms = max(0, start_at_ms - epilogue_start_ms)
+        local_start_time = time.monotonic() - (initial_elapsed_ms / 1000.0)
+
+        def apply_epilogue_lamp(ip, hue, sat, brightness):
+            step = {
+                "mode": "colour",
+                "h": hue,
+                "s": sat,
+                "temp": 255,
+                "brillo": safe_brightness(brightness),
+            }
+            apply_scripted_lamp(ip, step, brightness)
+
+        def apply_keep_on_lamp(ip, brightness=None):
+            brightness = keep_b if brightness is None else brightness
+            step = {
+                "mode": keep_mode,
+                "h": keep_h,
+                "s": keep_s,
+                "temp": keep_temp,
+                "brillo": keep_b,
+            }
+            apply_scripted_lamp(ip, step, brightness)
+
+        def fade_keep_on_lamp(ip):
+            if keep_on_fade_ms <= 0:
+                apply_keep_on_lamp(ip)
+                return
+            fade_start = time.monotonic()
+
+            def keep_on_tick():
+                if fade_token[0] != token:
+                    return
+                elapsed = int((time.monotonic() - fade_start) * 1000)
+                progress = max(0.0, min(1.0, elapsed / max(1, keep_on_fade_ms)))
+                eased = progress * progress * (3.0 - (2.0 * progress))
+                brightness = safe_brightness(keep_b * eased)
+                apply_keep_on_lamp(ip, brightness)
+                sync_espacio_laberintos_current_state([ip])
+                if progress < 1.0:
+                    root.after(tick, keep_on_tick)
+
+            keep_on_tick()
+
+        def epilogue_tick():
+            if fade_token[0] != token:
+                return
+            local_ms = int((time.monotonic() - local_start_time) * 1000)
+            absolute_ms = int(epilogue_config.get("start_ms", 274000)) + local_ms
+
+            if local_ms <= fade_in_ms:
+                progress = max(0.0, min(1.0, local_ms / max(1, inhale_ms or fade_in_ms)))
+                eased = progress * progress * (3.0 - (2.0 * progress))
+                eased = min(1.0, eased)
+                hue = start_h if epilogue_config.get("direct_breathe_start", False) else interpolate_hue(from_h, start_h, eased)
+                sat = start_s if epilogue_config.get("direct_breathe_start", False) else interpolate_value(from_s, start_s, eased)
+                brightness = interpolate_value(from_b, start_b, eased)
+                for ip in epilogue_ips:
+                    apply_epilogue_lamp(ip, hue, sat, brightness)
+                sync_espacio_laberintos_current_state(epilogue_ips)
+                root.after(tick, epilogue_tick)
+                return
+
+            if absolute_ms <= breathe_until_ms:
+                wave = (math.sin((local_ms / pulse_ms) * math.pi * 2) + 1.0) / 2.0
+                for index, ip in enumerate(epilogue_ips):
+                    offset_wave = (math.sin((local_ms / pulse_ms) * math.pi * 2 + index * 0.42) + 1.0) / 2.0
+                    lamp_brightness = int((start_b * 0.48) + ((breathe_peak - (start_b * 0.48)) * offset_wave))
+                    apply_epilogue_lamp(ip, start_h, start_s, lamp_brightness)
+                sync_espacio_laberintos_current_state(epilogue_ips)
+                root.after(tick, epilogue_tick)
+                return
+
+            if absolute_ms <= transition_until_ms:
+                progress = max(0.0, min(1.0, (absolute_ms - breathe_until_ms) / max(1, transition_until_ms - breathe_until_ms)))
+                hue = interpolate_hue(start_h, end_h, progress)
+                sat = interpolate_value(start_s, end_s, progress)
+                brightness = interpolate_value(start_b, end_b, progress)
+                for ip in epilogue_ips:
+                    apply_epilogue_lamp(ip, hue, sat, brightness)
+                sync_espacio_laberintos_current_state(epilogue_ips)
+                root.after(tick, epilogue_tick)
+                return
+
+            if absolute_ms <= fade_out_until_ms:
+                progress = max(0.0, min(1.0, (absolute_ms - transition_until_ms) / max(1, fade_out_until_ms - transition_until_ms)))
+                brightness = safe_brightness(end_b * (1.0 - progress))
+                fade_ips = []
+                for ip in epilogue_ips:
+                    lamp_id = str(get_lamp_id(ip)).strip().upper()
+                    if not lamp_id.startswith("L"):
+                        lamp_id = f"L{lamp_id}"
+                    if lamp_id in keep_on and keep_on_after_fade:
+                        apply_epilogue_lamp(ip, end_h, end_s, brightness)
+                    elif lamp_id in keep_on and progress < warm_exit_start:
+                        apply_epilogue_lamp(ip, end_h, end_s, brightness)
+                    elif lamp_id in keep_on:
+                        warm_progress = max(0.0, min(1.0, (progress - warm_exit_start) / max(0.001, 1.0 - warm_exit_start)))
+                        warm_brightness = interpolate_value(brightness, keep_b, warm_progress)
+                        apply_keep_on_lamp(ip, warm_brightness)
+                    elif lamp_id in warm_exit and progress >= warm_exit_start:
+                        apply_keep_on_lamp(ip, brightness)
+                    else:
+                        apply_epilogue_lamp(ip, end_h, end_s, brightness)
+                        fade_ips.append(ip)
+                sync_espacio_laberintos_current_state(epilogue_ips)
+                root.after(tick, epilogue_tick)
+                return
+
+            for ip in epilogue_ips:
+                lamp_id = str(get_lamp_id(ip)).strip().upper()
+                if not lamp_id.startswith("L"):
+                    lamp_id = f"L{lamp_id}"
+                if lamp_id in keep_on:
+                    if keep_on_after_fade:
+                        selected_devices[ip].set(False)
+                        panel = panels.get(ip)
+                        if panel is not None:
+                            panel.last_brillo = 0
+                            try:
+                                panel.brillo_var.set(0)
+                            except Exception:
+                                pass
+                            update_panel_visual(panel)
+                        send_off(ip)
+                        update_lamp_state(ip, "colour", end_h, end_s, 4000, 0)
+                        fade_keep_on_lamp(ip)
+                        continue
+                    apply_keep_on_lamp(ip)
+                else:
+                    selected_devices[ip].set(False)
+                    panel = panels.get(ip)
+                    if panel is not None:
+                        panel.last_brillo = 0
+                        try:
+                            panel.brillo_var.set(0)
+                        except Exception:
+                            pass
+                        update_panel_visual(panel)
+                    send_off(ip)
+                    update_lamp_state(ip, "colour", end_h, end_s, 4000, 0)
+            sync_espacio_laberintos_current_state(epilogue_ips)
+
+        print(f"[ESCENA PROGRAMADA] {scene_name}: epilogo rojo desde {epilogue_config.get('start_ms', 274000)}ms")
+        epilogue_tick()
+
+    def start_final_fade_out():
+        if fade_token[0] != token or not final_fade_out_config:
+            return
+        lamps = final_fade_out_config.get("lamps") or []
+        fade_ips = []
+        for lamp_id in lamps:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip and lamp_status.get(ip, True) and ip not in fade_ips:
+                fade_ips.append(ip)
+        if not fade_ips:
+            return
+
+        duration = max(1, int(final_fade_out_config.get("duration_ms", 5000)))
+        tick = max(80, min(500, int(final_fade_out_config.get("tick_ms", tick_ms))))
+        h = float(final_fade_out_config.get("h", 240)) % 360
+        s = max(0.0, min(1.0, float(final_fade_out_config.get("s", 1.0))))
+        start_b = safe_brightness(final_fade_out_config.get("from_brightness", 255))
+        end_b = max(0, min(255, int(final_fade_out_config.get("to_brightness", 0))))
+        start_time = time.monotonic()
+
+        def apply_final_fade(brightness):
+            brightness = max(0, min(255, int(brightness)))
+            for ip in fade_ips:
+                panel = panels.get(ip)
+                selected_devices[ip].set(brightness > 0)
+                if panel is not None:
+                    panel.last_mode = "colour"
+                    panel.mode_var.set("colour")
+                    panel.last_hue = h
+                    panel.last_sat = s
+                    panel.last_brillo = brightness
+                    try:
+                        panel.brillo_var.set(brightness)
+                        panel.colorwheel_lamp.set_color(h, s, max(0.01, brightness / 255))
+                    except Exception:
+                        pass
+                    set_panel_mode(panel, "colour", send=False)
+                    update_panel_visual(panel)
+                if brightness <= 0:
+                    send_off(ip)
+                else:
+                    send_lamp_color_safe(ip, h, s, brightness)
+                update_lamp_state(ip, "colour", h, s, 4000, brightness)
+            sync_espacio_laberintos_current_state(fade_ips)
+
+        def fade_tick():
+            if fade_token[0] != token:
+                return
+            elapsed = int((time.monotonic() - start_time) * 1000)
+            progress = max(0.0, min(1.0, elapsed / duration))
+            eased = -(math.cos(math.pi * progress) - 1) / 2
+            brightness = start_b + ((end_b - start_b) * eased)
+            if progress >= 1.0:
+                apply_final_fade(0)
+                for delay in (160, 520, 980):
+                    root.after(delay, lambda ips=list(fade_ips): [send_off(ip) for ip in ips])
+                return
+            apply_final_fade(brightness)
+            root.after(tick, fade_tick)
+
+        print(f"[ESCENA PROGRAMADA] {scene_name}: fade final dedicado desde {final_fade_out_config.get('start_ms', 0)}ms")
+        fade_tick()
+
+    def finish():
+        sync_espacio_laberintos_current_state(target_ips)
+        finalizar_escena(token, scene_name)
+
+    print(f"[ESCENA PROGRAMADA] {scene_name}: agenda " + ", ".join(
+        f"{step['at_ms']}ms={','.join(str(get_lamp_id(ip)) for ip in step['ips'])}" for step in scheduled_steps
+    ))
+    apply_rehearsal_snapshot()
+    for step in scheduled_steps:
+        step_start = step["at_ms"]
+        step_end = step["at_ms"] + step["fade_ms"]
+        if step_start >= start_at_ms:
+            rehearsal_step = dict(step)
+            rehearsal_step["at_ms"] = step_start - start_at_ms
+            schedule_step(rehearsal_step)
+        elif step["fade_ms"] > 0 and step_start < start_at_ms < step_end:
+            current_brightness = step_brightness_at(step, start_at_ms)
+            rehearsal_step = dict(step)
+            rehearsal_step["at_ms"] = 0
+            rehearsal_step["fade_ms"] = max(1, step_end - start_at_ms)
+            rehearsal_step["brillo_inicio"] = safe_brightness(current_brightness)
+            schedule_step(rehearsal_step)
+    if dance_config:
+        dance_start = int(dance_config.get("start_ms", 60000))
+        dance_end = dance_start + int(dance_config.get("duration_ms", 60000))
+        if start_at_ms < dance_end:
+            root.after(max(0, dance_start - start_at_ms), start_dance)
+    if chase_config:
+        chase_start = int(chase_config.get("start_ms", 210000))
+        chase_end = chase_start + int(chase_config.get("duration_ms", 64000))
+        if start_at_ms < chase_end:
+            root.after(max(0, chase_start - start_at_ms), start_clockwise_chase)
+    if epilogue_config:
+        epilogue_start = int(epilogue_config.get("start_ms", 274000))
+        if start_at_ms < duration_ms:
+            root.after(max(0, epilogue_start - start_at_ms), start_color_epilogue)
+    if final_fade_out_config:
+        final_fade_start = int(final_fade_out_config.get("start_ms", duration_ms))
+        final_fade_duration = int(final_fade_out_config.get("duration_ms", 5000))
+        if start_at_ms < final_fade_start + final_fade_duration:
+            root.after(max(0, final_fade_start - start_at_ms), start_final_fade_out)
+    root.after(max(duration_ms - start_at_ms, 1), finish)
+    return True
+
+
+def run_scripted_blue_ocean_pulse_scene(scene_data, token, scene_name):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = int(scripted.get("duration_ms", 90000))
+    tick_ms = max(120, min(1000, int(scripted.get("tick_ms", 350))))
+    color_period_ms = max(1000, int(scripted.get("color_period_ms", 10000)))
+    pulse_period_ms = max(2000, int(scripted.get("pulse_period_ms", 6500)))
+    brightness_min = safe_brightness(scripted.get("brightness_min", 14))
+    brightness_max = safe_brightness(scripted.get("brightness_max", 45))
+    if brightness_max < brightness_min:
+        brightness_min, brightness_max = brightness_max, brightness_min
+    excluded = {str(item).strip().upper() for item in scripted.get("exclude_lamps", [])}
+    palette = scripted.get("palette") or [
+        {"h": 205, "s": 0.92},
+        {"h": 214, "s": 0.86},
+        {"h": 222, "s": 0.78},
+        {"h": 196, "s": 0.88},
+        {"h": 232, "s": 0.70},
+        {"h": 188, "s": 0.76},
+    ]
+    hue_center = float(scripted.get("hue_center", 240)) % 360
+    tone_offsets = scripted.get("tone_offsets") or []
+    saturation_values = scripted.get("saturation_values") or []
+
+    target_ips = []
+    excluded_ips = []
+    for ip in get_sequence_ordered_lamp_ips():
+        lamp_id = str(get_lamp_id(ip)).strip().upper()
+        if not lamp_id.startswith("L"):
+            lamp_id = f"L{lamp_id}"
+        if get_lamp_group(ip) != "efectos":
+            continue
+        if lamp_id in excluded:
+            if lamp_status.get(ip, True):
+                excluded_ips.append(ip)
+            continue
+        if lamp_status.get(ip, True):
+            target_ips.append(ip)
+
+    if not target_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    claim_lamps_for_manual_control(target_ips + excluded_ips)
+    for ip in excluded_ips:
+        panel = panels.get(ip)
+        selected_devices[ip].set(False)
+        if panel is not None:
+            panel.last_brillo = 0
+            try:
+                panel.brillo_var.set(0)
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        send_off(ip)
+        update_lamp_state(
+            ip,
+            getattr(panel, "last_mode", "colour") if panel else "colour",
+            getattr(panel, "last_hue", 0) if panel else 0,
+            getattr(panel, "last_sat", 1) if panel else 1,
+            getattr(panel, "last_temp", 4000) if panel else 4000,
+            0,
+        )
+
+    for ip in target_ips:
+        panel = panels.get(ip)
+        selected_devices[ip].set(True)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_brillo = brightness_min
+            try:
+                panel.brillo_var.set(brightness_min)
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0)
+    except Exception:
+        pass
+
+    start_time = time.monotonic()
+
+    def color_for_lamp(index, elapsed_ms):
+        segment = int(elapsed_ms / color_period_ms)
+        local = (elapsed_ms % color_period_ms) / color_period_ms
+        if tone_offsets:
+            a_offset = float(tone_offsets[(index + segment) % len(tone_offsets)])
+            b_offset = float(tone_offsets[(index + segment + 1) % len(tone_offsets)])
+            if saturation_values:
+                a_sat = float(saturation_values[(index + segment) % len(saturation_values)])
+                b_sat = float(saturation_values[(index + segment + 1) % len(saturation_values)])
+            else:
+                a_sat = b_sat = 1.0
+            return {
+                "h": interpolate_hue(hue_center + a_offset, hue_center + b_offset, local),
+                "s": max(0.0, min(1.0, interpolate_value(a_sat, b_sat, local))),
+            }
+        a = palette[(index + segment) % len(palette)]
+        b = palette[(index + segment + 1) % len(palette)]
+        return {
+            "h": interpolate_hue(float(a.get("h", 210)), float(b.get("h", 210)), local),
+            "s": interpolate_value(float(a.get("s", 0.8)), float(b.get("s", 0.8)), local),
+        }
+
+    def brightness_for_lamp(index, elapsed_ms):
+        phase = (index / max(1, len(target_ips))) * math.pi * 2
+        wave = (math.sin((elapsed_ms / pulse_period_ms) * math.pi * 2 + phase) + 1.0) / 2.0
+        softened = 0.35 + (wave * 0.65)
+        return brightness_min + ((brightness_max - brightness_min) * softened)
+
+    def apply_blue_state(ip, h, s, brightness):
+        brightness = safe_brightness(brightness)
+        panel = panels.get(ip)
+        selected_devices[ip].set(True)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = h
+            panel.last_sat = max(0.0, min(1.0, s))
+            panel.last_brillo = brightness
+            try:
+                panel.brillo_var.set(brightness)
+                panel.colorwheel_lamp.set_color(h, panel.last_sat, max(0.01, brightness / 255))
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        send_lamp_color_safe(ip, h, s, brightness)
+        update_lamp_state(ip, "colour", h, s, 4000, brightness)
+
+    def finish():
+        sync_espacio_laberintos_current_state(target_ips)
+        finalizar_escena(token, scene_name)
+
+    def tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        if elapsed_ms >= duration_ms:
+            finish()
+            return
+        for index, ip in enumerate(target_ips):
+            color = color_for_lamp(index, elapsed_ms)
+            brightness = brightness_for_lamp(index, elapsed_ms)
+            apply_blue_state(ip, color["h"], color["s"], brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+        root.after(tick_ms, tick)
+
+    print(f"[ESCENA PROGRAMADA] {scene_name}: mar azul " + ", ".join(str(get_lamp_id(ip)) for ip in target_ips))
+    tick()
+    return True
+
+
+def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = int(scripted.get("duration_ms", 90000))
+    intro_ms = int(scripted.get("intro_ms", 15000))
+    outro_ms = int(scripted.get("outro_ms", 15000))
+    final_dim_ms = max(0, int(scripted.get("final_dim_ms", 0)))
+    tick_ms = max(120, min(1000, int(scripted.get("tick_ms", 250))))
+    pulse_period_ms = max(700, int(scripted.get("pulse_period_ms", 1400)))
+    low_brightness = safe_brightness(scripted.get("low_brightness", 5))
+    breath_peak = safe_brightness(scripted.get("breath_peak", 48))
+    firefly_peak = safe_brightness(scripted.get("firefly_peak", 180))
+    color = scripted.get("color", {})
+    h = float(color.get("h", 296)) % 360
+    s = max(0.0, min(1.0, float(color.get("s", 0.99))))
+    outro_color = scripted.get("outro_color", {}) if isinstance(scripted.get("outro_color", {}), dict) else {}
+    outro_h = float(outro_color.get("h", h)) % 360
+    outro_s = max(0.0, min(1.0, float(outro_color.get("s", s))))
+    outro_brightness = safe_brightness(outro_color.get("brillo", breath_peak))
+    outro_mode = str(scripted.get("outro_mode", "breath")).strip().lower()
+    final_dim_color = scripted.get("final_dim_color", {}) if isinstance(scripted.get("final_dim_color", {}), dict) else {}
+    final_dim_h = float(final_dim_color.get("h", outro_h)) % 360
+    final_dim_s = max(0.0, min(1.0, float(final_dim_color.get("s", outro_s))))
+    final_dim_start_brightness = safe_brightness(final_dim_color.get("brillo_inicio", outro_brightness))
+    final_dim_end_brightness = safe_brightness(final_dim_color.get("brillo", 0))
+    background_color = scripted.get("background_color", {}) if isinstance(scripted.get("background_color", {}), dict) else {}
+    background_h = float(background_color.get("h", h)) % 360
+    background_s = max(0.0, min(1.0, float(background_color.get("s", s))))
+    background_brightness = safe_brightness(background_color.get("brillo", low_brightness))
+    start_from_background = bool(scripted.get("start_from_background", bool(background_color)))
+    sequence_lamps = scripted.get("sequence_lamps") or ["L18", "L14", "L13", "L12", "L11"]
+
+    target_ips = get_scripted_scene_target_ips(scene_data)
+    sequence_ips = []
+    for lamp_id in sequence_lamps:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip and ip in target_ips and lamp_status.get(ip, True):
+            sequence_ips.append(ip)
+
+    if not target_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    middle_ms = max(0, duration_ms - intro_ms - outro_ms - final_dim_ms)
+    slot_ms = max(1, int(middle_ms / max(1, len(sequence_ips))))
+
+    claim_lamps_for_manual_control(target_ips)
+    for ip in target_ips:
+        panel = panels.get(ip)
+        initial_h = background_h if start_from_background else h
+        initial_s = background_s if start_from_background else s
+        initial_brightness = background_brightness if start_from_background else 0
+        selected_devices[ip].set(initial_brightness > 0)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = initial_h
+            panel.last_sat = initial_s
+            panel.last_brillo = initial_brightness
+            try:
+                panel.brillo_var.set(initial_brightness)
+                panel.colorwheel_lamp.set_color(initial_h, initial_s, max(0.01, initial_brightness / 255))
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+        if initial_brightness > 0:
+            send_lamp_color_safe(ip, initial_h, initial_s, initial_brightness)
+        else:
+            send_off(ip)
+        update_lamp_state(ip, "colour", initial_h, initial_s, 4000, initial_brightness)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0)
+    except Exception:
+        pass
+
+    start_time = time.monotonic()
+    last_middle_slot = [-1]
+
+    def apply_petalo_state(ip, brightness, hue=None, sat=None):
+        if fade_token[0] != token:
+            return
+        brightness = safe_brightness(brightness)
+        lamp_h = h if hue is None else float(hue) % 360
+        lamp_s = s if sat is None else max(0.0, min(1.0, float(sat)))
+        panel = panels.get(ip)
+        selected_devices[ip].set(brightness > 0)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = lamp_h
+            panel.last_sat = lamp_s
+            panel.last_brillo = brightness
+            try:
+                panel.brillo_var.set(brightness)
+                panel.colorwheel_lamp.set_color(lamp_h, lamp_s, max(0.01, brightness / 255))
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        if brightness <= 0:
+            send_off(ip)
+        else:
+            send_lamp_color_safe(ip, lamp_h, lamp_s, brightness)
+        update_lamp_state(ip, "colour", lamp_h, lamp_s, 4000, brightness)
+
+    def breathing_brightness(elapsed_ms, phase_offset=0.0):
+        wave = (math.sin((elapsed_ms / pulse_period_ms) * math.pi * 2 + phase_offset) + 1.0) / 2.0
+        return low_brightness + ((breath_peak - low_brightness) * wave)
+
+    def firefly_brightness(local_ms):
+        local = max(0.0, min(1.0, local_ms / max(1, slot_ms)))
+        fade_in = min(0.22, 1800 / max(1, slot_ms))
+        hold_until = 0.48
+        if local <= fade_in:
+            progress = local / max(0.001, fade_in)
+            eased = -(math.cos(math.pi * progress) - 1) / 2
+            return low_brightness + ((firefly_peak - low_brightness) * eased)
+        if local <= hold_until:
+            shimmer = (math.sin(local_ms / 420.0) + 1.0) / 2.0
+            return firefly_peak - (shimmer * 12)
+        progress = (local - hold_until) / max(0.001, 1.0 - hold_until)
+        eased = (math.cos(math.pi * progress) + 1) / 2
+        return low_brightness + ((firefly_peak - low_brightness) * eased)
+
+    def force_petalo_off(ip):
+        panel = panels.get(ip)
+        selected_devices[ip].set(final_dim_end_brightness > 0)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = final_dim_h
+            panel.last_sat = final_dim_s
+            panel.last_brillo = final_dim_end_brightness
+            try:
+                panel.brillo_var.set(final_dim_end_brightness)
+                panel.colorwheel_lamp.set_color(final_dim_h, final_dim_s, max(0.01, final_dim_end_brightness / 255))
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        if final_dim_end_brightness > 0:
+            send_lamp_color_safe(ip, final_dim_h, final_dim_s, final_dim_end_brightness)
+        else:
+            send_off(ip)
+        update_lamp_state(ip, "colour", final_dim_h, final_dim_s, 4000, final_dim_end_brightness)
+
+    def finish():
+        for ip in target_ips:
+            force_petalo_off(ip)
+        sync_espacio_laberintos_current_state(target_ips)
+        finalizar_escena(token, scene_name)
+
+    def tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        if elapsed_ms >= duration_ms:
+            finish()
+            return
+
+        if elapsed_ms < intro_ms:
+            if start_from_background:
+                for ip in target_ips:
+                    apply_petalo_state(ip, background_brightness, background_h, background_s)
+            else:
+                for index, ip in enumerate(target_ips):
+                    apply_petalo_state(ip, breathing_brightness(elapsed_ms, index * 0.45))
+            sync_espacio_laberintos_current_state(target_ips)
+            root.after(tick_ms, tick)
+            return
+
+        middle_elapsed = elapsed_ms - intro_ms
+        if middle_elapsed < middle_ms and sequence_ips:
+            slot_index = min(len(sequence_ips) - 1, int(middle_elapsed / slot_ms))
+            local_ms = middle_elapsed - (slot_index * slot_ms)
+            active_ip = sequence_ips[slot_index]
+            if slot_index != last_middle_slot[0]:
+                last_middle_slot[0] = slot_index
+                for ip in target_ips:
+                    if ip != active_ip:
+                        apply_petalo_state(ip, background_brightness, background_h, background_s)
+            for ip in target_ips:
+                if ip != active_ip:
+                    apply_petalo_state(ip, background_brightness, background_h, background_s)
+            apply_petalo_state(active_ip, firefly_brightness(local_ms))
+            sync_espacio_laberintos_current_state(target_ips)
+            root.after(tick_ms, tick)
+            return
+
+        outro_elapsed = elapsed_ms - intro_ms - middle_ms
+        if final_dim_ms > 0 and outro_elapsed >= outro_ms:
+            final_elapsed = outro_elapsed - outro_ms
+            progress = max(0.0, min(1.0, final_elapsed / max(1, final_dim_ms)))
+            eased = -(math.cos(math.pi * progress) - 1) / 2
+            current_brightness = interpolate_value(final_dim_start_brightness, final_dim_end_brightness, eased)
+            for ip in target_ips:
+                apply_petalo_state(ip, current_brightness, final_dim_h, final_dim_s)
+            sync_espacio_laberintos_current_state(target_ips)
+            root.after(tick_ms, tick)
+            return
+
+        if outro_mode == "transition":
+            progress = max(0.0, min(1.0, outro_elapsed / max(1, outro_ms)))
+            eased = -(math.cos(math.pi * progress) - 1) / 2
+            current_h = interpolate_hue(h, outro_h, eased)
+            current_s = interpolate_value(s, outro_s, eased)
+            current_brightness = interpolate_value(low_brightness, outro_brightness, eased)
+            for ip in target_ips:
+                apply_petalo_state(ip, current_brightness, current_h, current_s)
+        else:
+            for index, ip in enumerate(target_ips):
+                apply_petalo_state(ip, breathing_brightness(outro_elapsed, index * 0.45))
+        sync_espacio_laberintos_current_state(target_ips)
+        root.after(tick_ms, tick)
+
+    print(f"[ESCENA PROGRAMADA] {scene_name}: petalos/luciernaga " + ", ".join(str(get_lamp_id(ip)) for ip in target_ips))
+    tick()
+    return True
+
+
+def apply_scripted_scene_if_needed(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    if not scripted:
+        return False
+    if scripted.get("type") == "bichos_flor_marchita":
+        return run_scripted_flower_wither_scene(scene_data, token, scene_name)
+    if scripted.get("type") == "laberintos_sunset_sequence":
+        return run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
+    if scripted.get("type") == "laberintos_rect_sequence":
+        return run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
+    if scripted.get("type") == "laberintos_blue_ocean_pulse":
+        return run_scripted_blue_ocean_pulse_scene(scene_data, token, scene_name)
+    if scripted.get("type") == "laberintos_firefly_petals":
+        return run_scripted_firefly_petals_scene(scene_data, token, scene_name)
+    return False
+
+
 def apply_scene_mode_to_effect_target(scene_data, target_ips, preserve_brightness=True, send_to_lamps=False):
     global preview_updates_suspended, preview_updates_block_until
     if target_ips is None:
@@ -7350,8 +10340,9 @@ def apply_scene_mode_to_effect_target(scene_data, target_ips, preserve_brightnes
             refresh_espacio()
 
 
-def aplicar_escena(nombre_escena):
+def aplicar_escena(nombre_escena, start_at_ms=0):
     global escena_en_ejecucion
+    start_at_ms = max(0, int(start_at_ms or 0))
 
     escenas = load_escenas()
     datos = escenas.get("datos", {})
@@ -7360,20 +10351,25 @@ def aplicar_escena(nombre_escena):
         print(f"[ESCENA] No existe: {nombre_escena}")
         return
 
-    # Candado de ejecución
+    # En vivo, una escena nueva puede tomar el mando aunque otra no haya terminado.
+    # Los fades/callbacks anteriores se anulan cuando asignamos el token nuevo.
     if escena_en_ejecucion:
-        print("[INFO] No se puede ejecutar otra escena aún.")
-        return
+        print(f"[ESCENA] Interrumpiendo escena activa para ejecutar: {nombre_escena}")
+        try:
+            set_estado_escena(f"Cambiando a escena: {nombre_escena}", "#ffcc66")
+        except Exception:
+            pass
+        fade_token[0] = str(uuid.uuid4())
     escena_en_ejecucion = True
     update_midi_scene_execution_led()
 
     stop_all_active_effects("cambio de escena")
     effect_retired_ips["atardecer"].clear()
 
-    # Deshabilitar UI
-    try: btn_cargar.config(state="disabled")
+    # Mantener la UI activa permite disparar otra escena en vivo.
+    try: btn_cargar.config(state="normal")
     except: pass
-    try: listbox_escenas.config(state="disabled")
+    try: listbox_escenas.config(state="normal")
     except: pass
 
     escena = datos[nombre_escena]
@@ -7394,10 +10390,18 @@ def aplicar_escena(nombre_escena):
         set_estado_escena(f"Ejecutando escena: {nombre_escena}…", "#ff4d4d")
     except:
         pass
+    if start_at_ms > 0:
+        try:
+            set_estado_escena(f"Ensayo desde {format_scene_elapsed(start_at_ms / 1000)}: {nombre_escena}", "#ffcc66")
+        except Exception:
+            pass
     try:
-        start_scene_timer()
+        start_scene_timer(start_at_ms / 1000.0)
     except Exception:
         pass
+    if apply_scripted_scene_if_needed(escena, nuevo_token, nombre_escena, start_at_ms=start_at_ms):
+        return
+
     try:
         start_scene_progress(nuevo_token, max(fade_in_val, fade_out_val))
     except:
@@ -7600,7 +10604,7 @@ def aplicar_escena(nombre_escena):
     if "effects" in escena and not effects.get("transicion_color"):
         root.after(
             0,
-            lambda data=escena: apply_scene_effects_for_execution(data)
+            lambda data=escena, token=nuevo_token, name=nombre_escena: apply_scene_effects_for_execution(data, token, name)
         )
 
 def marcar_escena_terminada():
@@ -7743,6 +10747,45 @@ def cargar():
         aplicar_escena(escena)
 
 
+def parse_rehearsal_time_ms(value):
+    text = str(value or "").strip().replace(",", ":").replace(".", ":")
+    if not text:
+        return 0
+    try:
+        if ":" in text:
+            parts = [int(part.strip() or 0) for part in text.split(":")]
+            if len(parts) == 2:
+                minutes, seconds = parts
+                return max(0, ((minutes * 60) + seconds) * 1000)
+            if len(parts) == 3:
+                hours, minutes, seconds = parts
+                return max(0, (((hours * 60) + minutes) * 60 + seconds) * 1000)
+        return max(0, int(float(text)) * 1000)
+    except Exception:
+        raise ValueError("Usa un tiempo como 05:40 o 340.")
+
+
+def cargar_ensayo_desde():
+    global ultima_idx_escena
+    sel = listbox_escenas.curselection()
+    if not sel:
+        messagebox.showwarning("Selecciona una escena", "Elige una escena para ensayar.")
+        return
+    escena = listbox_escenas.get(sel[0])
+    escenas = load_escenas()
+    scene_data = escenas.get("datos", {}).get(escena, {})
+    if not scene_data.get("scripted_scene"):
+        messagebox.showinfo("Ensayo de escena", "Por ahora el ensayo desde tiempo esta disponible para escenas programadas.")
+        return
+    try:
+        start_ms = parse_rehearsal_time_ms(rehearsal_time_var.get())
+    except ValueError as exc:
+        messagebox.showwarning("Tiempo de ensayo", str(exc))
+        return
+    ultima_idx_escena = sel[0]
+    aplicar_escena(escena, start_at_ms=start_ms)
+
+
 def seleccionar_escena_midi(delta):
     total = listbox_escenas.size()
     if total <= 0:
@@ -7795,32 +10838,65 @@ def go_escena_midi():
     aplicar_escena(escena)
 
 
-def stop_show_midi():
+def play_scene_from_midi(scene_name):
+    escenas = load_escenas()
+    if scene_name not in escenas.get("datos", {}):
+        try:
+            set_estado_escena(f"Escena MIDI no encontrada: {scene_name}", "#ffcc66")
+        except Exception:
+            pass
+        return
+
+    try:
+        for idx in range(listbox_escenas.size()):
+            if listbox_escenas.get(idx) == scene_name:
+                listbox_escenas.selection_clear(0, tk.END)
+                listbox_escenas.selection_set(idx)
+                listbox_escenas.activate(idx)
+                listbox_escenas.see(idx)
+                break
+    except Exception:
+        pass
+
+    try:
+        set_estado_escena(f"Ableton disparo: {scene_name}", "#b9e3f7")
+    except Exception:
+        pass
+    aplicar_escena(scene_name)
+
+
+def stop_running_scene(source="manual"):
     global escena_en_ejecucion
 
     fade_token[0] = str(uuid.uuid4())
     escena_en_ejecucion = False
     set_active_scene_runtime()
     update_midi_scene_execution_led()
-    stop_all_active_effects("MIDI stop")
+    stop_all_active_effects(f"{source} stop")
     try:
         btn_cargar.config(state="normal")
         listbox_escenas.config(state="normal")
         scene_progress_var.set(0)
         reset_scene_timer()
-        set_estado_escena("Show detenido desde MIDI", "#ffcc66")
+        label = "MIDI" if source == "MIDI" else "boton"
+        set_estado_escena(f"Escena detenida desde {label}", "#ffcc66")
     except Exception:
         pass
+    try:
+        btn_parar_escena.config(state="normal")
+    except Exception:
+        pass
+
+
+def stop_show_midi():
+    stop_running_scene("MIDI")
     midi_led(get_midi_note("show_stop"), get_midi_led_color("show_stop"))
         
 
 def on_listbox_enter(event):
     global escena_en_ejecucion, ultima_idx_escena
 
-    # Si ya hay una escena corriendo, NO hacer nada
-    if escena_en_ejecucion:
-        return "break"
-
+    # Enter tambien puede disparar otra escena en vivo.
     sel = listbox_escenas.curselection()
     if not sel:
         return "break"
@@ -7898,6 +10974,7 @@ from tkinter import ttk
 estado_escena_var = tk.StringVar(value="Sin escenas en ejecución")
 scene_progress_var = tk.DoubleVar(value=0.0)
 scene_timer_var = tk.StringVar(value="00:00")
+rehearsal_time_var = tk.StringVar(value="05:40")
 scene_timer_token = {"value": None, "start": None}
 lbl_estado_escena = tk.Label(
     frame_right,
@@ -7973,11 +11050,12 @@ def format_scene_elapsed(seconds):
     return f"{minutes:02d}:{rest:02d}"
 
 
-def start_scene_timer():
+def start_scene_timer(start_offset_seconds=0.0):
     token = str(uuid.uuid4())
     scene_timer_token["value"] = token
-    scene_timer_token["start"] = time.monotonic()
-    scene_timer_var.set("00:00")
+    start_offset_seconds = max(0.0, float(start_offset_seconds or 0.0))
+    scene_timer_token["start"] = time.monotonic() - start_offset_seconds
+    scene_timer_var.set(format_scene_elapsed(start_offset_seconds))
 
     def tick():
         if scene_timer_token.get("value") != token:
@@ -7997,14 +11075,15 @@ def reset_scene_timer():
     scene_timer_var.set("00:00")
 
 
-def start_scene_progress(token, total_seconds):
+def start_scene_progress(token, total_seconds, start_offset_seconds=0.0):
     scene_progress_var.set(0)
     total_seconds = max(0.0, float(total_seconds or 0.0))
+    start_offset_seconds = max(0.0, min(total_seconds, float(start_offset_seconds or 0.0)))
     if total_seconds <= 0:
         scene_progress_var.set(100)
         return
 
-    start_time = time.monotonic()
+    start_time = time.monotonic() - start_offset_seconds
 
     def tick():
         if fade_token[0] != token or not escena_en_ejecucion:
@@ -8144,7 +11223,7 @@ update_scene_effect_options()
 # ---- UI Panel derecho ----
 frame_escenas_bar = tk.Frame(frame_right, bg="#202428")
 frame_escenas_bar.pack(fill="x", padx=16, pady=(2, 10))
-for i in range(4):
+for i in range(5):
     frame_escenas_bar.grid_columnconfigure(i, weight=1)
 
 ############ EJECUTAR ESCENA ###############
@@ -8178,6 +11257,20 @@ btn_cargar.grid(row=0, column=0, padx=(0, 4), sticky="ew")
 
 Tooltip(btn_cargar, "Ejecutar escena seleccionada")
 
+############ PARAR ESCENA ###############
+
+btn_parar_escena = tk.Button(
+    frame_escenas_bar,
+    text="Parar",
+    command=lambda: stop_running_scene("boton"),
+    width=6,
+    bg="#8f2727", fg="#fff",
+    font=("Segoe UI", 10, "bold"),
+)
+btn_parar_escena.grid(row=0, column=1, padx=4, sticky="ew")
+
+Tooltip(btn_parar_escena, "Detener la escena en ejecucion")
+
 ############ GUARDAR ESCENA ###############
 
 btn_guardar_escena = tk.Button(
@@ -8189,7 +11282,7 @@ btn_guardar_escena = tk.Button(
     font=("Segoe UI", 10, "bold"),
 )
 btn_guardar_escena.config(text="Guardar", width=7)
-btn_guardar_escena.grid(row=0, column=1, padx=4, sticky="ew")
+btn_guardar_escena.grid(row=0, column=2, padx=4, sticky="ew")
 
 Tooltip(btn_guardar_escena, "Guardar escena")
 
@@ -8204,7 +11297,7 @@ btn_actualizar_escena = tk.Button(
     font=("Segoe UI", 10, "bold"),
 )
 btn_actualizar_escena.config(text="Act.", width=5)
-btn_actualizar_escena.grid(row=0, column=2, padx=4, sticky="ew")
+btn_actualizar_escena.grid(row=0, column=3, padx=4, sticky="ew")
 
 Tooltip(btn_actualizar_escena, "Actualizar escena seleccionada")
 
@@ -8218,9 +11311,40 @@ btn_borrar = tk.Button(
     font=("Segoe UI", 10, "bold"),
 )
 btn_borrar.config(text="Borrar", width=6)
-btn_borrar.grid(row=0, column=3, padx=(4, 0), sticky="ew")
+btn_borrar.grid(row=0, column=4, padx=(4, 0), sticky="ew")
 
 Tooltip(btn_borrar, "Borrar escena seleccionada")
+
+
+########## ENSAYO DESDE TIEMPO ###################
+
+frame_rehearsal = tk.Frame(frame_right, bg="#202428")
+frame_rehearsal.pack(fill="x", padx=16, pady=(0, 6))
+tk.Label(
+    frame_rehearsal,
+    text="Ensayo desde",
+    bg="#202428", fg="#b9e3f7",
+    font=("Segoe UI", 9, "bold")
+).pack(side="left")
+entry_rehearsal_time = tk.Entry(
+    frame_rehearsal,
+    textvariable=rehearsal_time_var,
+    width=7,
+    justify="center",
+    bg="#111417", fg="#fff",
+    insertbackground="#fff",
+    font=("Consolas", 10, "bold"),
+)
+entry_rehearsal_time.pack(side="left", padx=(8, 6))
+btn_rehearsal = tk.Button(
+    frame_rehearsal,
+    text="Ensayar",
+    command=cargar_ensayo_desde,
+    bg="#ffb74d", fg="#000",
+    font=("Segoe UI", 9, "bold"),
+)
+btn_rehearsal.pack(side="left", fill="x", expand=True)
+Tooltip(btn_rehearsal, "Ejecutar la escena seleccionada desde el tiempo indicado, por ejemplo 05:40")
 
 
 ########## LISTBOX ESCENAS ###################
@@ -8284,18 +11408,12 @@ Tooltip(btn_down, "Bajar escena seleccionada")
 
 
 def on_enter_escena(event):
-    global escena_en_ejecucion
-
-    # Si una escena está corriendo → BLOQUEAR ENTER
-    if escena_en_ejecucion:
-        return "break"
-
-    # Si NO hay escena ejecutándose → permitir ejecución normal
     try:
         on_listbox_enter(event)
     except:
         pass
-    
+    return "break"
+
 
 actualizar_lista_escenas()
 
@@ -8334,12 +11452,22 @@ def handle_midi_event(event):
     note = event.get("note")
     vel = event.get("velocity")
     status = event.get("status")
+    try:
+        if event.get("note_on"):
+            root.after(0, lambda n=note, v=vel: midi_last_event_var.set(f"Ultima nota MIDI: {n}  vel {v}"))
+        elif event.get("note_off"):
+            root.after(0, lambda n=note: midi_last_event_var.set(f"Ultima nota MIDI: {n} off"))
+    except Exception:
+        pass
 
     if event.get("note_off"):
         if is_apc_espacio_note(note):
             root.after(0, lambda n=note: handle_espacio_midi_note_off(n))
             return
         action = get_midi_action_for_note(note)
+        if action and action.startswith("control_buttons_"):
+            root.after(0, lambda n=note: stop_espacio_midi_group_action(n, release_fade=True))
+            return
         trigger = MIDI_TRIGGER_DEFS.get(action) if action else None
         if trigger and trigger.get("hold"):
             stop_hold_trigger(action)
@@ -8350,6 +11478,11 @@ def handle_midi_event(event):
     # NOTE ON → ejecutar acción
     # ----------------------------
     if event.get("note_on"):
+        scene_name = get_midi_scene_for_note(note)
+        if scene_name:
+            root.after(0, lambda name=scene_name: play_scene_from_midi(name))
+            return
+
         if capture_midi_learn_note(note):
             return
 
@@ -9844,6 +12977,8 @@ def rebuild_midi_mappings():
         "refresh": lambda: root.after(0, refresh_lamp_status),
         "all_on": lambda: root.after(0, lambda: (encender_todo(), update_power_leds(True))),
         "all_off": lambda: root.after(0, lambda: (apagar_todo(), update_power_leds(False))),
+        "control_buttons_bichos": lambda: root.after(0, lambda: execute_espacio_midi_group_action("control_buttons_bichos")),
+        "control_buttons_atmosfera": lambda: root.after(0, lambda: execute_espacio_midi_group_action("control_buttons_atmosfera")),
         "drum_hit": lambda: root.after(0, lambda: efecto_golpe_de_tambor(
             send_lamp_color_safe,
             get_lamp_state,
@@ -9928,7 +13063,11 @@ def inicializar_leds_midi():
 
 # --- activar el listener MIDI ---
 # 1) Iniciar MIDI
-if start_midi_thread(handle_midi_event):
+if start_midi_thread(
+    handle_midi_event,
+    midi_settings.get("input_port") or None,
+    midi_settings.get("output_port") or None,
+):
     # 2) Una vez que MIDI está listo, esperar un poco
     #    y luego encender LEDs de acciones
     root.after(1200, inicializar_leds_midi)
@@ -9956,6 +13095,7 @@ def on_app_close():
         return
     if proyecto_activo.get("dirty"):
         guardar_ultimo_proyecto_activo(None)
+    stop_sound_module()
     stop_midi()
     root.destroy()
 

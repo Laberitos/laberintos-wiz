@@ -27,6 +27,7 @@ lamps_config.json
 # COPIAS / BACKUPS LOCALES
 # -----------------------------
 * - copia*.py
+backups/
 tablero/backup/
 
 # -----------------------------

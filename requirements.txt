@@ -1,0 +1,4 @@
+Pillow>=10.0
+pywizlight>=0.5.14
+python-rtmidi>=1.5
+screeninfo>=0.8
