@@ -7,6 +7,7 @@
     "2-Inicio_Caminata",
     "1C-M1-Vicente-cardumen",
     "2C-M1-Encuentro-Maria_Vicente",
+    "3C-M1-Parto_de_Maria",
     "3C-M2-Vicente_navega_con_Franc",
     "3C-M2.1-Francisco_toca_el_mar_estatico",
     "3C-M2.2-Francisco_saca_la_mano_atardecer",
@@ -21035,6 +21036,312 @@
       "from_bank": "1C-M1-Vicente-cardumen",
       "bank_description": "Vicente cardumen: cierre limpio. En 4:43 se replica un impacto del inicio en azul C-H240-S100-I008 #0000FF; luego las luces del cardumen se apagan en fade de 5 segundos. Solo L16 queda calida encendida. L19 no participa.",
       "description": "Vicente cardumen: cierre limpio. En 4:43 se replica un impacto del inicio en azul C-H240-S100-I008 #0000FF; luego las luces del cardumen se apagan en fade de 5 segundos. Solo L16 queda calida encendida. L19 no participa."
+    },
+    "3C-M1-Parto_de_Maria": {
+      "tipo": "escena_luces",
+      "version": 3,
+      "scene_kind": "scripted",
+      "nombre": "3C-M1-Parto_de_Maria",
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {},
+      "effects_config": {
+        "version": 1,
+        "active": {}
+      },
+      "effects_layers": [],
+      "lamparas": {},
+      "scripted_scene": {
+        "type": "laberintos_parto_maria",
+        "summary": "Escena hasta 5:25 | 4:35 L20 respira rojo; 4:52 queda sola y pasa a cálido brillante; final apagado",
+        "planned_duration_ms": 300000,
+        "duration_ms": 325000,
+        "tick_ms": 140,
+        "target_scope": "all",
+        "include_atmosphere_lamps": [
+          "L20"
+        ],
+        "opening_mode": "l18_fadeout_l20_low",
+        "opening_fade_out_lamp": "L18",
+        "opening_entry_lamp": "L20",
+        "opening_fade_out_ms": 5000,
+        "opening_fade_out_previous_state": {
+          "mode": "white",
+          "temp": 4,
+          "brillo": 255
+        },
+        "opening_l20_temp": 4,
+        "opening_l20_brightness": 8,
+        "opening_l20_fade_in_ms": 5000,
+        "opening_follow_entries": [
+          {
+            "at_ms": 15000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L18",
+              "L17"
+            ],
+            "temp": 4,
+            "brightness": 8
+          },
+          {
+            "at_ms": 20000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L9",
+              "L16"
+            ],
+            "temp": 4,
+            "brightness": 8
+          }
+        ],
+        "opening_dynamic_start_ms": 28000,
+        "opening_dynamic_end_ms": 325000,
+        "opening_heartbeat_lamp": "L20",
+        "opening_heartbeat_hue": 0,
+        "opening_heartbeat_sat": 1.0,
+        "opening_heartbeat_low": 2,
+        "opening_heartbeat_peak": 10,
+        "opening_heartbeat_period_ms": 1900,
+        "opening_neural_lamps": [
+          "L9",
+          "L16",
+          "L17",
+          "L18"
+        ],
+        "opening_neural_expansion_start_ms": 62000,
+        "opening_neural_expansion_fade_ms": 8000,
+        "opening_neural_expansion_brightness": 150,
+        "opening_neural_expansion_temp": 4,
+        "opening_neural_expansion_integrate_ms": 1200,
+        "opening_neural_expanded_lamps": [
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18"
+        ],
+        "opening_heartbeat_fast_period_ms": 1250,
+        "opening_warm_reverse_start_ms": 84000,
+        "opening_warm_reverse_temps": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "opening_warm_heartbeat_hue": 8,
+        "opening_warm_heartbeat_sat": 0.78,
+        "opening_warm_heartbeat_low": 8,
+        "opening_warm_heartbeat_peak": 22,
+        "opening_breathing_start_ms": 102000,
+        "opening_breathing_period_ms": 4800,
+        "opening_breathing_low": 12,
+        "opening_breathing_peak": 145,
+        "opening_breathing_temp": 0,
+        "opening_breathing_heartbeat_period_ms": 700,
+        "opening_breathing_heartbeat_hue": 0,
+        "opening_breathing_heartbeat_sat": 1.0,
+        "opening_breathing_heartbeat_low": 8,
+        "opening_breathing_heartbeat_peak": 180,
+        "opening_tension_start_ms": 140000,
+        "opening_tension_hue": 13,
+        "opening_tension_sat": 0.99,
+        "opening_tension_low": 8,
+        "opening_tension_peak": 255,
+        "opening_tension_pulse_interval_ms": 250,
+        "opening_tension_tick_ms": 80,
+        "opening_tension_l20_hue": 0,
+        "opening_tension_l20_sat": 1.0,
+        "opening_tension_l20_low": 8,
+        "opening_tension_l20_peak": 180,
+        "opening_tension_l20_period_ms": 4800,
+        "opening_intensified_start_ms": 204000,
+        "opening_intensified_hue": 32,
+        "opening_intensified_sat": 0.98,
+        "opening_intensified_low": 8,
+        "opening_intensified_attempt_levels": [
+          70,
+          105,
+          140
+        ],
+        "opening_intensified_peak": 180,
+        "opening_intensified_cycle_ms": 1700,
+        "opening_intensified_attempt_interval_ms": 300,
+        "opening_intensified_attempt_on_ms": 120,
+        "opening_intensified_final_start_ms": 900,
+        "opening_intensified_final_hold_ms": 600,
+        "opening_intensified_l20_hue": 171,
+        "opening_intensified_l20_sat": 0.42,
+        "opening_intensified_l20_low": 8,
+        "opening_intensified_l20_peak": 180,
+        "opening_intensified_l20_interval_ms": 250,
+        "opening_final_strobe_start_ms": 240000,
+        "opening_final_strobe_step_ms": 140,
+        "opening_final_strobe_red_hue": 0,
+        "opening_final_strobe_red_sat": 1.0,
+        "opening_final_strobe_yellow_hue": 48,
+        "opening_final_strobe_yellow_sat": 1.0,
+        "opening_final_strobe_low": 8,
+        "opening_final_strobe_peak": 255,
+        "opening_final_strobe_lamps": [
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18",
+          "L19",
+          "L20"
+        ],
+        "opening_post_strobe_start_ms": 275000,
+        "opening_final_warm_start_ms": 292000,
+        "opening_post_strobe_other_lamps": [
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18",
+          "L19"
+        ],
+        "opening_post_strobe_warm_temp": 0,
+        "opening_post_strobe_warm_brightness": 8,
+        "opening_post_l20_hue": 0,
+        "opening_post_l20_sat": 1.0,
+        "opening_post_l20_low": 8,
+        "opening_post_l20_peak": 180,
+        "opening_post_l20_period_ms": 4800,
+        "opening_final_warm_transition_ms": 6000,
+        "opening_final_warm_temp": 0,
+        "opening_final_warm_low": 8,
+        "opening_final_warm_peak": 255,
+        "opening_neural_temps": [
+          4,
+          3,
+          4,
+          5
+        ],
+        "opening_neural_low": 8,
+        "opening_neural_peak": 150,
+        "opening_neural_step_ms": 480,
+        "opening_neural_pulse_ms": 820,
+        "fade_in_ms": 4000,
+        "warm_temp": 4,
+        "warm_brightness": 210,
+        "neuron_start_ms": 4000,
+        "neuron_end_ms": 37000,
+        "pulse_low": 55,
+        "pulse_mid": 118,
+        "pulse_peak": 230,
+        "pulse_mode": "warm_white",
+        "pulse_temps": [
+          3,
+          4,
+          5,
+          4,
+          3
+        ],
+        "pulse_ms": 620,
+        "rest_ms": 170,
+        "path_pause_ms": 420,
+        "pulse_hues": [
+          46,
+          37,
+          30,
+          24,
+          18
+        ],
+        "pulse_palette": [
+          {
+            "h": 46,
+            "s": 89,
+            "i": 180,
+            "hex": "#FFCA1C"
+          },
+          {
+            "h": 37,
+            "s": 92,
+            "i": 180,
+            "hex": "#FFA514"
+          },
+          {
+            "h": 30,
+            "s": 88,
+            "i": 180,
+            "hex": "#FF861F"
+          },
+          {
+            "h": 24,
+            "s": 72,
+            "i": 180,
+            "hex": "#FFA552"
+          },
+          {
+            "h": 18,
+            "s": 42,
+            "i": 180,
+            "hex": "#FFB793"
+          }
+        ],
+        "neuron_paths": [
+          [
+            "L9",
+            "L10",
+            "L11",
+            "L12",
+            "L13",
+            "L14",
+            "L15",
+            "L16"
+          ],
+          [
+            "L16",
+            "L15",
+            "L14",
+            "L13",
+            "L12",
+            "L11",
+            "L10",
+            "L9"
+          ],
+          [
+            "L9",
+            "L13",
+            "L10",
+            "L14",
+            "L11",
+            "L15",
+            "L12",
+            "L16"
+          ],
+          [
+            "L16",
+            "L12",
+            "L15",
+            "L11",
+            "L14",
+            "L10",
+            "L13",
+            "L9"
+          ]
+        ]
+      },
+      "updated_at": "2026-08-28T19:43:39",
+      "from_bank": "3C-M1-Parto_de_Maria",
+      "bank_description": "Parto de Maria. Primer tramo: todas las luces nacen en blanco calido durante 4 segundos; desde ahi las luces de bichos se pasan impulsos como informacion neuronal, mientras atmosfera sostiene el calor inicial."
     }
   }
 }

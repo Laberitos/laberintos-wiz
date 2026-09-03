@@ -48,7 +48,7 @@
       "version": 2,
       "nombre": "LABERINTOS_2026",
       "created_at": "2026-06-17T18:08:06",
-      "updated_at": "2026-08-14T13:52:21",
+      "updated_at": "2026-08-28T19:49:23",
       "modo_reproduccion": "manual",
       "notas": "",
       "escenas": [
@@ -59,6 +59,7 @@
         "2-Inicio_Caminata",
         "1C-M1-Vicente-cardumen",
         "2C-M1-Encuentro-Maria_Vicente",
+        "3C-M1-Parto_de_Maria",
         "3C-M2-Vicente_navega_con_Franc",
         "3C-M2.1-Francisco_toca_el_mar_estatico",
         "3C-M2.2-Francisco_saca_la_mano_atardecer",

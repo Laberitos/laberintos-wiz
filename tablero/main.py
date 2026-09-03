@@ -10257,6 +10257,969 @@ def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
     return True
 
 
+def run_scripted_maria_birth_scene(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = int(scripted.get("duration_ms", 37000))
+    start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
+    tick_ms = max(80, min(1000, int(scripted.get("tick_ms", 220))))
+    fade_in_ms = max(0, int(scripted.get("fade_in_ms", 4000)))
+    neuron_start_ms = max(0, int(scripted.get("neuron_start_ms", fade_in_ms)))
+    neuron_end_ms = max(neuron_start_ms, int(scripted.get("neuron_end_ms", 37000)))
+    warm_temp = int(scripted.get("warm_temp", 4))
+    pulse_mode = scripted.get("pulse_mode", "colour")
+    pulse_temps = scripted.get("pulse_temps") or [3, 4, 5, 4, 3]
+    warm_brightness = safe_brightness(scripted.get("warm_brightness", 210))
+    pulse_low = safe_brightness(scripted.get("pulse_low", 55))
+    pulse_mid = safe_brightness(scripted.get("pulse_mid", 128))
+    pulse_peak = safe_brightness(scripted.get("pulse_peak", 255))
+    pulse_ms = max(120, int(scripted.get("pulse_ms", 620)))
+    rest_ms = max(80, int(scripted.get("rest_ms", 170)))
+
+    all_ips = [ip for ip in get_sequence_ordered_lamp_ips() if lamp_status.get(ip, True)]
+    bichos_ips = [ip for ip in all_ips if get_lamp_group(ip) == "efectos"]
+    atmosphere_ips = [ip for ip in all_ips if get_lamp_group(ip) == "atmosfera"]
+    target_ips = list(dict.fromkeys(all_ips))
+    if not target_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    claim_lamps_for_manual_control(target_ips)
+
+    def scene_brightness(value):
+        try:
+            numeric_value = int(round(float(value)))
+        except Exception:
+            numeric_value = 0
+        return 0 if numeric_value <= 0 else safe_brightness(numeric_value)
+
+    def set_panel_white(ip, brightness, temp=None):
+        brightness = scene_brightness(brightness)
+        temp = int(warm_temp if temp is None else temp)
+        panel = panels.get(ip)
+        selected_devices[ip].set(brightness > 0)
+        if panel is not None:
+            panel.last_mode = "white"
+            panel.mode_var.set("white")
+            panel.last_temp = temp
+            panel.last_brillo = brightness
+            try:
+                panel.temp_var.set(temp)
+                panel.brillo_var.set(brightness)
+                panel.whitewheel_lamp.set_temp_value(temp)
+            except Exception:
+                pass
+            set_panel_mode(panel, "white", send=False)
+            update_panel_visual(panel)
+        if brightness > 0:
+            send_lamp_white_scene(ip, brightness, temp)
+        else:
+            send_off(ip)
+        update_lamp_state(ip, "white", 30, 0.0, temp, brightness)
+
+    def set_panel_colour(ip, hue, sat, brightness, send_command=True):
+        brightness = scene_brightness(brightness)
+        panel = panels.get(ip)
+        selected_devices[ip].set(brightness > 0)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = float(hue) % 360
+            panel.last_sat = max(0.0, min(1.0, float(sat)))
+            panel.last_brillo = brightness
+            try:
+                panel.brillo_var.set(brightness)
+                panel.colorwheel_lamp.set_color(panel.last_hue, panel.last_sat, max(0.01, brightness / 255))
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+        if brightness > 0 and send_command:
+            send_lamp_color_safe(ip, hue, sat, brightness)
+        elif brightness <= 0 and send_command:
+            send_off(ip)
+        update_lamp_state(ip, "colour", hue, sat, warm_temp, brightness)
+
+    def set_group_colour(lamp_ids, hue, sat, brightness):
+        live_ips = []
+        for lamp_id in lamp_ids:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if not ip or not lamp_status.get(ip, True):
+                continue
+            set_panel_colour(ip, hue, sat, brightness, send_command=False)
+            live_ips.append(ip)
+        if live_ips:
+            send_color_to_lamps(live_ips, hue, sat, brightness)
+        return live_ips
+
+    def run_l18_to_l20_opening():
+        l18_ip = get_scripted_lamp_ip(scripted.get("opening_fade_out_lamp", "L18"))
+        l20_ip = get_scripted_lamp_ip(scripted.get("opening_entry_lamp", "L20"))
+        fade_out_ms = max(1, int(scripted.get("opening_fade_out_ms", 5000)))
+        l20_temp = int(scripted.get("opening_l20_temp", warm_temp))
+        l20_brightness = safe_brightness(scripted.get("opening_l20_brightness", 8))
+        l20_fade_in_ms = max(1, int(scripted.get("opening_l20_fade_in_ms", 5000)))
+        follow_entries = scripted.get("opening_follow_entries") or []
+        dynamic_start_ms = max(0, int(scripted.get("opening_dynamic_start_ms", 28000)))
+        dynamic_end_ms = max(dynamic_start_ms, int(scripted.get("opening_dynamic_end_ms", 40000)))
+        heartbeat_lamp_id = str(scripted.get("opening_heartbeat_lamp", "L20")).strip().upper()
+        heartbeat_hue = int(scripted.get("opening_heartbeat_hue", 0)) % 360
+        heartbeat_sat = max(0.0, min(1.0, float(scripted.get("opening_heartbeat_sat", 1.0))))
+        heartbeat_low = safe_brightness(scripted.get("opening_heartbeat_low", 2))
+        heartbeat_peak = max(heartbeat_low, safe_brightness(scripted.get("opening_heartbeat_peak", 10)))
+        heartbeat_period_ms = max(900, int(scripted.get("opening_heartbeat_period_ms", 1900)))
+        neural_lamp_ids = [
+            str(lamp_id).strip().upper()
+            for lamp_id in (scripted.get("opening_neural_lamps") or ["L9", "L16", "L17", "L18"])
+        ]
+        neural_expansion_start_ms = max(
+            dynamic_start_ms,
+            int(scripted.get("opening_neural_expansion_start_ms", 62000)),
+        )
+        neural_expansion_fade_ms = max(
+            500,
+            int(scripted.get("opening_neural_expansion_fade_ms", 5000)),
+        )
+        neural_expansion_end_ms = neural_expansion_start_ms + neural_expansion_fade_ms
+        neural_expansion_brightness = safe_brightness(
+            scripted.get("opening_neural_expansion_brightness", 150)
+        )
+        neural_expansion_temp = int(scripted.get("opening_neural_expansion_temp", 4))
+        neural_expansion_integrate_ms = max(
+            0,
+            int(scripted.get("opening_neural_expansion_integrate_ms", 1200)),
+        )
+        neural_expanded_lamp_ids = [
+            str(lamp_id).strip().upper()
+            for lamp_id in (
+                scripted.get("opening_neural_expanded_lamps")
+                or ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"]
+            )
+        ]
+        neural_temp_values = [
+            int(value) for value in (scripted.get("opening_neural_temps") or [4, 3, 4, 5])
+        ]
+        neural_low = safe_brightness(scripted.get("opening_neural_low", l20_brightness))
+        neural_peak = max(neural_low, safe_brightness(scripted.get("opening_neural_peak", 95)))
+        neural_step_ms = max(250, int(scripted.get("opening_neural_step_ms", 650)))
+        neural_pulse_ms = max(neural_step_ms, int(scripted.get("opening_neural_pulse_ms", 1050)))
+        heartbeat_fast_period_ms = max(
+            700,
+            int(scripted.get("opening_heartbeat_fast_period_ms", 1250)),
+        )
+        warm_reverse_start_ms = max(
+            neural_expansion_start_ms,
+            int(scripted.get("opening_warm_reverse_start_ms", 84000)),
+        )
+        warm_reverse_temp_values = [
+            int(value)
+            for value in (scripted.get("opening_warm_reverse_temps") or [0, 1, 0, 2])
+        ]
+        warm_heartbeat_hue = int(scripted.get("opening_warm_heartbeat_hue", 8)) % 360
+        warm_heartbeat_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_warm_heartbeat_sat", 0.78))),
+        )
+        warm_heartbeat_low = safe_brightness(scripted.get("opening_warm_heartbeat_low", 8))
+        warm_heartbeat_peak = max(
+            warm_heartbeat_low,
+            safe_brightness(scripted.get("opening_warm_heartbeat_peak", 22)),
+        )
+        breathing_start_ms = max(
+            warm_reverse_start_ms,
+            int(scripted.get("opening_breathing_start_ms", 102000)),
+        )
+        breathing_period_ms = max(
+            1800,
+            int(scripted.get("opening_breathing_period_ms", 4800)),
+        )
+        breathing_low = safe_brightness(scripted.get("opening_breathing_low", 12))
+        breathing_peak = max(
+            breathing_low,
+            safe_brightness(scripted.get("opening_breathing_peak", 145)),
+        )
+        breathing_temp = int(scripted.get("opening_breathing_temp", 0))
+        breathing_heartbeat_period_ms = max(
+            450,
+            int(scripted.get("opening_breathing_heartbeat_period_ms", 700)),
+        )
+        breathing_heartbeat_hue = int(scripted.get("opening_breathing_heartbeat_hue", 0)) % 360
+        breathing_heartbeat_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_breathing_heartbeat_sat", 1.0))),
+        )
+        breathing_heartbeat_low = safe_brightness(
+            scripted.get("opening_breathing_heartbeat_low", 8)
+        )
+        breathing_heartbeat_peak = max(
+            breathing_heartbeat_low,
+            safe_brightness(scripted.get("opening_breathing_heartbeat_peak", 180)),
+        )
+        tension_start_ms = max(
+            breathing_start_ms,
+            int(scripted.get("opening_tension_start_ms", 140000)),
+        )
+        tension_hue = int(scripted.get("opening_tension_hue", 13)) % 360
+        tension_sat = max(0.0, min(1.0, float(scripted.get("opening_tension_sat", 0.99))))
+        tension_low = safe_brightness(scripted.get("opening_tension_low", 8))
+        tension_peak = max(
+            tension_low,
+            safe_brightness(scripted.get("opening_tension_peak", 255)),
+        )
+        tension_pulse_interval_ms = max(
+            160,
+            int(scripted.get("opening_tension_pulse_interval_ms", 250)),
+        )
+        tension_tick_ms = max(50, min(tick_ms, int(scripted.get("opening_tension_tick_ms", 80))))
+        tension_l20_hue = int(scripted.get("opening_tension_l20_hue", 0)) % 360
+        tension_l20_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_tension_l20_sat", 1.0))),
+        )
+        tension_l20_low = safe_brightness(scripted.get("opening_tension_l20_low", 8))
+        tension_l20_peak = max(
+            tension_l20_low,
+            safe_brightness(scripted.get("opening_tension_l20_peak", 180)),
+        )
+        tension_l20_period_ms = max(
+            1800,
+            int(scripted.get("opening_tension_l20_period_ms", 4800)),
+        )
+        intensified_start_ms = max(
+            tension_start_ms,
+            int(scripted.get("opening_intensified_start_ms", 204000)),
+        )
+        intensified_hue = int(scripted.get("opening_intensified_hue", 32)) % 360
+        intensified_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_intensified_sat", 0.98))),
+        )
+        intensified_low = safe_brightness(scripted.get("opening_intensified_low", 8))
+        intensified_attempt_levels = [
+            safe_brightness(value)
+            for value in (scripted.get("opening_intensified_attempt_levels") or [70, 105, 140])
+        ]
+        intensified_peak = max(
+            intensified_low,
+            safe_brightness(scripted.get("opening_intensified_peak", 180)),
+        )
+        intensified_cycle_ms = max(
+            1200,
+            int(scripted.get("opening_intensified_cycle_ms", 1700)),
+        )
+        intensified_attempt_interval_ms = max(
+            180,
+            int(scripted.get("opening_intensified_attempt_interval_ms", 300)),
+        )
+        intensified_attempt_on_ms = max(
+            60,
+            int(scripted.get("opening_intensified_attempt_on_ms", 120)),
+        )
+        intensified_final_start_ms = max(
+            intensified_attempt_interval_ms * 3,
+            int(scripted.get("opening_intensified_final_start_ms", 900)),
+        )
+        intensified_final_hold_ms = max(
+            250,
+            int(scripted.get("opening_intensified_final_hold_ms", 600)),
+        )
+        intensified_l20_hue = int(scripted.get("opening_intensified_l20_hue", 171)) % 360
+        intensified_l20_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_intensified_l20_sat", 0.42))),
+        )
+        intensified_l20_low = safe_brightness(
+            scripted.get("opening_intensified_l20_low", 8)
+        )
+        intensified_l20_peak = max(
+            intensified_l20_low,
+            safe_brightness(scripted.get("opening_intensified_l20_peak", 180)),
+        )
+        intensified_l20_interval_ms = max(
+            160,
+            int(scripted.get("opening_intensified_l20_interval_ms", 250)),
+        )
+        final_strobe_start_ms = max(
+            intensified_start_ms,
+            int(scripted.get("opening_final_strobe_start_ms", 240000)),
+        )
+        final_strobe_step_ms = max(
+            100,
+            int(scripted.get("opening_final_strobe_step_ms", 140)),
+        )
+        final_strobe_red_hue = int(scripted.get("opening_final_strobe_red_hue", 0)) % 360
+        final_strobe_red_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_final_strobe_red_sat", 1.0))),
+        )
+        final_strobe_yellow_hue = int(
+            scripted.get("opening_final_strobe_yellow_hue", 48)
+        ) % 360
+        final_strobe_yellow_sat = max(
+            0.0,
+            min(1.0, float(scripted.get("opening_final_strobe_yellow_sat", 1.0))),
+        )
+        final_strobe_low = safe_brightness(scripted.get("opening_final_strobe_low", 8))
+        final_strobe_peak = max(
+            final_strobe_low,
+            safe_brightness(scripted.get("opening_final_strobe_peak", 255)),
+        )
+        final_strobe_lamp_ids = [
+            str(lamp_id).strip().upper()
+            for lamp_id in (
+                scripted.get("opening_final_strobe_lamps")
+                or [f"L{number}" for number in range(9, 21)]
+            )
+        ]
+        post_strobe_start_ms = max(
+            final_strobe_start_ms,
+            int(scripted.get("opening_post_strobe_start_ms", 275000)),
+        )
+        final_warm_start_ms = max(
+            post_strobe_start_ms,
+            int(scripted.get("opening_final_warm_start_ms", 292000)),
+        )
+        post_strobe_other_lamp_ids = [
+            str(lamp_id).strip().upper()
+            for lamp_id in (
+                scripted.get("opening_post_strobe_other_lamps")
+                or [f"L{number}" for number in range(9, 20)]
+            )
+        ]
+        post_strobe_warm_temp = int(scripted.get("opening_post_strobe_warm_temp", 0))
+        post_strobe_warm_brightness = safe_brightness(
+            scripted.get("opening_post_strobe_warm_brightness", 8)
+        )
+        post_l20_hue = int(scripted.get("opening_post_l20_hue", 0)) % 360
+        post_l20_sat = max(0.0, min(1.0, float(scripted.get("opening_post_l20_sat", 1.0))))
+        post_l20_low = safe_brightness(scripted.get("opening_post_l20_low", 8))
+        post_l20_peak = max(
+            post_l20_low,
+            safe_brightness(scripted.get("opening_post_l20_peak", 180)),
+        )
+        post_l20_period_ms = max(
+            1800,
+            int(scripted.get("opening_post_l20_period_ms", 4800)),
+        )
+        final_warm_transition_ms = max(
+            1000,
+            int(scripted.get("opening_final_warm_transition_ms", 6000)),
+        )
+        final_warm_temp = int(scripted.get("opening_final_warm_temp", 0))
+        final_warm_low = safe_brightness(scripted.get("opening_final_warm_low", 8))
+        final_warm_peak = max(
+            final_warm_low,
+            safe_brightness(scripted.get("opening_final_warm_peak", 255)),
+        )
+        tension_last_state = [None]
+        post_others_state = [None]
+        neural_lamp_id_set = set(neural_lamp_ids) | set(neural_expanded_lamp_ids)
+        neural_expansion_only_ids = [
+            lamp_id for lamp_id in neural_expanded_lamp_ids if lamp_id not in set(neural_lamp_ids)
+        ]
+        heartbeat_ip = get_scripted_lamp_ip(heartbeat_lamp_id)
+        follow_lamp_ids = {
+            str(lamp_id).strip().upper()
+            for entry in follow_entries
+            for lamp_id in (entry.get("lamps") or [])
+        }
+        l18_state = get_current_fade_state(l18_ip) if l18_ip else {"brightness": 0, "mode": "white", "temp": warm_temp}
+        previous_l18_state = scripted.get("opening_fade_out_previous_state") or {}
+        if previous_l18_state and safe_brightness(l18_state.get("brightness", 0)) > 0:
+            previous_mode = str(previous_l18_state.get("mode", "white")).strip().lower()
+            if previous_mode in ("colour", "white"):
+                l18_state["mode"] = previous_mode
+            l18_state["hue"] = previous_l18_state.get("h", previous_l18_state.get("hue", l18_state.get("hue", 0)))
+            l18_state["sat"] = previous_l18_state.get("s", previous_l18_state.get("sat", l18_state.get("sat", 1.0)))
+            l18_state["temp"] = previous_l18_state.get("temp", l18_state.get("temp", warm_temp))
+        l18_start_brightness = safe_brightness(l18_state.get("brightness", 0))
+
+        def keep_l20_off_before_entry():
+            if not l20_ip:
+                return
+            selected_devices[l20_ip].set(False)
+            send_off(l20_ip)
+            update_lamp_state(l20_ip, "white", 30, 0.0, l20_temp, 0)
+            panel = panels.get(l20_ip)
+            if panel is not None:
+                panel.last_mode = "white"
+                panel.mode_var.set("white")
+                panel.last_temp = l20_temp
+                panel.last_brillo = 0
+                try:
+                    panel.temp_var.set(l20_temp)
+                    panel.brillo_var.set(0)
+                    panel.whitewheel_lamp.set_temp_value(l20_temp)
+                except Exception:
+                    pass
+                set_panel_mode(panel, "white", send=False)
+                update_panel_visual(panel)
+
+        def apply_l18_fade(brightness):
+            if not l18_ip:
+                return
+            if brightness <= 0:
+                selected_devices[l18_ip].set(False)
+                send_off(l18_ip)
+                update_lamp_state(
+                    l18_ip,
+                    l18_state.get("mode", "white"),
+                    l18_state.get("hue", 0),
+                    l18_state.get("sat", 0.0),
+                    l18_state.get("temp", warm_temp),
+                    0,
+                )
+                panel = panels.get(l18_ip)
+                if panel is not None:
+                    panel.last_brillo = 0
+                    try:
+                        panel.brillo_var.set(0)
+                    except Exception:
+                        pass
+                    update_panel_visual(panel)
+                return
+            if l18_state.get("mode") == "colour":
+                set_panel_colour(l18_ip, l18_state.get("hue", 0), l18_state.get("sat", 1.0), brightness)
+            else:
+                set_panel_white(l18_ip, brightness, l18_state.get("temp", warm_temp))
+
+        def force_expansion_lamps_off():
+            if fade_token[0] != token:
+                return
+            absolute_ms = int((time.monotonic() - start_time) * 1000)
+            if absolute_ms >= neural_expansion_start_ms:
+                return
+            changed_ips = []
+            for lamp_id in neural_expansion_only_ids:
+                ip = get_scripted_lamp_ip(lamp_id)
+                if ip and lamp_status.get(ip, True):
+                    set_panel_white(ip, 0, l20_temp)
+                    changed_ips.append(ip)
+            if changed_ips:
+                sync_espacio_laberintos_current_state(changed_ips)
+
+        def tick_opening():
+            if fade_token[0] != token:
+                return
+            absolute_ms = int((time.monotonic() - start_time) * 1000)
+            if absolute_ms >= duration_ms:
+                final_ips = []
+                for lamp_id in final_strobe_lamp_ids:
+                    ip = get_scripted_lamp_ip(lamp_id)
+                    if ip and lamp_status.get(ip, True):
+                        set_panel_white(ip, 0, final_warm_temp)
+                        final_ips.append(ip)
+                if final_ips:
+                    sync_espacio_laberintos_current_state(final_ips)
+                    for delay in (280, 760):
+                        root.after(
+                            delay,
+                            lambda ips=list(final_ips): [send_off(ip) for ip in ips],
+                        )
+                finalizar_escena(token, scene_name)
+                return
+            dynamic_active = dynamic_start_ms <= absolute_ms < dynamic_end_ms
+            tension_phase = dynamic_active and absolute_ms >= tension_start_ms
+            intensified_phase = dynamic_active and absolute_ms >= intensified_start_ms
+            final_strobe_phase = (
+                dynamic_active
+                and final_strobe_start_ms <= absolute_ms < post_strobe_start_ms
+            )
+            post_strobe_phase = dynamic_active and absolute_ms >= post_strobe_start_ms
+            final_warm_phase = dynamic_active and absolute_ms >= final_warm_start_ms
+            changed_ips = []
+
+            follow_changed = []
+            for entry in follow_entries:
+                at_ms = int(entry.get("at_ms", 0))
+                fade_ms = max(1, int(entry.get("fade_ms", 5000)))
+                entry_temp = int(entry.get("temp", l20_temp))
+                entry_brightness = safe_brightness(entry.get("brightness", l20_brightness))
+                lamps = entry.get("lamps") or []
+                if absolute_ms < at_ms:
+                    continue
+                progress = max(0.0, min(1.0, (absolute_ms - at_ms) / fade_ms))
+                eased = -(math.cos(math.pi * progress) - 1) / 2
+                for lamp_id in lamps:
+                    normalized_lamp_id = str(lamp_id).strip().upper()
+                    ip = get_scripted_lamp_ip(normalized_lamp_id)
+                    if ip and lamp_status.get(ip, True):
+                        if not (dynamic_active and normalized_lamp_id in neural_lamp_id_set):
+                            set_panel_white(ip, entry_brightness * eased, entry_temp)
+                        follow_changed.append(ip)
+
+            for lamp_id in follow_lamp_ids:
+                ip = get_scripted_lamp_ip(lamp_id)
+                if not ip or ip in follow_changed or ip == l18_ip:
+                    continue
+                next_at = min(
+                    int(entry.get("at_ms", 0))
+                    for entry in follow_entries
+                    if lamp_id in {str(item).strip().upper() for item in (entry.get("lamps") or [])}
+                )
+                if absolute_ms < next_at:
+                    selected_devices[ip].set(False)
+                    send_off(ip)
+                    update_lamp_state(ip, "white", 30, 0.0, l20_temp, 0)
+                    panel = panels.get(ip)
+                    if panel is not None:
+                        panel.last_mode = "white"
+                        panel.mode_var.set("white")
+                        panel.last_temp = l20_temp
+                        panel.last_brillo = 0
+                        try:
+                            panel.temp_var.set(l20_temp)
+                            panel.brillo_var.set(0)
+                            panel.whitewheel_lamp.set_temp_value(l20_temp)
+                        except Exception:
+                            pass
+                        set_panel_mode(panel, "white", send=False)
+                        update_panel_visual(panel)
+                    changed_ips.append(ip)
+
+            if l18_ip and l18_ip not in follow_changed:
+                if absolute_ms < fade_out_ms:
+                    progress = max(0.0, min(1.0, absolute_ms / fade_out_ms))
+                    eased = -(math.cos(math.pi * progress) - 1) / 2
+                    apply_l18_fade(l18_start_brightness * (1.0 - eased))
+                else:
+                    apply_l18_fade(0)
+                changed_ips.append(l18_ip)
+
+            if l20_ip:
+                if dynamic_active and l20_ip == heartbeat_ip:
+                    pass
+                elif absolute_ms >= fade_out_ms:
+                    l20_elapsed_ms = absolute_ms - fade_out_ms
+                    if l20_elapsed_ms < l20_fade_in_ms:
+                        progress = max(0.0, min(1.0, l20_elapsed_ms / l20_fade_in_ms))
+                        eased = -(math.cos(math.pi * progress) - 1) / 2
+                        set_panel_white(l20_ip, l20_brightness * eased, l20_temp)
+                    else:
+                        set_panel_white(l20_ip, l20_brightness, l20_temp)
+                    changed_ips.append(l20_ip)
+                else:
+                    keep_l20_off_before_entry()
+                    changed_ips.append(l20_ip)
+
+            if dynamic_active:
+                dynamic_elapsed_ms = absolute_ms - dynamic_start_ms
+                neural_entry_phase = (
+                    neural_expansion_start_ms <= absolute_ms < neural_expansion_end_ms
+                )
+                expanded_neural_phase = absolute_ms >= neural_expansion_end_ms
+                accelerated_heartbeat_phase = absolute_ms >= neural_expansion_start_ms
+                warm_reverse_phase = absolute_ms >= warm_reverse_start_ms
+                breathing_phase = absolute_ms >= breathing_start_ms
+                heartbeat_elapsed_ms = (
+                    absolute_ms - breathing_start_ms
+                    if breathing_phase
+                    else absolute_ms - warm_reverse_start_ms
+                    if warm_reverse_phase
+                    else absolute_ms - neural_expansion_start_ms
+                    if accelerated_heartbeat_phase
+                    else dynamic_elapsed_ms
+                )
+                current_heartbeat_period_ms = (
+                    breathing_heartbeat_period_ms
+                    if breathing_phase
+                    else heartbeat_fast_period_ms
+                    if accelerated_heartbeat_phase
+                    else heartbeat_period_ms
+                )
+                if heartbeat_ip and lamp_status.get(heartbeat_ip, True) and not final_strobe_phase:
+                    heartbeat_white_mode = False
+                    heartbeat_phase = (
+                        heartbeat_elapsed_ms % current_heartbeat_period_ms
+                    ) / current_heartbeat_period_ms
+                    first_beat = math.exp(-((heartbeat_phase - 0.16) / 0.065) ** 2)
+                    second_beat = 0.68 * math.exp(-((heartbeat_phase - 0.31) / 0.08) ** 2)
+                    heartbeat_envelope = min(1.0, max(first_beat, second_beat))
+                    if breathing_phase:
+                        if heartbeat_phase < 0.18:
+                            heartbeat_envelope = 1.0
+                        elif 0.32 <= heartbeat_phase < 0.47:
+                            heartbeat_envelope = 0.72
+                        else:
+                            heartbeat_envelope = 0.0
+                    heartbeat_brightness = heartbeat_low + (
+                        (heartbeat_peak - heartbeat_low) * heartbeat_envelope
+                    )
+                    current_heartbeat_hue = heartbeat_hue
+                    current_heartbeat_sat = heartbeat_sat
+                    if warm_reverse_phase:
+                        heartbeat_brightness = warm_heartbeat_low + (
+                            (warm_heartbeat_peak - warm_heartbeat_low) * heartbeat_envelope
+                        )
+                        current_heartbeat_hue = warm_heartbeat_hue
+                        current_heartbeat_sat = warm_heartbeat_sat
+                    if breathing_phase:
+                        heartbeat_brightness = breathing_heartbeat_low + (
+                            (breathing_heartbeat_peak - breathing_heartbeat_low)
+                            * heartbeat_envelope
+                        )
+                        current_heartbeat_hue = breathing_heartbeat_hue
+                        current_heartbeat_sat = breathing_heartbeat_sat
+                    if tension_phase:
+                        tension_l20_elapsed_ms = absolute_ms - tension_start_ms
+                        tension_l20_envelope = (
+                            1.0
+                            - math.cos(
+                                (tension_l20_elapsed_ms / tension_l20_period_ms) * math.pi * 2
+                            )
+                        ) / 2.0
+                        heartbeat_brightness = tension_l20_low + (
+                            (tension_l20_peak - tension_l20_low) * tension_l20_envelope
+                        )
+                        current_heartbeat_hue = tension_l20_hue
+                        current_heartbeat_sat = tension_l20_sat
+                    if intensified_phase:
+                        intensified_l20_elapsed_ms = absolute_ms - intensified_start_ms
+                        intensified_l20_phase = (
+                            intensified_l20_elapsed_ms % intensified_l20_interval_ms
+                        ) / intensified_l20_interval_ms
+                        heartbeat_brightness = (
+                            intensified_l20_peak
+                            if intensified_l20_phase < 0.42
+                            else intensified_l20_low
+                        )
+                        current_heartbeat_hue = intensified_l20_hue
+                        current_heartbeat_sat = intensified_l20_sat
+                    if post_strobe_phase:
+                        post_l20_elapsed_ms = absolute_ms - post_strobe_start_ms
+                        post_l20_envelope = (
+                            1.0
+                            - math.cos((post_l20_elapsed_ms / post_l20_period_ms) * math.pi * 2)
+                        ) / 2.0
+                        heartbeat_brightness = post_l20_low + (
+                            (post_l20_peak - post_l20_low) * post_l20_envelope
+                        )
+                        current_heartbeat_hue = post_l20_hue
+                        current_heartbeat_sat = post_l20_sat
+                    if final_warm_phase:
+                        warm_progress = max(
+                            0.0,
+                            min(
+                                1.0,
+                                (absolute_ms - final_warm_start_ms) / final_warm_transition_ms,
+                            ),
+                        )
+                        warm_peak = post_l20_peak + (
+                            (final_warm_peak - post_l20_peak) * warm_progress
+                        )
+                        heartbeat_brightness = final_warm_low + (
+                            (warm_peak - final_warm_low) * post_l20_envelope
+                        )
+                        if warm_progress >= 1.0:
+                            heartbeat_white_mode = True
+                        else:
+                            current_heartbeat_hue = 30.0 * warm_progress
+                            current_heartbeat_sat = 1.0 - (0.85 * warm_progress)
+                    if heartbeat_white_mode:
+                        set_panel_white(heartbeat_ip, heartbeat_brightness, final_warm_temp)
+                    else:
+                        set_panel_colour(
+                            heartbeat_ip,
+                            current_heartbeat_hue,
+                            current_heartbeat_sat,
+                            heartbeat_brightness,
+                        )
+                    changed_ips.append(heartbeat_ip)
+
+                if final_warm_phase:
+                    if post_others_state[0] != "off":
+                        post_others_state[0] = "off"
+                        for lamp_id in post_strobe_other_lamp_ids:
+                            ip = get_scripted_lamp_ip(lamp_id)
+                            if ip and lamp_status.get(ip, True):
+                                set_panel_white(ip, 0, post_strobe_warm_temp)
+                                changed_ips.append(ip)
+                elif post_strobe_phase:
+                    if post_others_state[0] != "warm_low":
+                        post_others_state[0] = "warm_low"
+                        for lamp_id in post_strobe_other_lamp_ids:
+                            ip = get_scripted_lamp_ip(lamp_id)
+                            if ip and lamp_status.get(ip, True):
+                                set_panel_white(
+                                    ip,
+                                    post_strobe_warm_brightness,
+                                    post_strobe_warm_temp,
+                                )
+                                changed_ips.append(ip)
+                elif final_strobe_phase:
+                    final_strobe_elapsed_ms = absolute_ms - final_strobe_start_ms
+                    final_strobe_step = (final_strobe_elapsed_ms // final_strobe_step_ms) % 4
+                    if final_strobe_step in (0, 1):
+                        current_hue = final_strobe_red_hue
+                        current_sat = final_strobe_red_sat
+                    else:
+                        current_hue = final_strobe_yellow_hue
+                        current_sat = final_strobe_yellow_sat
+                    tension_brightness = (
+                        final_strobe_peak if final_strobe_step in (0, 2) else final_strobe_low
+                    )
+                    tension_state = (current_hue, current_sat, tension_brightness)
+                    if tension_state != tension_last_state[0]:
+                        tension_last_state[0] = tension_state
+                        changed_ips.extend(
+                            set_group_colour(
+                                final_strobe_lamp_ids,
+                                current_hue,
+                                current_sat,
+                                tension_brightness,
+                            )
+                        )
+                elif tension_phase:
+                    if intensified_phase:
+                        intensified_elapsed_ms = absolute_ms - intensified_start_ms
+                        cycle_position_ms = intensified_elapsed_ms % intensified_cycle_ms
+                        current_hue = intensified_hue
+                        current_sat = intensified_sat
+                        tension_brightness = intensified_low
+                        for attempt_index, attempt_level in enumerate(intensified_attempt_levels):
+                            attempt_start_ms = attempt_index * intensified_attempt_interval_ms
+                            if attempt_start_ms <= cycle_position_ms < (
+                                attempt_start_ms + intensified_attempt_on_ms
+                            ):
+                                tension_brightness = attempt_level
+                                break
+                        if intensified_final_start_ms <= cycle_position_ms < (
+                            intensified_final_start_ms + intensified_final_hold_ms
+                        ):
+                            tension_brightness = intensified_peak
+                    else:
+                        tension_elapsed_ms = absolute_ms - tension_start_ms
+                        tension_phase_value = (
+                            tension_elapsed_ms % tension_pulse_interval_ms
+                        ) / tension_pulse_interval_ms
+                        tension_brightness = (
+                            tension_peak if tension_phase_value < 0.42 else tension_low
+                        )
+                        current_hue = tension_hue
+                        current_sat = tension_sat
+                    tension_state = (current_hue, current_sat, tension_brightness)
+                    if tension_state != tension_last_state[0]:
+                        tension_last_state[0] = tension_state
+                        changed_ips.extend(
+                            set_group_colour(
+                                neural_expanded_lamp_ids,
+                                current_hue,
+                                current_sat,
+                                tension_brightness,
+                            )
+                        )
+                elif breathing_phase:
+                    breathing_elapsed_ms = absolute_ms - breathing_start_ms
+                    breathing_envelope = (
+                        1.0 - math.cos((breathing_elapsed_ms / breathing_period_ms) * math.pi * 2)
+                    ) / 2.0
+                    breathing_brightness = breathing_low + (
+                        (breathing_peak - breathing_low) * breathing_envelope
+                    )
+                    for lamp_id in neural_expanded_lamp_ids:
+                        ip = get_scripted_lamp_ip(lamp_id)
+                        if ip and lamp_status.get(ip, True):
+                            set_panel_white(ip, breathing_brightness, breathing_temp)
+                            changed_ips.append(ip)
+                else:
+                    active_neural_lamp_ids = (
+                        neural_expanded_lamp_ids if expanded_neural_phase else neural_lamp_ids
+                    )
+                    if warm_reverse_phase:
+                        active_neural_lamp_ids = list(reversed(neural_expanded_lamp_ids))
+                    neural_elapsed_ms = (
+                        absolute_ms - warm_reverse_start_ms
+                        if warm_reverse_phase
+                        else absolute_ms - neural_expansion_start_ms
+                        if expanded_neural_phase
+                        else dynamic_elapsed_ms
+                    )
+                    neural_cycle_ms = max(
+                        neural_step_ms,
+                        len(active_neural_lamp_ids) * neural_step_ms,
+                    )
+                    for index, lamp_id in enumerate(active_neural_lamp_ids):
+                        ip = get_scripted_lamp_ip(lamp_id)
+                        if not ip or not lamp_status.get(ip, True):
+                            continue
+                        offset_ms = index * neural_step_ms
+                        if neural_elapsed_ms < offset_ms:
+                            envelope = 0.0
+                        else:
+                            local_ms = (neural_elapsed_ms - offset_ms) % neural_cycle_ms
+                            envelope = (
+                                math.sin(math.pi * (local_ms / neural_pulse_ms))
+                                if local_ms <= neural_pulse_ms
+                                else 0.0
+                            )
+                        brightness = neural_low + ((neural_peak - neural_low) * envelope)
+                        if (
+                            expanded_neural_phase
+                            and lamp_id in neural_expansion_only_ids
+                            and neural_expansion_integrate_ms > 0
+                        ):
+                            integrate_progress = max(
+                                0.0,
+                                min(
+                                    1.0,
+                                    (absolute_ms - neural_expansion_end_ms)
+                                    / neural_expansion_integrate_ms,
+                                ),
+                            )
+                            brightness = neural_expansion_brightness + (
+                                (brightness - neural_expansion_brightness) * integrate_progress
+                            )
+                        temp_values = warm_reverse_temp_values if warm_reverse_phase else neural_temp_values
+                        temp = temp_values[index % len(temp_values)]
+                        set_panel_white(ip, brightness, temp)
+                        changed_ips.append(ip)
+
+                if neural_entry_phase:
+                    entry_progress = max(
+                        0.0,
+                        min(
+                            1.0,
+                            (absolute_ms - neural_expansion_start_ms) / neural_expansion_fade_ms,
+                        ),
+                    )
+                    entry_eased = -(math.cos(math.pi * entry_progress) - 1) / 2
+                    entry_brightness = neural_expansion_brightness * entry_eased
+                    for lamp_id in neural_expansion_only_ids:
+                        ip = get_scripted_lamp_ip(lamp_id)
+                        if ip and lamp_status.get(ip, True):
+                            set_panel_white(ip, entry_brightness, neural_expansion_temp)
+                            changed_ips.append(ip)
+
+            changed_ips.extend(follow_changed)
+
+            if changed_ips:
+                sync_espacio_laberintos_current_state(changed_ips)
+
+            root.after(tension_tick_ms if tension_phase else tick_ms, tick_opening)
+
+        if start_at_ms < neural_expansion_start_ms:
+            force_expansion_lamps_off()
+            root.after(350, force_expansion_lamps_off)
+            root.after(900, force_expansion_lamps_off)
+        tick_opening()
+
+    def fade_in_tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        if elapsed_ms >= fade_in_ms:
+            for ip in target_ips:
+                set_panel_white(ip, warm_brightness)
+            sync_espacio_laberintos_current_state(target_ips)
+            return
+        progress = max(0.0, min(1.0, elapsed_ms / max(1, fade_in_ms)))
+        eased = -(math.cos(math.pi * progress) - 1) / 2
+        brightness = warm_brightness * eased
+        for ip in target_ips:
+            set_panel_white(ip, brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+        root.after(tick_ms, fade_in_tick)
+
+    neuron_paths = scripted.get("neuron_paths") or [
+        ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16"],
+        ["L16", "L15", "L14", "L13", "L12", "L11", "L10", "L9"],
+        ["L9", "L13", "L10", "L14", "L11", "L15", "L12", "L16"],
+        ["L16", "L12", "L15", "L11", "L14", "L10", "L13", "L9"],
+    ]
+    neuron_events = []
+    cursor = neuron_start_ms
+    path_index = 0
+    while cursor < neuron_end_ms:
+        path = neuron_paths[path_index % len(neuron_paths)]
+        for lamp_id in path:
+            if cursor >= neuron_end_ms:
+                break
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip and ip in bichos_ips:
+                neuron_events.append({"at_ms": cursor, "ip": ip, "path": path_index})
+            cursor += rest_ms
+        cursor += max(0, int(scripted.get("path_pause_ms", 420)))
+        path_index += 1
+
+    pulse_hues = scripted.get("pulse_hues") or [194, 218, 285, 326]
+    pulse_palette = scripted.get("pulse_palette") or []
+
+    def get_pulse_colour(palette_index):
+        if pulse_palette:
+            colour = pulse_palette[palette_index % len(pulse_palette)]
+            return (
+                float(colour.get("h", colour.get("hue", 76))) % 360,
+                max(0.0, min(1.0, float(colour.get("s", colour.get("sat", 100))) / 100.0)),
+                safe_brightness(colour.get("i", colour.get("brightness", pulse_peak))),
+            )
+        return (pulse_hues[palette_index % len(pulse_hues)], 1.0, pulse_peak)
+
+    def active_pulse_for(ip, absolute_ms):
+        active = None
+        for event in neuron_events:
+            delta = absolute_ms - event["at_ms"]
+            if event["ip"] == ip and 0 <= delta <= pulse_ms:
+                active = (event, delta)
+        return active
+
+    def neuron_tick():
+        if fade_token[0] != token:
+            return
+        absolute_ms = int((time.monotonic() - start_time) * 1000)
+        if absolute_ms >= neuron_end_ms:
+            for ip in target_ips:
+                set_panel_white(ip, warm_brightness)
+            sync_espacio_laberintos_current_state(target_ips)
+            return
+
+        for ip in atmosphere_ips:
+            set_panel_white(ip, warm_brightness)
+
+        changed_ips = list(atmosphere_ips)
+        for index, ip in enumerate(bichos_ips):
+            pulse = active_pulse_for(ip, absolute_ms)
+            if pulse:
+                event, delta = pulse
+                local = max(0.0, min(1.0, delta / max(1, pulse_ms)))
+                envelope = math.sin(math.pi * local)
+                if pulse_mode == "warm_white":
+                    temp = pulse_temps[(event["path"] + index) % len(pulse_temps)]
+                    brightness = pulse_mid + ((pulse_peak - pulse_mid) * envelope)
+                    set_panel_white(ip, brightness, temp)
+                else:
+                    hue, sat, palette_peak = get_pulse_colour(event["path"] + index)
+                    brightness = pulse_mid + ((palette_peak - pulse_mid) * envelope)
+                    set_panel_colour(ip, hue, sat, brightness)
+            else:
+                drift = (math.sin((absolute_ms / 1900.0) + index * 0.85) + 1.0) / 2.0
+                set_panel_white(ip, pulse_low + ((warm_brightness - pulse_low) * 0.22 * drift))
+            changed_ips.append(ip)
+        sync_espacio_laberintos_current_state(changed_ips)
+        root.after(tick_ms, neuron_tick)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+    except Exception:
+        pass
+
+    start_time = time.monotonic() - (start_at_ms / 1000.0)
+    if scripted.get("opening_mode") == "l18_fadeout_l20_low":
+        run_l18_to_l20_opening()
+        print(f"[ESCENA PROGRAMADA] {scene_name}: apertura L18 fade out -> L20 calida baja")
+        return True
+
+    if start_at_ms < fade_in_ms:
+        fade_in_tick()
+        root.after(max(0, neuron_start_ms - start_at_ms), neuron_tick)
+    else:
+        for ip in target_ips:
+            set_panel_white(ip, warm_brightness)
+        neuron_tick()
+
+    root.after(max(duration_ms - start_at_ms, 1), lambda: finalizar_escena(token, scene_name))
+    print(f"[ESCENA PROGRAMADA] {scene_name}: parto de Maria primer tramo neuronal")
+    return True
+
+
 def apply_scripted_scene_if_needed(scene_data, token, scene_name, start_at_ms=0):
     scripted = scene_data.get("scripted_scene", {})
     if not scripted:
@@ -10271,6 +11234,8 @@ def apply_scripted_scene_if_needed(scene_data, token, scene_name, start_at_ms=0)
         return run_scripted_blue_ocean_pulse_scene(scene_data, token, scene_name)
     if scripted.get("type") == "laberintos_firefly_petals":
         return run_scripted_firefly_petals_scene(scene_data, token, scene_name)
+    if scripted.get("type") == "laberintos_parto_maria":
+        return run_scripted_maria_birth_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
     return False
 
 
