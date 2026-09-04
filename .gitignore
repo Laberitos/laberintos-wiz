@@ -31,12 +31,6 @@ backups/
 tablero/backup/
 
 # -----------------------------
-# COPIAS / BACKUPS LOCALES
-# -----------------------------
-* - copia*.py
-tablero/backup/
-
-# -----------------------------
 # SISTEMA / OS
 # -----------------------------
 .DS_Store
