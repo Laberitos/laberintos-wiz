@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "default_groups": {
+    "efectos": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16"],
+    "atmosfera": ["L17", "L18", "L19", "L20"]
+  },
+  "notes": {
+    "efectos": "Lamparas disponibles para efectos dinamicos. Cada escena puede usar un subconjunto.",
+    "atmosfera": "Lamparas disponibles para sostener clima luminico. Cada escena puede usar un subconjunto."
+  }
+}

@@ -24,3 +24,5 @@ for vel in range(0, 128):
 m.send_message([0x90, note, 0])
 
 print("\nFIN DEL TEST. Mira la consola para ver los valores notables.")
+
+#oscar

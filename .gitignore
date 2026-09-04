@@ -16,10 +16,19 @@ venv/
 lamp_names.json
 lamp_ips.txt
 lamp_ips - copia.txt
+lamp_groups.json
+lamps_config.json
 
 # Escenas y proyectos locales
-escenas.json
-proyectos.json
+#escenas.json
+#proyectos.json
+
+# -----------------------------
+# COPIAS / BACKUPS LOCALES
+# -----------------------------
+* - copia*.py
+backups/
+tablero/backup/
 
 # -----------------------------
 # COPIAS / BACKUPS LOCALES

@@ -100,3 +100,72 @@ def hsv_to_rgb(h, s, v):
     import colorsys
     r, g, b = colorsys.hsv_to_rgb(h/360.0, s, v)
     return (int(round(r*255)), int(round(g*255)), int(round(b*255)))
+
+
+class WhiteTempWheel(tk.Canvas):
+    def __init__(self, master, radius=80, callback=None, **kwargs):
+        size = radius * 2 + 10
+        super().__init__(master, width=size, height=size, **kwargs)
+        self.radius = radius
+        self.callback = callback
+        self._draw_wheel()
+        self.bind("<Button-1>", self._click)
+        self.cursor = self.create_oval(0, 0, 0, 0, outline="#1b1f23", width=3)
+        self.set_temp_value(128)
+
+    def _draw_wheel(self):
+        size = self.radius * 2 + 1
+        img = Image.new("RGB", (size, size), (0, 0, 0))
+        warm = (255, 190, 95)
+        neutral = (255, 245, 220)
+        cool = (175, 215, 255)
+
+        for x in range(size):
+            for y in range(size):
+                dx = x - self.radius
+                dy = y - self.radius
+                dist = math.hypot(dx, dy)
+                if dist <= self.radius:
+                    t = x / max(1, size - 1)
+                    if t < 0.5:
+                        local = t / 0.5
+                        rgb = lerp_rgb(warm, neutral, local)
+                    else:
+                        local = (t - 0.5) / 0.5
+                        rgb = lerp_rgb(neutral, cool, local)
+
+                    # Slight radial darkening so the circle reads as a selector.
+                    shade = 1.0 - (dist / self.radius) * 0.18
+                    rgb = tuple(max(0, min(255, int(c * shade))) for c in rgb)
+                    img.putpixel((x, y), rgb)
+
+        self.imgtk = ImageTk.PhotoImage(img)
+        self.create_image(5, 5, anchor="nw", image=self.imgtk)
+
+    def _click(self, event):
+        x = event.x - 5
+        y = event.y - 5
+        dx = x - self.radius
+        dy = y - self.radius
+        dist = math.hypot(dx, dy)
+        if dist > self.radius:
+            dx = dx * self.radius / dist
+            dy = dy * self.radius / dist
+            x = dx + self.radius
+            y = dy + self.radius
+
+        value = int(max(0, min(255, (x / (self.radius * 2)) * 255)))
+        self.set_temp_value(value)
+        if self.callback:
+            self.callback(value)
+
+    def set_temp_value(self, value):
+        value = int(max(0, min(255, value)))
+        x = 5 + (value / 255) * (self.radius * 2)
+        y = 5 + self.radius
+        r = 6
+        self.coords(self.cursor, x-r, y-r, x+r, y+r)
+
+
+def lerp_rgb(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
