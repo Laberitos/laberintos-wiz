@@ -5,7 +5,7 @@ Tablero de control de luces para el proyecto Laberintos. Permite controlar lampa
 ## Requisitos
 
 - Windows 10/11
-- Python 3.11 o superior
+- Python 3.11.16 (version validada para este proyecto)
 - Red local donde esten conectadas las lamparas WiZ
 - Opcional: APC Mini / controlador MIDI
 - Opcional: loopMIDI si se quiere disparar escenas desde Ableton
@@ -49,15 +49,26 @@ Con el entorno activado:
 python -m tablero.main
 ```
 
-## Actualizar cambios desde Git
+## Flujo de versiones
 
-Cuando haya una nueva version subida al repositorio:
+- `dev`: rama de trabajo y pruebas. El desarrollo nuevo se guarda aqui.
+- `main`: version estable para las computadoras que operan el show.
 
-```powershell
-git pull origin dev
-pip install -r requirements.txt
-python -m tablero.main
-```
+El responsable del desarrollo trabaja siempre en `dev`:
+
+1. Ejecuta `Publicar_DEV.cmd` para guardar y subir el trabajo a GitHub.
+2. Prueba el tablero desde `dev`.
+3. Cuando la version este validada, ejecuta `Crear_VERSION_ESTABLE.cmd`.
+
+El segundo equipo trabaja siempre en `main`. Para recibir una version estable:
+
+1. Cierra el tablero.
+2. Ejecuta `Actualizar_TABLERO.cmd`.
+3. Abre nuevamente el tablero.
+
+El actualizador conserva los archivos locales ignorados por Git, como las IP de
+las lamparas. Si encuentra otros cambios locales, los guarda temporalmente antes
+de actualizar para evitar que se pierdan.
 
 ## Archivos que no se comparten
 
