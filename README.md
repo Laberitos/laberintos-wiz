@@ -49,6 +49,10 @@ Con el entorno activado:
 python -m tablero.main
 ```
 
+También puede abrirse con doble clic en `Abrir_Tablero_Laberintos.cmd`. El
+lanzador busca el proyecto junto al archivo y en las ubicaciones locales
+recomendadas, y utiliza el entorno `.venv` de la instalación.
+
 ## Flujo de versiones
 
 - `dev`: rama de trabajo y pruebas. El desarrollo nuevo se guarda aqui.
