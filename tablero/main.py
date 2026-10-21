@@ -20,8 +20,8 @@ import time
 import threading
 import uuid
 import random
+import queue
 import screeninfo
-from concurrent.futures import wait
 from tablero.midi_listener import (
     start_midi_thread,
     stop_midi,
@@ -39,6 +39,7 @@ from tablero.scene_timing import (
     format_scene_duration,
     get_scene_timing,
 )
+from tablero.lamp_network import pilot_result_to_info, probe_known_lamps
 
 bulb_states = {}
 midi_out = None
@@ -432,21 +433,74 @@ def get_or_create_event_loop():
 from pywizlight import wizlight
 
 
+LAMP_PROBE_BATCH_TIMEOUT_SECONDS = 4.2
+LAMP_STATUS_REFRESH_INTERVAL_MS = 15000
+LAMP_STARTUP_REFRESH_DELAYS_MS = (800, 3500, 8000)
+
+
+def _first_pilot_state(state):
+    if isinstance(state, (list, tuple)):
+        return next((pilot for pilot in state if pilot is not None), None)
+    return state
+
+
+def _pilot_method_value(pilot, method_name, default=None):
+    method = getattr(pilot, method_name, None)
+    if not callable(method):
+        return default
+    try:
+        value = method()
+        return default if value is None else value
+    except Exception:
+        return default
+
+
+def _pilot_to_lamp_info(state):
+    """Normaliza la respuesta de pywizlight sin depender de atributos internos."""
+    pilot = _first_pilot_state(state)
+    if pilot is None:
+        return None
+
+    raw = getattr(pilot, "pilotResult", {})
+    raw = raw if isinstance(raw, dict) else {}
+    parsed = pilot_result_to_info(raw)
+    if parsed is not None:
+        return parsed
+
+    brightness = safe_brightness(_pilot_method_value(pilot, "get_brightness", 0))
+    is_on = bool(_pilot_method_value(pilot, "get_state", brightness > 0))
+    temp = int(_pilot_method_value(pilot, "get_colortemp", 4000))
+    rgb = _pilot_method_value(pilot, "get_rgb", (None, None, None))
+    has_rgb = (
+        isinstance(rgb, (list, tuple))
+        and len(rgb) >= 3
+        and all(value is not None for value in rgb[:3])
+    )
+
+    hue = 0.0
+    saturation = 0.0
+    if has_rgb:
+        red, green, blue = (max(0, min(255, int(value))) for value in rgb[:3])
+        hue, saturation, _value = colorsys.rgb_to_hsv(red / 255.0, green / 255.0, blue / 255.0)
+        hue *= 360.0
+
+    has_colour_payload = all(key in raw for key in ("r", "g", "b"))
+    mode = "colour" if has_colour_payload else "white"
+    return {
+        "brightness": brightness,
+        "is_on": is_on,
+        "mode": mode,
+        "hue": hue,
+        "sat": saturation,
+        "temp": temp,
+    }
+
+
 async def _get_lamp_info_async(ip: str):
     try:
         bulb = get_wiz(ip)
-        pilot = await bulb.updateState()    # <-- YA NO DEVUELVE get_pilot()
-
-        if pilot is None:
-            return None
-
-        return {
-            "brightness": getattr(pilot, "dimming", 0),
-            "mode": getattr(pilot, "colormode", "white"),
-            "hue": getattr(pilot, "hue", 0),
-            "sat": getattr(pilot, "sat", 0),
-            "temp": getattr(pilot, "ct", 4000)
-        }
+        state = await bulb.updateState()
+        return _pilot_to_lamp_info(state)
 
     except Exception as e:
         print(f"[ERROR] get_lamp_info({ip}): {e}")
@@ -462,7 +516,7 @@ def get_lamp_info(ip: str):
     try:
         if loop.is_running():
             future = asyncio.run_coroutine_threadsafe(_do(), loop)
-            return future.result(timeout=2)
+            return future.result(timeout=LAMP_PROBE_BATCH_TIMEOUT_SECONDS)
         else:
             return loop.run_until_complete(_do())
     except Exception as e:
@@ -473,73 +527,116 @@ def get_lamp_info(ip: str):
 # -- Estado de lámparas online/offline + ESTADO REAL --
 lamp_status = {}
 lamp_state = {}
+lamp_probe_queue = queue.Queue()
+lamp_refresh_guard = threading.Lock()
+lamp_refresh_state = {"running": False, "active": True}
 
-def refresh_lamp_status():
-    """
-    REFRESCO ROBUSTO:
-    - Solo cambia estado UI si la lámpara cambió realmente entre online/offline.
-    - Usa histeresis (3 lecturas) para evitar falsos "offline".
-    - Actualiza información real (hue, sat, temp, brillo) SOLO si está online.
-    """
 
-    # 1) obtener lecturas reales
-    online_raw = get_online_ips()
+def _apply_lamp_probe_results(probe_results, reason):
+    changed = []
+    online_count = 0
 
     for ip, panel in panels.items():
-
-        # Estado leído del sistema
-        ahora_online = ip in online_raw
-
-        # Aplicar filtro anti-falsos-offline
+        result = probe_results.get(ip) or {"online": False, "info": None}
+        ahora_online = bool(result.get("online"))
         ahora_filtrado = _actualizar_historial(ip, ahora_online)
-
-        # Estado anterior
         before = lamp_status.get(ip, None)
-
-        # Si NO hubo cambio → NO tocar UI, NO refrescar.
-        if before is not None and before == ahora_filtrado:
-            continue
-
-        # Actualizar estado
         lamp_status[ip] = ahora_filtrado
 
-        # ---------------------------------------
-        # UI: LÁMPARA ONLINE (verde)
-        # ---------------------------------------
         if ahora_filtrado:
-            try:
-                info = get_lamp_info(ip)
-            except:
-                info = None
-
+            online_count += 1
+            info = result.get("info")
             if info:
                 lamp_state[ip] = {
                     "brightness": info.get("brightness", 0),
+                    "is_on": bool(info.get("is_on", False)),
                     "mode": info.get("mode", "colour"),
                     "hue": info.get("hue", 0),
                     "sat": info.get("sat", 1),
-                    "temp": info.get("temp", 4000)
+                    "temp": info.get("temp", 4000),
                 }
-
-        # ---------------------------------------
-        # UI: LÁMPARA OFFLINE (rojo)
-        # ---------------------------------------
-        else:
+        elif before is None or before != ahora_filtrado:
             lamp_state[ip] = {
                 "brightness": 0,
+                "is_on": False,
                 "mode": "colour",
                 "hue": 0,
                 "sat": 1,
-                "temp": 4000
+                "temp": 4000,
             }
 
-        apply_visual = globals().get("apply_lamp_visual_state")
-        if callable(apply_visual):
-            apply_visual(panel)
+        if before is None or before != ahora_filtrado:
+            changed.append((ip, ahora_filtrado))
+            apply_visual = globals().get("apply_lamp_visual_state")
+            if callable(apply_visual):
+                apply_visual(panel)
 
     refresh_espacio = globals().get("refresh_espacio_laberintos_visual")
     if callable(refresh_espacio):
         refresh_espacio()
+
+    if changed or reason != "periodico":
+        detail = ", ".join(
+            f"{lamp_names.get(ip, ip)}={'online' if online else 'offline'}"
+            for ip, online in changed
+        )
+        suffix = f" | cambios: {detail}" if detail else ""
+        print(f"[RED] Deteccion {reason}: {online_count}/{len(LAMP_IPS)} lamparas online{suffix}")
+
+
+def _drain_lamp_probe_queue():
+    while True:
+        try:
+            reason, probe_results, error = lamp_probe_queue.get_nowait()
+        except queue.Empty:
+            break
+
+        try:
+            if error is not None:
+                print(f"[RED] No se pudo completar la deteccion ({reason}): {error}")
+            else:
+                _apply_lamp_probe_results(probe_results, reason)
+        finally:
+            with lamp_refresh_guard:
+                lamp_refresh_state["running"] = False
+
+    if lamp_refresh_state.get("active", False):
+        root.after(120, _drain_lamp_probe_queue)
+
+
+def refresh_lamp_status(reason="manual"):
+    """
+    Consulta todas las IP conocidas en segundo plano. Nunca enciende ni apaga
+    lámparas: solamente actualiza el estado de conexión y la información real.
+    """
+    with lamp_refresh_guard:
+        if lamp_refresh_state["running"] or not lamp_refresh_state.get("active", False):
+            return False
+        lamp_refresh_state["running"] = True
+
+    def worker():
+        try:
+            probe_results = get_lamp_probe_results()
+            lamp_probe_queue.put((reason, probe_results, None))
+        except Exception as exc:
+            lamp_probe_queue.put((reason, {}, exc))
+
+    threading.Thread(target=worker, name="wiz-lamp-detection", daemon=True).start()
+    return True
+
+
+def start_lamp_status_monitor():
+    root.after(120, _drain_lamp_probe_queue)
+    for delay in LAMP_STARTUP_REFRESH_DELAYS_MS:
+        root.after(delay, lambda: refresh_lamp_status("inicio"))
+
+    def periodic_refresh():
+        if not lamp_refresh_state.get("active", False):
+            return
+        refresh_lamp_status("periodico")
+        root.after(LAMP_STATUS_REFRESH_INTERVAL_MS, periodic_refresh)
+
+    root.after(LAMP_STATUS_REFRESH_INTERVAL_MS, periodic_refresh)
 
 
 
@@ -711,43 +808,23 @@ def ip_online(ip):
     except Exception:
         return False
 
-async def _check_online_async(ip):
+def get_lamp_probe_results():
     """
-    Usa directamente updateState() de pywizlight.
-    Si responde → está online. Si no → offline real.
+    Consulta por UDP todas las IP conocidas con reintentos y un plazo propio.
+    La operación es de solo lectura y se ejecuta desde el trabajador de red.
     """
-    try:
-        bulb = get_wiz(ip)
-        await bulb.updateState()
-        return True
-    except:
-        return False
+    return probe_known_lamps(
+        LAMP_IPS,
+        timeout=LAMP_PROBE_BATCH_TIMEOUT_SECONDS,
+    )
 
 
 def get_online_ips():
-    """
-    Llama a updateState() desde el loop global para TODAS las lámparas.
-    Retorna SOLO aquellas que respondieron correctamente.
-    """
-    loop = get_or_create_event_loop()
-    future_by_ip = {
-        asyncio.run_coroutine_threadsafe(_check_online_async(ip), loop): ip
-        for ip in LAMP_IPS
-    }
-
-    done, pending = wait(future_by_ip, timeout=1.2)
-    for fut in pending:
-        fut.cancel()
-
-    online = []
-    for fut in done:
-        try:
-            if fut.result():
-                ip = future_by_ip[fut]
-                online.append(ip)
-        except:
-            pass
-    return online
+    return [
+        ip
+        for ip, result in get_lamp_probe_results().items()
+        if result.get("online")
+    ]
 
 
 NAMES_FILE = "lamp_names.json"
@@ -3992,10 +4069,20 @@ def open_midi_config_panel():
         ports = get_available_ports()
         input_count = len(ports.get("inputs", []))
         output_count = len(ports.get("outputs", []))
+        if status.get("apc_connected") and status.get("output_port"):
+            connection_label = "APC conectada"
+        elif status.get("reconnecting"):
+            connection_label = "reconectando automaticamente"
+        elif status.get("connected"):
+            connection_label = "entrada activa; APC sin conectar"
+        elif status.get("running"):
+            connection_label = "esperando puertos MIDI"
+        else:
+            connection_label = "detenido"
         update_midi_scene_indicator(scene_indicator_btn)
         status_var.set(
             "Estado: {estado}\nEntrada: {entrada}\nSalida: {salida}\nPuertos disponibles: {inputs} entrada(s), {outputs} salida(s)\nUltimo error: {error}".format(
-                estado="conectado" if status.get("running") else "detenido",
+                estado=connection_label,
                 entrada=status.get("input_port") or "sin entrada",
                 salida=status.get("output_port") or "sin salida",
                 inputs=input_count,
@@ -4125,9 +4212,8 @@ def restart_midi_listener_from_settings():
             handle_midi_event,
             midi_settings.get("input_port") or None,
             midi_settings.get("output_port") or None,
+            on_connection_change=handle_midi_connection_change,
         )
-        if ok:
-            root.after(1200, inicializar_leds_midi)
         return ok
     except Exception as exc:
         print(f"[MIDI] No se pudo reiniciar MIDI: {exc}")
@@ -15007,15 +15093,32 @@ def handle_midi_event(event):
     note = event.get("note")
     vel = event.get("velocity")
     status = event.get("status")
+    source_role = str(event.get("source_role") or "unknown").lower()
+    source_port = str(event.get("source_port") or "").strip()
+    source_label = "Ableton" if source_role == "ableton" else "APC" if source_role == "apc" else source_port or "MIDI"
     try:
         if event.get("note_on"):
-            root.after(0, lambda n=note, v=vel: midi_last_event_var.set(f"Ultima nota MIDI: {n}  vel {v}"))
+            root.after(
+                0,
+                lambda n=note, v=vel, source=source_label: midi_last_event_var.set(
+                    f"Ultima nota MIDI ({source}): {n}  vel {v}"
+                ),
+            )
         elif event.get("note_off"):
-            root.after(0, lambda n=note: midi_last_event_var.set(f"Ultima nota MIDI: {n} off"))
+            root.after(
+                0,
+                lambda n=note, source=source_label: midi_last_event_var.set(
+                    f"Ultima nota MIDI ({source}): {n} off"
+                ),
+            )
     except Exception:
         pass
 
     if event.get("note_off"):
+        # Las notas de Ableton solo disparan escenas; sus NOTE OFF no deben
+        # liberar pulsos, fades ni botones sostenidos de la APC.
+        if source_role == "ableton":
+            return
         if is_apc_espacio_note(note):
             root.after(0, lambda n=note: handle_espacio_midi_note_off(n))
             return
@@ -15033,13 +15136,24 @@ def handle_midi_event(event):
     # NOTE ON → ejecutar acción
     # ----------------------------
     if event.get("note_on"):
-        scene_name = get_midi_scene_for_note(note)
-        if scene_name:
-            root.after(0, lambda name=scene_name: play_scene_from_midi(name))
-            return
-
         if capture_midi_learn_note(note):
             return
+
+        # El puerto virtual se reserva para las notas enviadas por Ableton.
+        # Aunque coincidan numéricamente con un pad, nunca ejecutan controles APC.
+        if source_role == "ableton":
+            scene_name = get_midi_scene_for_note(note)
+            if scene_name:
+                root.after(0, lambda name=scene_name: play_scene_from_midi(name))
+            return
+
+        # Compatibilidad con dispositivos sin origen identificado. Las notas
+        # físicas de la APC quedan excluidas de los disparadores de escenas.
+        if source_role == "unknown":
+            scene_name = get_midi_scene_for_note(note)
+            if scene_name:
+                root.after(0, lambda name=scene_name: play_scene_from_midi(name))
+                return
 
         if is_apc_espacio_note(note):
             root.after(0, lambda n=note: handle_espacio_midi_note(n))
@@ -15106,6 +15220,8 @@ def handle_midi_event(event):
     # CC (control change → fader)
     # ----------------------------
     if (status & 0xF0) == 0xB0:   # CC
+        if source_role == "ableton":
+            return
         cc = note
         value = vel
         if cc in cc_map:
@@ -16616,16 +16732,32 @@ def inicializar_leds_midi():
     update_midi_scene_execution_led()
     refresh_espacio_midi_leds()
 
+
+def handle_midi_connection_change(event, status):
+    """Restaura el estado visual de la APC cuando Windows vuelve a exponerla."""
+    output_name = str(status.get("output_port") or "")
+
+    def apply_connection_change():
+        try:
+            if event in ("connected", "reconnected") and "apc" in output_name.lower():
+                midi_last_event_var.set("APC MIDI conectada. LEDs restaurados.")
+                inicializar_leds_midi()
+            elif event == "disconnected":
+                midi_last_event_var.set("APC MIDI desconectada. Esperando reconexion...")
+        except Exception as exc:
+            print(f"[MIDI] No se pudo actualizar la interfaz tras reconectar: {exc}")
+
+    root.after(300, apply_connection_change)
+
 # --- activar el listener MIDI ---
 # 1) Iniciar MIDI
 if start_midi_thread(
     handle_midi_event,
     midi_settings.get("input_port") or None,
     midi_settings.get("output_port") or None,
+    on_connection_change=handle_midi_connection_change,
 ):
-    # 2) Una vez que MIDI está listo, esperar un poco
-    #    y luego encender LEDs de acciones
-    root.after(1200, inicializar_leds_midi)
+    print("[MIDI] Supervisor automatico de puertos activo.")
 else:
     print("[MIDI] No se pudo iniciar MIDI.")
 
@@ -16637,17 +16769,14 @@ else:
 
 # CIERRE PANEL ESCENAS_________________________________________________________________________________________________________
 
-# refresco inteligente cada 1.2 s
-# def refresco_periodico():
-#     refresh_lamp_status()
-#     root.after(1200, refresco_periodico)
-# root.after(1200, refresco_periodico)
-root.after(800, refresh_lamp_status)
+# Detección inicial con reintentos y supervisión periódica de la red.
+start_lamp_status_monitor()
 
 
 def on_app_close():
     if not confirmar_cambios_proyecto_pendientes("salir"):
         return
+    lamp_refresh_state["active"] = False
     if proyecto_activo.get("dirty"):
         guardar_ultimo_proyecto_activo(None)
     stop_sound_module()

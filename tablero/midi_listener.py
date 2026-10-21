@@ -5,9 +5,20 @@ import rtmidi
 
 midi_in = None
 midi_inputs = []
+midi_input_sources = {}
 midi_out = None
 running = False
 midi_thread = None
+midi_generation = 0
+connection_callback = None
+preferred_input_port_name = None
+preferred_output_port_name = None
+last_port_inventory = ((), ())
+reconnect_requested = threading.Event()
+midi_port_lock = threading.RLock()
+
+MIDI_PORT_SCAN_INTERVAL_SECONDS = 1.5
+MIDI_RECONNECT_INTERVAL_SECONDS = 2.0
 
 midi_status = {
     "input_port": None,
@@ -15,6 +26,10 @@ midi_status = {
     "input_ports": [],
     "output_ports": [],
     "running": False,
+    "connected": False,
+    "apc_connected": False,
+    "reconnecting": False,
+    "reconnect_count": 0,
     "last_error": "",
 }
 
@@ -57,44 +72,113 @@ def get_midi_status():
     return dict(midi_status)
 
 
-def init_midi(input_port_name=None, output_port_name=None):
-    global midi_in, midi_inputs, midi_out
+def _port_inventory(ports=None):
+    ports = ports or get_available_ports()
+    return (
+        tuple(ports.get("inputs", [])),
+        tuple(ports.get("outputs", [])),
+    )
 
+
+def _close_midi_ports():
+    global midi_in, midi_inputs, midi_input_sources, midi_out
+
+    with midi_port_lock:
+        inputs = list(midi_inputs)
+        if midi_in is not None and midi_in not in inputs:
+            inputs.append(midi_in)
+
+        for midi_input in inputs:
+            try:
+                midi_input.close_port()
+            except Exception:
+                pass
+
+        try:
+            if midi_out is not None:
+                midi_out.close_port()
+        except Exception:
+            pass
+
+        midi_in = None
+        midi_inputs = []
+        midi_input_sources = {}
+        midi_out = None
+
+
+def _notify_connection(event):
+    callback = connection_callback
+    if not callable(callback):
+        return
+    try:
+        callback(event, get_midi_status())
+    except Exception as exc:
+        print(f"[MIDI ERROR] Avisando cambio de conexion: {exc}")
+
+
+def request_midi_reconnect(error=None):
+    if error:
+        midi_status["last_error"] = str(error)
+    midi_status["reconnecting"] = True
+    reconnect_requested.set()
+
+
+def init_midi(input_port_name=None, output_port_name=None):
+    global midi_in, midi_inputs, midi_input_sources, midi_out, last_port_inventory
+
+    _close_midi_ports()
+    midi_status["input_port"] = None
+    midi_status["output_port"] = None
+    midi_status["connected"] = False
+    midi_status["apc_connected"] = False
+    midi_status["reconnecting"] = True
     try:
         midi_status["last_error"] = ""
 
         input_probe = rtmidi.MidiIn()
         input_ports = input_probe.get_ports()
         midi_status["input_ports"] = input_ports
+        output_probe = rtmidi.MidiOut()
+        output_ports = output_probe.get_ports()
+        midi_status["output_ports"] = output_ports
+        last_port_inventory = (tuple(input_ports), tuple(output_ports))
 
-        input_indexes = []
+        input_specs = []
         if input_port_name:
             preferred_index = _find_port_index(input_ports, input_port_name)
             if preferred_index is not None:
-                input_indexes.append(preferred_index)
+                preferred_name = input_ports[preferred_index]
+                preferred_role = "apc" if "apc" in preferred_name.lower() else "ableton"
+                input_specs.append((preferred_index, preferred_role))
 
         apc_index = _find_port_index(input_ports, "APC")
-        if apc_index is not None and apc_index not in input_indexes:
-            input_indexes.append(apc_index)
+        if apc_index is not None and all(index != apc_index for index, _role in input_specs):
+            input_specs.append((apc_index, "apc"))
 
-        if not input_indexes:
+        if not input_specs:
             midi_status["last_error"] = "No se encontro entrada MIDI compatible."
             print("[MIDI] No se encontro entrada MIDI compatible.")
             return False
 
         midi_inputs = []
-        for input_port_index in input_indexes:
+        midi_input_sources = {}
+        for input_port_index, source_role in input_specs:
             midi_input = rtmidi.MidiIn()
             midi_input.open_port(input_port_index)
             midi_inputs.append(midi_input)
+            midi_input_sources[id(midi_input)] = {
+                "port": input_ports[input_port_index],
+                "role": source_role,
+            }
 
         midi_in = midi_inputs[0] if midi_inputs else None
-        midi_status["input_port"] = " + ".join(input_ports[index] for index in input_indexes)
+        midi_status["input_port"] = " + ".join(
+            input_ports[index]
+            for index, _role in input_specs
+        )
         print("[MIDI] Entrada MIDI conectada:", midi_status["input_port"])
 
         midi_out = rtmidi.MidiOut()
-        output_ports = midi_out.get_ports()
-        midi_status["output_ports"] = output_ports
         if output_port_name and "microsoft gs wavetable" in output_port_name.lower():
             output_port_name = None
 
@@ -116,9 +200,19 @@ def init_midi(input_port_name=None, output_port_name=None):
             midi_status["output_port"] = output_ports[output_port_index]
             print("[MIDI] Salida MIDI conectada:", output_ports[output_port_index])
 
+        connected_names = input_ports + output_ports
+        midi_status["connected"] = bool(midi_inputs)
+        midi_status["apc_connected"] = any("apc" in name.lower() for name in connected_names)
+        midi_status["reconnecting"] = False
         return True
 
     except Exception as exc:
+        _close_midi_ports()
+        midi_status["input_port"] = None
+        midi_status["output_port"] = None
+        midi_status["connected"] = False
+        midi_status["apc_connected"] = False
+        midi_status["reconnecting"] = True
         midi_status["last_error"] = str(exc)
         print(f"[MIDI ERROR] No se pudo inicializar MIDI: {exc}")
         return False
@@ -128,10 +222,13 @@ def midi_led(note, velocity):
     if not midi_out or note is None:
         return
     try:
-        midi_out.send_message([144, note, velocity])
+        with midi_port_lock:
+            if midi_out is not None:
+                midi_out.send_message([144, note, velocity])
     except Exception as exc:
         midi_status["last_error"] = str(exc)
         print(f"[MIDI ERROR] LED note={note}: {exc}")
+        request_midi_reconnect(exc)
 
 
 def led_activo(note):
@@ -175,75 +272,141 @@ def procesar_mensaje_crudo(msg):
         return None
 
 
-def midi_loop(handle_event_callback):
-    global midi_in, midi_inputs, running
+def midi_loop(handle_event_callback, generation):
+    global midi_in, midi_inputs, running, last_port_inventory
 
-    while running:
-        active_inputs = midi_inputs or ([midi_in] if midi_in else [])
-        for midi_input in active_inputs:
+    next_port_scan = 0.0
+    next_reconnect_attempt = 0.0
+    connection_announced = bool(midi_status.get("connected"))
+
+    while running and generation == midi_generation:
+        now = time.monotonic()
+        if now >= next_port_scan:
+            available = get_available_ports()
+            inventory = _port_inventory(available)
+            inventory_changed = inventory != last_port_inventory
+            should_reconnect = (
+                reconnect_requested.is_set()
+                or inventory_changed
+                or not midi_status.get("connected", False)
+            )
+
+            if should_reconnect and now >= next_reconnect_attempt:
+                if not running or generation != midi_generation:
+                    break
+                was_connected = bool(midi_status.get("connected"))
+                was_apc_connected = bool(midi_status.get("apc_connected"))
+                midi_status["reconnecting"] = True
+                if was_connected and (inventory_changed or reconnect_requested.is_set()):
+                    midi_status["connected"] = False
+                    midi_status["apc_connected"] = False
+                    _notify_connection("disconnected")
+
+                ok = init_midi(
+                    input_port_name=preferred_input_port_name,
+                    output_port_name=preferred_output_port_name,
+                )
+                reconnect_requested.clear()
+                next_reconnect_attempt = now + MIDI_RECONNECT_INTERVAL_SECONDS
+
+                if ok:
+                    reconnected = connection_announced or was_connected or was_apc_connected
+                    if reconnected:
+                        midi_status["reconnect_count"] += 1
+                    connection_announced = True
+                    _notify_connection("reconnected" if reconnected else "connected")
+                    print("[MIDI] Conexion restablecida automaticamente.")
+
+            next_port_scan = now + MIDI_PORT_SCAN_INTERVAL_SECONDS
+
+        if not running or generation != midi_generation:
+            break
+
+        with midi_port_lock:
+            active_inputs = [
+                (
+                    midi_input,
+                    dict(
+                        midi_input_sources.get(
+                            id(midi_input),
+                            {"port": "", "role": "unknown"},
+                        )
+                    ),
+                )
+                for midi_input in (midi_inputs or ([midi_in] if midi_in else []))
+            ]
+        for midi_input, source in active_inputs:
             try:
-                msg = midi_input.get_message()
+                with midi_port_lock:
+                    msg = midi_input.get_message()
             except Exception as exc:
                 midi_status["last_error"] = str(exc)
                 print(f"[MIDI ERROR] Leyendo mensaje: {exc}")
-                time.sleep(0.1)
-                continue
+                if running and generation == midi_generation:
+                    request_midi_reconnect(exc)
+                break
 
             if msg:
                 event = procesar_mensaje_crudo(msg)
                 if event:
+                    event["source_port"] = source.get("port", "")
+                    event["source_role"] = source.get("role", "unknown")
                     handle_event_callback(event)
 
         time.sleep(0.003)
 
 
-def start_midi_thread(handle_event_callback, input_port_name=None, output_port_name=None):
-    global running, midi_thread
+def start_midi_thread(
+    handle_event_callback,
+    input_port_name=None,
+    output_port_name=None,
+    on_connection_change=None,
+):
+    global running, midi_thread, connection_callback, midi_generation
+    global preferred_input_port_name, preferred_output_port_name
+
+    preferred_input_port_name = input_port_name
+    preferred_output_port_name = output_port_name
+    connection_callback = on_connection_change
 
     if running:
+        request_midi_reconnect()
         return True
 
     ok = init_midi(input_port_name=input_port_name, output_port_name=output_port_name)
     if not ok:
-        print("[MIDI] No se iniciara el hilo MIDI.")
-        running = False
-        midi_status["running"] = False
-        return False
+        print("[MIDI] Puertos no disponibles; se intentara reconectar automaticamente.")
 
     running = True
+    midi_generation += 1
+    generation = midi_generation
     midi_status["running"] = True
 
     midi_thread = threading.Thread(
         target=midi_loop,
-        args=(handle_event_callback,),
+        args=(handle_event_callback, generation),
         daemon=True,
     )
     midi_thread.start()
 
-    print("[MIDI] Thread MIDI iniciado.")
+    if ok:
+        _notify_connection("connected")
+    else:
+        request_midi_reconnect()
+    print("[MIDI] Thread MIDI iniciado con supervision de puertos.")
     return True
 
 
 def stop_midi():
-    global running, midi_in, midi_inputs, midi_out
+    global running, midi_generation
     running = False
+    midi_generation += 1
     midi_status["running"] = False
-    try:
-        for midi_input in midi_inputs:
-            try:
-                midi_input.close_port()
-            except Exception:
-                pass
-        midi_inputs = []
-        if midi_in:
-            midi_in.close_port()
-    except Exception:
-        pass
-    try:
-        if midi_out:
-            midi_out.close_port()
-    except Exception:
-        pass
+    midi_status["connected"] = False
+    midi_status["apc_connected"] = False
+    midi_status["reconnecting"] = False
+    reconnect_requested.clear()
+    _close_midi_ports()
 
 
 def inicializar_leds(mapeo_notas):
@@ -253,7 +416,7 @@ def inicializar_leds(mapeo_notas):
 
     try:
         clear_all_leds()
-        midi_out.send_message([0x90, 0, 1])
+        midi_led(0, 1)
         time.sleep(0.05)
 
         efectos_validos = {16, 24, 32, 40, 48, 56}
