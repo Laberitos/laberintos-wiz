@@ -12,9 +12,10 @@
     "3C-M2.1-Francisco_toca_el_mar_estatico",
     "3C-M2.2-Francisco_saca_la_mano_atardecer",
     "3C-M3-Francisco_toca_el_mar",
-    "4C-M1-Florence_el_jardin",
-    "4C-M2-Se_marchita_el_jardín",
-    "4C-M3-Petalos-luciernaga"
+    "4C-M1-Maria_en_su_jardin",
+    "5C-M1-Separación_Vicente_Maria",
+    "6C-M1-Colapso_de_Vicente",
+    "7C-M1-Cenando_pez"
   ],
   "datos": {
     "2-Inicio_Caminata": {
@@ -1844,7 +1845,7 @@
             "color": {
               "h": 295,
               "s": 1.0,
-              "brillo": 180
+              "brillo": 255
             }
           },
           {
@@ -1856,7 +1857,7 @@
             "color": {
               "h": 292,
               "s": 0.98,
-              "brillo": 164
+              "brillo": 255
             }
           },
           {
@@ -1868,7 +1869,7 @@
             "color": {
               "h": 298,
               "s": 1.0,
-              "brillo": 196
+              "brillo": 255
             }
           },
           {
@@ -1880,7 +1881,7 @@
             "color": {
               "h": 294,
               "s": 0.99,
-              "brillo": 150
+              "brillo": 255
             }
           },
           {
@@ -1892,7 +1893,7 @@
             "color": {
               "h": 300,
               "s": 0.97,
-              "brillo": 210
+              "brillo": 255
             }
           },
           {
@@ -1904,7 +1905,7 @@
             "color": {
               "h": 296,
               "s": 1.0,
-              "brillo": 172
+              "brillo": 255
             }
           },
           {
@@ -1916,7 +1917,7 @@
             "color": {
               "h": 291,
               "s": 0.98,
-              "brillo": 188
+              "brillo": 255
             }
           },
           {
@@ -1928,7 +1929,7 @@
             "color": {
               "h": 299,
               "s": 1.0,
-              "brillo": 158
+              "brillo": 255
             }
           },
           {
@@ -1940,7 +1941,7 @@
             "color": {
               "h": 293,
               "s": 0.99,
-              "brillo": 202
+              "brillo": 255
             }
           },
           {
@@ -1952,7 +1953,7 @@
             "color": {
               "h": 297,
               "s": 1.0,
-              "brillo": 176
+              "brillo": 255
             }
           }
         ],
@@ -2075,8 +2076,8 @@
         "target_group": "efectos",
         "summary": "Bichos | arranque marchito | luciernaga violeta | fuego a minimo 30s",
         "duration_ms": 130000,
-        "intro_ms": 5000,
-        "outro_ms": 25000,
+        "intro_ms": 500,
+        "outro_ms": 24500,
         "tick_ms": 250,
         "pulse_period_ms": 1400,
         "low_brightness": 5,
@@ -2143,7 +2144,7 @@
             "at_ms": 0,
             "fade_ms": 30000,
             "lamps": [
-              "L18"
+              "L9"
             ],
             "mode": "white",
             "color": {
@@ -2181,7 +2182,7 @@
             "at_ms": 64000,
             "fade_ms": 5000,
             "lamps": [
-              "L9",
+              "L18",
               "L10"
             ],
             "mode": "white",
@@ -21342,6 +21343,1089 @@
       "updated_at": "2026-08-28T19:43:39",
       "from_bank": "3C-M1-Parto_de_Maria",
       "bank_description": "Parto de Maria. Primer tramo: todas las luces nacen en blanco calido durante 4 segundos; desde ahi las luces de bichos se pasan impulsos como informacion neuronal, mientras atmosfera sostiene el calor inicial."
+    },
+    "4C-M1-Maria_en_su_jardin": {
+      "tipo": "escena_luces",
+      "version": 2,
+      "scene_kind": "scripted",
+      "nombre": "4C-M1-Maria_en_su_jardin",
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {},
+      "effects_config": {},
+      "effects_layers": [],
+      "lamparas": {},
+      "scripted_scene": {
+        "type": "laberintos_composite_scene",
+        "summary": "Maria en su jardín | nacimiento y danza | marchitamiento | pétalos-luciérnaga",
+        "duration_ms": 294500,
+        "preserve_source_timing": false,
+        "phases": [
+          {
+            "source_scene": "4C-M1-Florence_el_jardin",
+            "duration_ms": 120000
+          },
+          {
+            "source_scene": "4C-M2-Se_marchita_el_jardín",
+            "duration_ms": 60000
+          },
+          {
+            "source_scene": "4C-M3-Petalos-luciernaga",
+            "duration_ms": 114500,
+            "scripted_overrides": {
+              "duration_ms": 114500,
+              "intro_ms": 0,
+              "sequence_lamps": [
+                "L14",
+                "L13",
+                "L12",
+                "L11"
+              ],
+              "final_dim_hold_lamps": [
+                "L17",
+                "L18",
+                "L12",
+                "L13"
+              ],
+              "final_dim_hold_brightness": 255
+            }
+          }
+        ]
+      },
+      "created_at": "2026-09-05T00:00:00",
+      "updated_at": "2026-09-05T00:00:00",
+      "from_bank": "4C-M1-Maria_en_su_jardin",
+      "bank_description": "Escena compuesta de 4:54.5 que encadena el nacimiento y la danza del jardín, un marchitamiento de 1 minuto y los relevos de pétalos-luciérnaga desde L14."
+    },
+    "6C-M1-Colapso_de_Vicente": {
+      "tipo": "escena_luces",
+      "version": 3,
+      "scene_kind": "scripted",
+      "nombre": "6C-M1-Colapso_de_Vicente",
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {},
+      "effects_config": {},
+      "effects_layers": [],
+      "lamparas": {},
+      "scripted_scene": {
+        "type": "laberintos_collapse_vicente",
+        "summary": "Colapso | corazón | trueno | MIDI | danza 06:00-08:06.700 | truenos | azul final",
+        "duration_ms": 666000,
+        "tick_ms": 250,
+        "initial_source_scene": "5C-M1-Separación_Vicente_Maria",
+        "initial_hold_ms": 1000,
+        "target_group": "bichos",
+        "target_lamps": [
+          "L8",
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18"
+        ],
+        "main_lamps": [
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18"
+        ],
+        "initial_states": {
+          "L9": {
+            "h": 238.63,
+            "s": 0.988,
+            "brillo": 8
+          },
+          "L10": {
+            "h": 228.46,
+            "s": 0.969,
+            "brillo": 8
+          },
+          "L11": {
+            "h": 212.0,
+            "s": 0.94,
+            "brillo": 8
+          },
+          "L12": {
+            "h": 195.54,
+            "s": 0.911,
+            "brillo": 8
+          },
+          "L13": {
+            "h": 185.37,
+            "s": 0.892,
+            "brillo": 8
+          },
+          "L14": {
+            "h": 185.37,
+            "s": 0.892,
+            "brillo": 8
+          },
+          "L15": {
+            "h": 195.54,
+            "s": 0.911,
+            "brillo": 8
+          },
+          "L16": {
+            "h": 212.0,
+            "s": 0.94,
+            "brillo": 8
+          },
+          "L17": {
+            "h": 228.46,
+            "s": 0.969,
+            "brillo": 8
+          },
+          "L18": {
+            "h": 238.63,
+            "s": 0.988,
+            "brillo": 8
+          }
+        },
+        "warm_color": {
+          "temp": 22,
+          "brillo": 255,
+          "preview_h": 34,
+          "preview_s": 0.54
+        },
+        "steps": [
+          {
+            "at_ms": 1000,
+            "fade_ms": 5000,
+            "start_brightness": 8,
+            "lamps": [
+              "L14",
+              "L15"
+            ]
+          },
+          {
+            "at_ms": 10000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L13",
+              "L16"
+            ]
+          },
+          {
+            "at_ms": 20000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L12",
+              "L17"
+            ]
+          },
+          {
+            "at_ms": 30000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L11",
+              "L18"
+            ]
+          },
+          {
+            "at_ms": 40000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L10"
+            ]
+          },
+          {
+            "at_ms": 46000,
+            "fade_ms": 5000,
+            "lamps": [
+              "L9"
+            ]
+          }
+        ],
+        "rage_impulses": {
+          "start_ms": 51000,
+          "end_ms": 100000,
+          "impact_dark_end_ms": 51400,
+          "impact_recover_end_ms": 52000,
+          "impact_brightness": 15,
+          "tick_ms": 200,
+          "stages": [
+            {
+              "start_ms": 52755,
+              "end_ms": 63947,
+              "interval_ms": 5278,
+              "width_ms": 2000,
+              "brillo_min": 145
+            },
+            {
+              "start_ms": 63947,
+              "end_ms": 85054,
+              "interval_ms": 2646,
+              "width_ms": 1500,
+              "brillo_min": 95
+            },
+            {
+              "start_ms": 85054,
+              "end_ms": 100000,
+              "interval_ms": 1323,
+              "width_ms": 950,
+              "brillo_min": 50
+            }
+          ]
+        },
+        "sax_calm": {
+          "start_ms": 100000,
+          "end_ms": 141000,
+          "period_ms": 10584,
+          "brillo_min": 215,
+          "brillo_max": 255
+        },
+        "collapse_pulses": {
+          "start_ms": 141000,
+          "end_ms": 231000,
+          "impact_dark_end_ms": 141250,
+          "impact_recover_end_ms": 141700,
+          "impact_brightness": 8,
+          "tick_ms": 120,
+          "stages": [
+            {
+              "start_ms": 141700,
+              "end_ms": 157593,
+              "interval_ms": 2646,
+              "width_ms": 1000,
+              "brillo_min": 55
+            },
+            {
+              "start_ms": 157593,
+              "end_ms": 200434,
+              "interval_ms": 1323,
+              "width_ms": 750,
+              "brillo_min": 30
+            },
+            {
+              "start_ms": 200434,
+              "end_ms": 215945,
+              "interval_ms": 1323,
+              "width_ms": 720,
+              "brillo_min": 20
+            },
+            {
+              "start_ms": 215945,
+              "end_ms": 224977,
+              "interval_ms": 2646,
+              "width_ms": 1000,
+              "brillo_min": 65
+            },
+            {
+              "start_ms": 224977,
+              "end_ms": 231000,
+              "interval_ms": 1323,
+              "width_ms": 720,
+              "brillo_min": 25
+            }
+          ]
+        },
+        "final_puppet": {
+          "start_ms": 231000,
+          "end_ms": 239300,
+          "lamps": [
+            "L8",
+            "L13",
+            "L14",
+            "L15"
+          ],
+          "violet_lamps": [
+            "L13",
+            "L14",
+            "L15"
+          ],
+          "h": 313,
+          "s": 0.37,
+          "brillo_min": 80,
+          "brillo_max": 180,
+          "period_ms": 7000,
+          "tick_ms": 80,
+          "heartbeat": {
+            "lamp": "L8",
+            "h": 5,
+            "s": 0.51,
+            "brillo_min": 8,
+            "brillo_max": 255,
+            "period_ms": 1050,
+            "second_peak_factor": 0.9
+          }
+        },
+        "thunder": {
+          "start_ms": 239300,
+          "sound_start_ms": 240000,
+          "duration_ms": 4700,
+          "mode": "white",
+          "temp": 235,
+          "preview_h": 205,
+          "h": 210,
+          "s": 0.08,
+          "pattern": [
+            [
+              0,
+              255
+            ],
+            [
+              260,
+              0
+            ],
+            [
+              430,
+              255
+            ],
+            [
+              650,
+              0
+            ],
+            [
+              700,
+              255
+            ],
+            [
+              1220,
+              0
+            ],
+            [
+              1440,
+              255
+            ],
+            [
+              1740,
+              0
+            ],
+            [
+              2050,
+              255
+            ],
+            [
+              2400,
+              0
+            ],
+            [
+              2850,
+              255
+            ],
+            [
+              3300,
+              0
+            ],
+            [
+              3650,
+              255
+            ],
+            [
+              4050,
+              0
+            ],
+            [
+              4700,
+              0
+            ]
+          ]
+        },
+        "manual_hold_window": {
+          "start_ms": 244000,
+          "end_ms": 300000,
+          "h": 163,
+          "s": 0.53,
+          "brillo": 89
+        },
+        "rebirth_sequence": {
+          "h": 155,
+          "s": 0.67,
+          "brillo": 255,
+          "tick_ms": 200,
+          "entries": [
+            {
+              "at_ms": 305000,
+              "fade_ms": 5000,
+              "lamps": [
+                "L17"
+              ]
+            },
+            {
+              "at_ms": 330000,
+              "fade_ms": 5000,
+              "lamps": [
+                "L12",
+                "L13"
+              ]
+            },
+            {
+              "at_ms": 340000,
+              "fade_ms": 5000,
+              "lamps": [
+                "L11",
+                "L14"
+              ]
+            },
+            {
+              "at_ms": 350000,
+              "fade_ms": 5000,
+              "lamps": [
+                "L10",
+                "L15"
+              ]
+            },
+            {
+              "at_ms": 355000,
+              "fade_ms": 5000,
+              "lamps": [
+                "L9",
+                "L16",
+                "L18"
+              ]
+            }
+          ]
+        },
+        "dance": {
+          "start_ms": 360000,
+          "all_join_ms": 416000,
+          "partial_lamps": [
+            "L14",
+            "L15",
+            "L16",
+            "L17"
+          ],
+          "partial_order": [
+            "L14",
+            "L15",
+            "L16",
+            "L17"
+          ],
+          "full_order": [
+            "L16",
+            "L17",
+            "L18",
+            "L9",
+            "L10",
+            "L11",
+            "L12",
+            "L13",
+            "L14",
+            "L15"
+          ],
+          "brillo_base": 95,
+          "brillo_pico": 255,
+          "ramp_ms": 2500,
+          "join_ramp_ms": 3500,
+          "step_ms": 900,
+          "crest_width": 0.62,
+          "tail_strength": 0.28,
+          "mixed_palette": {
+            "start_ms": 416000,
+            "color_lamps": [
+              "L16",
+              "L18",
+              "L10",
+              "L12",
+              "L14"
+            ],
+            "color": {
+              "h": 155,
+              "s": 0.67
+            },
+            "warm_lamps": [
+              "L17",
+              "L9",
+              "L11",
+              "L13",
+              "L15"
+            ],
+            "warm": {
+              "temp": 22,
+              "preview_h": 34
+            }
+          },
+          "tick_ms": 120
+        },
+        "late_warm_hold": {
+          "start_ms": 486700,
+          "lamps": [
+            "L18",
+            "L17",
+            "L12",
+            "L13"
+          ],
+          "temp": 0,
+          "brillo": 255,
+          "preview_h": 34
+        },
+        "late_thunder": {
+          "start_times_ms": [
+            591580,
+            600000
+          ],
+          "duration_ms": 4700
+        },
+        "final_blue_hold": {
+          "start_ms": 604700,
+          "end_ms": 666000,
+          "lamps": [
+            "L9",
+            "L10",
+            "L11",
+            "L14",
+            "L15",
+            "L16"
+          ],
+          "h": 199,
+          "s": 0.96,
+          "brillo": 180
+        }
+      },
+      "from_bank": "6C-M1-Colapso_de_Vicente",
+      "bank_description": "Colapso de Vicente sincronizado con cuadro6.wav. El rectángulo cálido crece hasta 00:51, atraviesa rabia, calma de saxofón y pulsos de colapso. Desde 03:51 L13, L14 y L15 respiran en violeta mientras L8 late intensamente tras el susto. A las 03:59.300 aparecen dos anticipos en blanco frío nativo; el golpe principal a I255 coincide exactamente con el trueno de 04:00 y deja réplicas hasta 04:04. Luego se abre una ventana de interpretación manual con Sostener MIDI y, desde 05:05, el espacio renace. Entre 06:56 y 08:06.700 la onda alterna cinco lámparas C-H155-S067 con cinco en blanco cálido. Después quedan únicamente L18, L17, L12 y L13 en B-T000-I255, y el trueno se repite a 09:51.580 y 10:00. Desde 10:04.700 hasta 11:06 se suman L9, L10, L11, L14, L15 y L16 en C-H199-S096-I180, manteniendo las cuatro cálidas y L8 apagada.",
+      "updated_at": "2026-10-16T00:00:00"
+    },
+    "7C-M1-Cenando_pez": {
+      "tipo": "escena_luces",
+      "version": 3,
+      "scene_kind": "scripted",
+      "nombre": "7C-M1-Cenando_pez",
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {},
+      "effects_config": {},
+      "effects_layers": [],
+      "lamparas": {},
+      "scripted_scene": {
+        "type": "laberintos_cenando_pez",
+        "summary": "Continuidad de 6C-M1 | fade 10 s | 00:21.500 entran L16, L17 y L15 con L18",
+        "duration_ms": 416000,
+        "tick_ms": 250,
+        "initial_source_scene": "6C-M1-Colapso_de_Vicente",
+        "target_group": "bichos",
+        "target_lamps": [
+          "L8",
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18"
+        ],
+        "opening_state": {
+          "warm_lamps": [
+            "L18",
+            "L17",
+            "L12",
+            "L13"
+          ],
+          "warm": {
+            "temp": 0,
+            "brillo": 255,
+            "preview_h": 34
+          },
+          "blue_lamps": [
+            "L9",
+            "L10",
+            "L11",
+            "L14",
+            "L15",
+            "L16"
+          ],
+          "blue": {
+            "h": 199,
+            "s": 0.96,
+            "brillo": 180
+          },
+          "off_lamps": [
+            "L8"
+          ]
+        },
+        "opening_fade": {
+          "duration_ms": 10000,
+          "tick_ms": 120,
+          "survivor_lamp": "L18",
+          "start_preview": {
+            "h": 34,
+            "s": 0.59
+          },
+          "target": {
+            "h": 13,
+            "s": 0.9,
+            "brillo": 255
+          }
+        },
+        "first_group_entry": {
+          "at_ms": 21500,
+          "lamps": [
+            "L16",
+            "L17",
+            "L15"
+          ],
+          "h": 13,
+          "s": 0.9,
+          "brillo": 255
+        }
+      },
+      "from_bank": "7C-M1-Cenando_pez",
+      "bank_description": "Cenando pez está sincronizada con los 06:56 de Cuadro7.wav. Comienza exactamente desde el cierre de 6C-M1. Durante los primeros diez segundos L9 a L17 se apagan mediante fade, mientras L18 transiciona desde B-T000-I255 hasta C-H013-S090-I255 #FF4B19. Desde 00:10 L18 queda sola; en 00:21.500 se encienden simultáneamente L16, L17 y L15 en el mismo tono. L8 continúa apagada.",
+      "updated_at": "2026-10-17T20:32:36"
+    },
+    "5C-M1-Separación_Vicente_Maria": {
+      "tipo": "escena_luces",
+      "version": 2,
+      "scene_kind": "look",
+      "nombre": "5C-M1-Separación_Vicente_Maria",
+      "fade_in": 0.0,
+      "fade_out": 0.0,
+      "effects": {
+        "respiracion": false,
+        "transicion_color": false,
+        "secuencia": false,
+        "secuencia_on": false,
+        "secuencia_on_overlay": false,
+        "secuencia_off": false,
+        "secuencia_off_overlay": false,
+        "parpadeo": false,
+        "estrobo": false,
+        "estrobo_udp": false,
+        "fuego": false,
+        "mar": false,
+        "arcoiris": false,
+        "vela": false,
+        "atardecer": false,
+        "desfase": false,
+        "latido": false,
+        "Intercambio": false,
+        "_params": {
+          "respiracion": {
+            "brillo_min": 1,
+            "brillo_max": 255
+          },
+          "transicion_color": {
+            "hue_destino": 280,
+            "sat_destino_pct": 100,
+            "duracion_ms": 180000,
+            "pasos": 240
+          },
+          "secuencia": {
+            "brillo_on": 255,
+            "tiempo_on_ms": 70,
+            "cambio_ms": 0,
+            "cola_lamparas": 1,
+            "brillo_cola_pct": 18,
+            "brillo_fondo_pct": 0
+          },
+          "secuencia_on": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_on_overlay": {
+            "tiempo_on_ms": 4000
+          },
+          "secuencia_off": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "secuencia_off_overlay": {
+            "tiempo_off_ms": 20000,
+            "fade_ms": 20000,
+            "pasos_fade": 20
+          },
+          "parpadeo": {
+            "brillo_on": 230,
+            "brillo_off": 0,
+            "tiempo_on_ms": 20,
+            "tiempo_off_ms": 20
+          },
+          "estrobo": {
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 70,
+            "off_ms": 70
+          },
+          "estrobo_udp": {
+            "on_ms": 50,
+            "off_ms": 50
+          },
+          "fuego": {
+            "brillo_min": 140,
+            "brillo_max": 255
+          },
+          "vela": {
+            "brillo_base": 120
+          },
+          "Intercambio": {
+            "hue_a": 0,
+            "sat_a_pct": 100,
+            "hue_b": 220,
+            "sat_b_pct": 100,
+            "brillo_min": 20,
+            "brillo": 220,
+            "duracion_ms": 10000,
+            "pasos": 100
+          }
+        }
+      },
+      "effects_config": {
+        "version": 1,
+        "active": {}
+      },
+      "effects_layers": [],
+      "lamparas": {
+        "L9": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 255,
+          "temp": 14,
+          "ip": "192.168.0.109"
+        },
+        "L10": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 248,
+          "temp": 14,
+          "ip": "192.168.0.110"
+        },
+        "L11": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 155,
+          "temp": 14,
+          "ip": "192.168.0.111"
+        },
+        "L12": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 101,
+          "temp": 14,
+          "ip": "192.168.0.112"
+        },
+        "L13": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 129,
+          "temp": 14,
+          "ip": "192.168.0.113"
+        },
+        "L14": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 167,
+          "temp": 14,
+          "ip": "192.168.0.114"
+        },
+        "L15": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 173,
+          "temp": 14,
+          "ip": "192.168.0.115"
+        },
+        "L16": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 191,
+          "temp": 14,
+          "ip": "192.168.0.116"
+        },
+        "L17": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 242,
+          "temp": 14,
+          "ip": "192.168.0.117"
+        },
+        "L18": {
+          "state": "on",
+          "modo": "white",
+          "brillo": 252,
+          "temp": 14,
+          "ip": "192.168.0.118"
+        },
+        "L19": {
+          "ip": "192.168.0.119",
+          "state": "off"
+        },
+        "L20": {
+          "ip": "192.168.0.100",
+          "state": "off"
+        },
+        "L8": {
+          "ip": "192.168.0.108",
+          "state": "off"
+        }
+      },
+      "scripted_scene": {
+        "type": "laberintos_separation_vicente_maria",
+        "summary": "Separación | danza 04:59.5 | cálido 05:40 | azules 07:00 | fade 08:00",
+        "duration_ms": 510000,
+        "tick_ms": 250,
+        "opening_transition_ms": 60000,
+        "swap_start_ms": 62000,
+        "swap_end_ms": 157000,
+        "white_start_ms": 157000,
+        "white_end_ms": 240000,
+        "isolation_start_ms": 245000,
+        "opening_neutral_s": 0.04,
+        "white_target": {
+          "temp": 128,
+          "brillo": 255,
+          "preview_h": 34,
+          "preview_s": 0.27
+        },
+        "isolation_lamp": "L14",
+        "isolation_color": {
+          "temp": 14,
+          "brillo": 255
+        },
+        "isolation_steps": [
+          {
+            "at_ms": 245000,
+            "lamps": [
+              "L14"
+            ],
+            "color": {
+              "temp": 14,
+              "brillo": 255
+            }
+          },
+          {
+            "at_ms": 254500,
+            "lamps": [
+              "L15",
+              "L16"
+            ],
+            "color": {
+              "temp": 14,
+              "brillo": 255
+            }
+          },
+          {
+            "at_ms": 265200,
+            "lamps": [
+              "L13",
+              "L12"
+            ],
+            "color": {
+              "temp": 14,
+              "brillo": 255
+            }
+          },
+          {
+            "at_ms": 273200,
+            "lamps": [
+              "L11"
+            ],
+            "color": {
+              "temp": 14,
+              "brillo": 255
+            }
+          },
+          {
+            "at_ms": 281500,
+            "fade_ms": 20000,
+            "lamps": [
+              "L9",
+              "L10",
+              "L18",
+              "L17"
+            ],
+            "color": {
+              "temp": 14,
+              "brillo": 255
+            }
+          }
+        ],
+        "candle_effect": {
+          "start_ms": 299500,
+          "end_ms": 340000,
+          "style": "harmonic_glow",
+          "h": 69,
+          "s": 0.36,
+          "brillo_min": 165,
+          "brillo_max": 255,
+          "brillo_final": 255,
+          "periodo_ms": 5600,
+          "frame_ms": 250,
+          "entrada_ms": 2500,
+          "entrada_h": 34,
+          "entrada_s": 0.55,
+          "cierre_ms": 0,
+          "variacion_h": 1.5,
+          "variacion_s": 0.025
+        },
+        "post_candle": {
+          "warm_fade_end_ms": 345000,
+          "warm_hold_end_ms": 388000,
+          "return_end_ms": 393000,
+          "blue_end_ms": 420000,
+          "warm_brightness": 255,
+          "warm_preview_h": 34,
+          "warm_preview_s": 0.52,
+          "blue_h": 216,
+          "blue_s": 0.9,
+          "blue_brightness": 255
+        },
+        "blue_variations": {
+          "style": "tidal_wave",
+          "start_ms": 420000,
+          "end_ms": 480000,
+          "fade_end_ms": 510000,
+          "frame_ms": 400,
+          "period_ms": 20000,
+          "entry_ms": 4000,
+          "center_h": 212,
+          "hue_range": 28,
+          "center_s": 0.94,
+          "sat_range": 0.05,
+          "brillo_min": 215,
+          "brillo_max": 255,
+          "brillo_final": 8,
+          "lamp_order": [
+            "L16",
+            "L17",
+            "L18",
+            "L9",
+            "L10",
+            "L11",
+            "L12",
+            "L13",
+            "L14",
+            "L15"
+          ]
+        },
+        "initial_source_scene": "4C-M1-Maria_en_su_jardin",
+        "initial_color": {
+          "h": 16,
+          "s": 1.0,
+          "brillo": 8
+        },
+        "target_lamps": [
+          "L9",
+          "L10",
+          "L11",
+          "L12",
+          "L13",
+          "L14",
+          "L15",
+          "L16",
+          "L17",
+          "L18"
+        ],
+        "zones": [
+          {
+            "name": "Zona 1",
+            "lamps": [
+              "L9",
+              "L10",
+              "L11",
+              "L12",
+              "L13"
+            ],
+            "color": {
+              "h": 274,
+              "s": 0.99,
+              "brillo": 255
+            }
+          },
+          {
+            "name": "Zona 2",
+            "lamps": [
+              "L14",
+              "L15",
+              "L16",
+              "L17",
+              "L18"
+            ],
+            "color": {
+              "h": 212,
+              "s": 0.96,
+              "brillo": 255
+            }
+          }
+        ]
+      },
+      "created_at": "2026-09-05T00:00:00",
+      "updated_at": "2026-10-03T00:00:00",
+      "from_bank": "5C-M1-Separación_Vicente_Maria",
+      "bank_description": "Separación progresiva de Vicente y María. Tras la danza y el cálido, una marea visible de cian I255 y azul profundo I215 recorre el rectángulo entre 07:00 y 08:00; luego cada lámpara conserva su estado y desciende hasta I008 a las 08:30.",
+      "192.168.0.109": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 255,
+        "temp": 14
+      },
+      "192.168.0.110": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 248,
+        "temp": 14
+      },
+      "192.168.0.111": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 155,
+        "temp": 14
+      },
+      "192.168.0.112": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 101,
+        "temp": 14
+      },
+      "192.168.0.113": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 129,
+        "temp": 14
+      },
+      "192.168.0.114": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 167,
+        "temp": 14
+      },
+      "192.168.0.115": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 173,
+        "temp": 14
+      },
+      "192.168.0.116": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 191,
+        "temp": 14
+      },
+      "192.168.0.117": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 242,
+        "temp": 14
+      },
+      "192.168.0.118": {
+        "state": "on",
+        "modo": "white",
+        "brillo": 252,
+        "temp": 14
+      },
+      "192.168.0.119": {
+        "state": "off"
+      },
+      "192.168.0.100": {
+        "state": "off"
+      },
+      "192.168.0.108": {
+        "state": "off"
+      }
     }
   }
 }
