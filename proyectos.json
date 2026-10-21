@@ -48,7 +48,7 @@
       "version": 2,
       "nombre": "LABERINTOS_2026",
       "created_at": "2026-06-17T18:08:06",
-      "updated_at": "2026-08-28T19:49:23",
+      "updated_at": "2026-10-17T20:32:42",
       "modo_reproduccion": "manual",
       "notas": "",
       "escenas": [
@@ -64,9 +64,10 @@
         "3C-M2.1-Francisco_toca_el_mar_estatico",
         "3C-M2.2-Francisco_saca_la_mano_atardecer",
         "3C-M3-Francisco_toca_el_mar",
-        "4C-M1-Florence_el_jardin",
-        "4C-M2-Se_marchita_el_jardín",
-        "4C-M3-Petalos-luciernaga"
+        "4C-M1-Maria_en_su_jardin",
+        "5C-M1-Separación_Vicente_Maria",
+        "6C-M1-Colapso_de_Vicente",
+        "7C-M1-Cenando_pez"
       ]
     }
   },

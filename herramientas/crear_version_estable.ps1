@@ -11,11 +11,41 @@ function Invoke-Git {
     }
 }
 
+$sharedDataFiles = @(
+    "escenas.json"
+    "banco_escenas.json"
+    "proyectos.json"
+    "espacio_laberintos.json"
+)
+
+function Assert-SharedData {
+    foreach ($file in $sharedDataFiles) {
+        $path = Join-Path $repo $file
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Falta el archivo compartido del espectaculo: $file"
+        }
+
+        try {
+            Get-Content -LiteralPath $path -Raw | ConvertFrom-Json | Out-Null
+        }
+        catch {
+            throw "El archivo $file no contiene JSON valido. Corrigelo antes de publicar MAIN."
+        }
+
+        & git ls-files --error-unmatch -- $file *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw "El archivo $file no esta incluido en Git. No se publicara una version incompleta."
+        }
+    }
+}
+
 try {
     $branch = (& git branch --show-current).Trim()
     if ($branch -ne "dev") {
         throw "Debes iniciar desde la rama dev. Rama actual: $branch"
     }
+
+    Assert-SharedData
 
     if (@(& git status --porcelain).Count -gt 0) {
         throw "Hay cambios sin publicar. Ejecuta primero Publicar_DEV.cmd."
@@ -39,12 +69,22 @@ try {
 
     $releaseMessage = "Publica version estable " + (Get-Date -Format "yyyy-MM-dd HH:mm")
     Invoke-Git merge --no-ff dev -m $releaseMessage
+
+    foreach ($file in $sharedDataFiles) {
+        $devObject = (& git rev-parse "dev:$file").Trim()
+        $mainObject = (& git rev-parse "HEAD:$file").Trim()
+        if ($devObject -ne $mainObject) {
+            throw "MAIN no contiene la misma version de $file que DEV."
+        }
+    }
+
     Invoke-Git push origin main
 
     $version = (& git rev-parse --short HEAD).Trim()
     Invoke-Git switch dev
 
     Write-Host "`nMAIN publicada correctamente. Version: $version" -ForegroundColor Green
+    Write-Host "La version estable incluye escenas, banco, proyectos y Espacio Laberintos." -ForegroundColor Green
     Write-Host "Tu amigo ya puede ejecutar Actualizar_TABLERO.cmd."
 }
 catch {

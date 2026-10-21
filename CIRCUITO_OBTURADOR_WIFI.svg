@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <style>
+      .title { font: 700 52px Arial, sans-serif; fill: #111820; }
+      .subtitle { font: 700 30px Arial, sans-serif; fill: #16a9d6; }
+      .heading { font: 700 25px Arial, sans-serif; fill: #111820; }
+      .label { font: 600 21px Arial, sans-serif; fill: #18232d; }
+      .small { font: 500 18px Arial, sans-serif; fill: #273640; }
+      .tiny { font: 500 16px Arial, sans-serif; fill: #273640; }
+      .pin { font: 700 18px Arial, sans-serif; fill: #ffffff; }
+      .wire { fill: none; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+      .junction { stroke: #ffffff; stroke-width: 2; }
+    </style>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#f7fafc"/>
+  <text x="800" y="70" text-anchor="middle" class="title">CIRCUITO DEL OBTURADOR WI-FI</text>
+  <text x="800" y="112" text-anchor="middle" class="subtitle">ESP32 DevKit + servo MG90S</text>
+
+  <!-- Power rails -->
+  <path d="M275 245 H350 M500 245 H1480" class="wire" stroke="#e42323"/>
+  <text x="292" y="225" class="label" fill="#e42323">+5 V</text>
+  <path d="M275 325 V775 H1480" class="wire" stroke="#20272d"/>
+  <text x="285" y="360" class="label">GND</text>
+  <text x="790" y="812" text-anchor="middle" class="heading">GND COMUN</text>
+
+  <!-- Power supply -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="175" width="220" height="210" rx="12" fill="#313b43" stroke="#111820" stroke-width="4"/>
+    <rect x="92" y="225" width="145" height="105" rx="8" fill="#ffffff"/>
+    <text x="164" y="263" text-anchor="middle" class="heading">FUENTE</text>
+    <text x="164" y="300" text-anchor="middle" class="heading">5 V / 2 A</text>
+  </g>
+  <circle cx="275" cy="245" r="10" fill="#e42323" class="junction"/>
+  <circle cx="275" cy="325" r="10" fill="#20272d" class="junction"/>
+
+  <!-- Fuse -->
+  <g filter="url(#shadow)">
+    <rect x="350" y="210" width="150" height="70" rx="17" fill="#ffd52a" stroke="#2a2a2a" stroke-width="4"/>
+    <text x="425" y="238" text-anchor="middle" class="small">FUSIBLE</text>
+    <text x="425" y="264" text-anchor="middle" class="small">1,5 A</text>
+  </g>
+  <circle cx="500" cy="245" r="10" fill="#e42323" class="junction"/>
+
+  <!-- ESP32 -->
+  <g filter="url(#shadow)">
+    <rect x="455" y="345" width="365" height="385" rx="18" fill="#1d2933" stroke="#0a0f13" stroke-width="5"/>
+    <rect x="535" y="390" width="205" height="145" rx="10" fill="#bcc4c9" stroke="#10171c" stroke-width="4"/>
+    <text x="638" y="450" text-anchor="middle" class="heading">ESP32</text>
+    <text x="638" y="485" text-anchor="middle" class="heading">DevKit</text>
+    <rect x="568" y="675" width="140" height="45" rx="8" fill="#dce3e7"/>
+  </g>
+
+  <!-- ESP32 power -->
+  <path d="M550 245 V375 H455" class="wire" stroke="#e42323"/>
+  <circle cx="550" cy="245" r="10" fill="#e42323" class="junction"/>
+  <circle cx="455" cy="375" r="10" fill="#e42323" class="junction"/>
+  <rect x="467" y="358" width="103" height="34" rx="6" fill="#e42323"/>
+  <text x="518" y="381" text-anchor="middle" class="pin">5V / VIN</text>
+  <path d="M455 690 H420 V775" class="wire" stroke="#20272d"/>
+  <circle cx="420" cy="775" r="10" fill="#20272d" class="junction"/>
+  <rect x="468" y="673" width="72" height="34" rx="6" fill="#20272d"/>
+  <text x="504" y="696" text-anchor="middle" class="pin">GND</text>
+
+  <!-- ESP32 signal pins -->
+  <circle cx="820" cy="415" r="12" fill="#f18718" class="junction"/>
+  <text x="800" y="420" text-anchor="end" class="pin">GPIO 18</text>
+  <circle cx="820" cy="500" r="12" fill="#2186e8" class="junction"/>
+  <text x="800" y="505" text-anchor="end" class="pin">GPIO 25</text>
+  <circle cx="820" cy="575" r="12" fill="#8f43d7" class="junction"/>
+  <text x="800" y="580" text-anchor="end" class="pin">GPIO 26</text>
+  <circle cx="820" cy="650" r="12" fill="#17a45b" class="junction"/>
+  <text x="800" y="655" text-anchor="end" class="pin">GPIO 27</text>
+
+  <!-- Servo -->
+  <g filter="url(#shadow)">
+    <rect x="1280" y="360" width="235" height="205" rx="14" fill="#252e36" stroke="#101519" stroke-width="5"/>
+    <rect x="1320" y="305" width="155" height="78" rx="12" fill="#38434c" stroke="#101519" stroke-width="4"/>
+    <circle cx="1397" cy="302" r="31" fill="#cbd1d5" stroke="#31383d" stroke-width="4"/>
+    <text x="1397" y="446" text-anchor="middle" class="heading" fill="#ffffff">SERVO</text>
+    <text x="1397" y="480" text-anchor="middle" class="heading" fill="#ffffff">MG90S</text>
+  </g>
+  <circle cx="1280" cy="405" r="10" fill="#e42323" class="junction"/>
+  <circle cx="1280" cy="475" r="10" fill="#f18718" class="junction"/>
+  <circle cx="1280" cy="535" r="10" fill="#20272d" class="junction"/>
+  <text x="1260" y="411" text-anchor="end" class="label">Rojo +5 V</text>
+  <text x="1260" y="481" text-anchor="end" class="label">Naranja SENAL</text>
+  <text x="1260" y="541" text-anchor="end" class="label">Marron GND</text>
+
+  <!-- Servo wiring -->
+  <path d="M1420 245 V405 H1280" class="wire" stroke="#e42323"/>
+  <circle cx="1420" cy="245" r="10" fill="#e42323" class="junction"/>
+  <path d="M820 415 H1135 V475 H1280" class="wire" stroke="#f18718"/>
+  <text x="980" y="397" class="small" fill="#f18718">PWM</text>
+  <path d="M1280 535 H1460 V775" class="wire" stroke="#20272d"/>
+  <circle cx="1460" cy="775" r="10" fill="#20272d" class="junction"/>
+
+  <!-- Capacitor in parallel -->
+  <path d="M1130 245 V285" class="wire" stroke="#e42323"/>
+  <circle cx="1130" cy="245" r="10" fill="#e42323" class="junction"/>
+  <line x1="1090" y1="300" x2="1170" y2="300" stroke="#e42323" stroke-width="9"/>
+  <line x1="1090" y1="326" x2="1170" y2="326" stroke="#20272d" stroke-width="9"/>
+  <path d="M1130 341 V775" class="wire" stroke="#20272d"/>
+  <circle cx="1130" cy="775" r="10" fill="#20272d" class="junction"/>
+  <text x="1080" y="307" text-anchor="end" class="heading" fill="#e42323">+</text>
+  <text x="1080" y="337" text-anchor="end" class="heading">-</text>
+  <text x="1040" y="280" text-anchor="end" class="label">1000 uF / 10 V</text>
+  <text x="1040" y="308" text-anchor="end" class="small">en paralelo</text>
+
+  <!-- Open button -->
+  <path d="M820 500 H900" class="wire" stroke="#2186e8"/>
+  <g filter="url(#shadow)">
+    <rect x="900" y="472" width="105" height="58" rx="10" fill="#ffffff" stroke="#2186e8" stroke-width="5"/>
+    <circle cx="952" cy="501" r="17" fill="#2186e8"/>
+  </g>
+  <text x="952" y="458" text-anchor="middle" class="label">ABRIR</text>
+  <path d="M1005 500 H1030 V775" class="wire" stroke="#20272d"/>
+  <circle cx="1030" cy="775" r="10" fill="#20272d" class="junction"/>
+
+  <!-- Close button -->
+  <path d="M820 575 H900" class="wire" stroke="#8f43d7"/>
+  <g filter="url(#shadow)">
+    <rect x="900" y="547" width="105" height="58" rx="10" fill="#ffffff" stroke="#8f43d7" stroke-width="5"/>
+    <circle cx="952" cy="576" r="17" fill="#d53d3d"/>
+  </g>
+  <text x="952" y="538" text-anchor="middle" class="label">CERRAR</text>
+  <path d="M1005 575 H1065 V775" class="wire" stroke="#20272d"/>
+  <circle cx="1065" cy="775" r="10" fill="#20272d" class="junction"/>
+
+  <!-- LED status -->
+  <path d="M820 650 H895" class="wire" stroke="#17a45b"/>
+  <rect x="895" y="630" width="125" height="40" rx="10" fill="#f4dfb2" stroke="#574429" stroke-width="3"/>
+  <text x="957" y="657" text-anchor="middle" class="small">220 ohm</text>
+  <path d="M1020 650 H1070" class="wire" stroke="#17a45b"/>
+  <path d="M1080 620 Q1120 650 1080 680 Z" fill="#ef3030" stroke="#8e1717" stroke-width="4"/>
+  <line x1="1080" y1="620" x2="1080" y2="680" stroke="#8e1717" stroke-width="4"/>
+  <path d="M1080 680 V775" class="wire" stroke="#20272d"/>
+  <circle cx="1080" cy="775" r="10" fill="#20272d" class="junction"/>
+  <text x="1080" y="605" text-anchor="middle" class="label">LED</text>
+
+  <!-- Pin summary -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="435" width="330" height="285" rx="12" fill="#ffffff" stroke="#16a9d6" stroke-width="4"/>
+    <rect x="55" y="435" width="330" height="52" rx="10" fill="#16a9d6"/>
+    <text x="220" y="469" text-anchor="middle" class="heading" fill="#ffffff">RESUMEN DE PINES</text>
+    <text x="80" y="525" class="label">GPIO 18</text><text x="210" y="525" class="label">Servo</text>
+    <text x="80" y="567" class="label">GPIO 25</text><text x="210" y="567" class="label">Abrir</text>
+    <text x="80" y="609" class="label">GPIO 26</text><text x="210" y="609" class="label">Cerrar</text>
+    <text x="80" y="651" class="label">GPIO 27</text><text x="210" y="651" class="label">LED</text>
+    <text x="80" y="693" class="label">5V/VIN</text><text x="210" y="693" class="label">+5 V</text>
+  </g>
+
+  <!-- Warnings -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="850" width="470" height="95" rx="13" fill="#ffe43b" stroke="#222b31" stroke-width="4"/>
+    <text x="290" y="888" text-anchor="middle" class="heading">NO conectar el servo</text>
+    <text x="290" y="922" text-anchor="middle" class="heading">al pin 3V3</text>
+
+    <rect x="565" y="850" width="470" height="95" rx="13" fill="#ffe43b" stroke="#222b31" stroke-width="4"/>
+    <text x="800" y="888" text-anchor="middle" class="heading">ESP32 y servo deben</text>
+    <text x="800" y="922" text-anchor="middle" class="heading">compartir GND</text>
+
+    <rect x="1075" y="850" width="470" height="95" rx="13" fill="#ffe43b" stroke="#222b31" stroke-width="4"/>
+    <text x="1310" y="888" text-anchor="middle" class="heading">Condensador en paralelo</text>
+    <text x="1310" y="922" text-anchor="middle" class="heading">entre +5 V y GND</text>
+  </g>
+
+  <text x="800" y="978" text-anchor="middle" class="small">Usar cable 22 AWG para +5 V y GND. Confirmar los nombres impresos en la placa antes de conectar.</text>
+</svg>

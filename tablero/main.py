@@ -2,6 +2,7 @@ import rtmidi
 import tkinter as tk
 from tkinter import messagebox
 import json
+import math
 import colorsys
 import asyncio
 import os
@@ -30,6 +31,13 @@ from tablero.midi_listener import (
     led_inactivo,
     get_available_ports,
     get_midi_status,
+)
+from tablero.scene_timing import (
+    TIMING_CONTINUOUS,
+    TIMING_INSTANT,
+    TIMING_TIMED,
+    format_scene_duration,
+    get_scene_timing,
 )
 
 bulb_states = {}
@@ -76,6 +84,7 @@ active_scene_runtime = {
     "data": None,
     "target_ips": set(),
     "effects": set(),
+    "midi_hold_override": None,
 }
 espacio_midi_effect_ips = set()
 
@@ -4761,7 +4770,7 @@ bank_scenes_window = None
 
 
 def load_bank_scenes():
-    default_data = {"version": 1, "orden": [], "datos": {}}
+    default_data = {"version": 2, "orden": [], "datos": {}}
     if not os.path.exists(BANK_SCENES_FILE):
         return default_data
     try:
@@ -4769,7 +4778,10 @@ def load_bank_scenes():
             data = json.load(f)
         if not isinstance(data, dict):
             return default_data
-        data.setdefault("version", 1)
+        try:
+            data["version"] = max(2, int(data.get("version", 1)))
+        except (TypeError, ValueError):
+            data["version"] = 2
         data.setdefault("orden", [])
         data.setdefault("datos", {})
         return data
@@ -4815,6 +4827,114 @@ def bank_scene_summary(scene_data):
     if effect_names:
         parts.append("Efectos: " + ", ".join(effect_names[:3]))
     return " | ".join(parts)
+
+
+def bank_scene_duration_text(scene_data):
+    timing = get_scene_timing_for_display(scene_data)
+    if timing.get("kind") == TIMING_TIMED:
+        return format_scene_duration(timing.get("seconds", 0))
+    if timing.get("kind") == TIMING_CONTINUOUS:
+        return "Continua, hasta cambiar o detener la escena"
+    return "Instantánea, sin desarrollo temporal"
+
+
+def bank_scene_automatic_facts(scene_data):
+    scene_data = scene_data if isinstance(scene_data, dict) else {}
+    scripted = scene_data.get("scripted_scene", {})
+    lamps = scene_data.get("lamparas", {})
+    facts = []
+
+    if isinstance(scripted, dict) and scripted:
+        type_names = {
+            "bichos_flor_marchita": "Marchitamiento programado",
+            "laberintos_sunset_sequence": "Secuencia programada por tiempos",
+            "laberintos_rect_sequence": "Secuencia espacial programada",
+            "laberintos_blue_ocean_pulse": "Pulso oceánico programado",
+            "laberintos_firefly_petals": "Secuencia programada de luciérnagas",
+            "laberintos_parto_maria": "Secuencia dramática programada",
+            "laberintos_composite_scene": "Escena compuesta por movimientos",
+            "laberintos_separation_vicente_maria": "Separación espacial programada",
+            "laberintos_collapse_vicente": "Colapso de Vicente programado",
+            "laberintos_cenando_pez": "Cena del pez programada",
+        }
+        scene_type = scripted.get("type")
+        if scene_type:
+            facts.append(f"Tipo: {type_names.get(scene_type, scene_type)}")
+        target_group = scripted.get("target_group")
+        if target_group:
+            group_name = "Bichos" if target_group in ("efectos", "bichos") else str(target_group).title()
+            facts.append(f"Grupo principal: {group_name}")
+        target_lamps = scripted.get("target_lamps") or []
+        if target_lamps:
+            facts.append("Lámparas programadas: " + ", ".join(str(item) for item in target_lamps))
+        excluded = scripted.get("exclude_lamps") or scripted.get("excluded_lamps") or []
+        if excluded:
+            facts.append("Excluidas: " + ", ".join(str(item) for item in excluded))
+
+    if isinstance(lamps, dict) and lamps:
+        active_lamps = [
+            str(lamp_id) for lamp_id, state in lamps.items()
+            if isinstance(state, dict) and state.get("state") == "on"
+        ]
+        if active_lamps:
+            facts.append("Encendidas en el estado guardado: " + ", ".join(active_lamps))
+
+    effects = scene_data.get("effects", {})
+    if isinstance(effects, dict):
+        active_effects = [
+            str(name) for name, enabled in effects.items()
+            if name != "_params" and bool(enabled)
+        ]
+        if active_effects:
+            facts.append("Efectos: " + ", ".join(active_effects))
+
+    facts.append(
+        "Fades generales: entrada "
+        f"{scene_data.get('fade_in', 0)} s, salida {scene_data.get('fade_out', 0)} s"
+    )
+    return facts
+
+
+def bank_scene_record_text(entry):
+    entry = entry if isinstance(entry, dict) else {}
+    scene_data = entry.get("scene_data", {})
+    documentation = entry.get("documentation", {})
+    documentation = documentation if isinstance(documentation, dict) else {}
+
+    sections = []
+    description = str(entry.get("description") or "Sin descripción general.").strip()
+    sections.append(("DESCRIPCIÓN GENERAL", description))
+
+    purpose = str(documentation.get("purpose") or "").strip()
+    if purpose:
+        sections.append(("PROPÓSITO NARRATIVO", purpose))
+
+    sections.append(("DURACIÓN", bank_scene_duration_text(scene_data)))
+
+    lamps = str(documentation.get("lamps") or "").strip()
+    if lamps:
+        sections.append(("LÁMPARAS", lamps))
+
+    timeline = documentation.get("timeline") or []
+    if isinstance(timeline, str):
+        timeline = [timeline]
+    if timeline:
+        sections.append(("DESARROLLO TEMPORAL", "\n".join(f"• {item}" for item in timeline)))
+
+    palette = str(documentation.get("palette") or "").strip()
+    if palette:
+        sections.append(("PALETA Y MODOS", palette))
+
+    ending = str(documentation.get("ending") or "").strip()
+    if ending:
+        sections.append(("ESTADO FINAL / EMPALME", ending))
+
+    notes = str(documentation.get("notes") or "").strip()
+    if notes:
+        sections.append(("NOTAS PARA CAMBIOS", notes))
+
+    sections.append(("DATOS AUTOMÁTICOS", "\n".join(bank_scene_automatic_facts(scene_data))))
+    return "\n\n".join(f"{title}\n{body}" for title, body in sections)
 
 
 def add_bank_scene_to_project(bank_name):
@@ -4885,12 +5005,14 @@ def save_current_scene_to_bank(bank_name, description):
         bank["orden"].append(bank_name)
     scene_copy = json.loads(json.dumps(scene_data))
     scene_copy["nombre"] = bank_name
+    previous_entry = bank.get("datos", {}).get(bank_name, {})
     bank["datos"][bank_name] = {
         "name": bank_name,
         "source_scene": scene_name,
         "description": description,
         "summary": bank_scene_summary(scene_copy),
-        "created_at": bank.get("datos", {}).get(bank_name, {}).get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "documentation": previous_entry.get("documentation", {}),
+        "created_at": previous_entry.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "scene_data": scene_copy,
     }
@@ -4947,30 +5069,41 @@ def open_bank_scenes_panel():
                            font=("Segoe UI", 10, "bold"), padx=10, pady=10)
     detail.grid(row=1, column=1, sticky="nsew", pady=(12, 0))
     detail.grid_columnconfigure(0, weight=1)
+    detail.grid_columnconfigure(1, weight=0)
+    detail.grid_rowconfigure(2, weight=1)
 
     selected_name_var = tk.StringVar(value="Sin escena seleccionada")
     summary_var = tk.StringVar(value="")
     tk.Label(detail, textvariable=selected_name_var, bg="#181b1e", fg="#ffffff",
-             font=("Segoe UI", 15, "bold"), anchor="w").grid(row=0, column=0, sticky="ew")
+             font=("Segoe UI", 15, "bold"), anchor="w").grid(row=0, column=0, columnspan=2, sticky="ew")
     tk.Label(detail, textvariable=summary_var, bg="#181b1e", fg="#8dfa9f",
-             font=("Segoe UI", 9, "italic"), anchor="w").grid(row=1, column=0, sticky="ew", pady=(2, 8))
+             font=("Segoe UI", 9, "italic"), anchor="w").grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 8))
 
-    description_box = tk.Text(detail, height=8, bg="#111519", fg="#d8f6ff", relief="flat",
-                              wrap="word", font=("Segoe UI", 10))
+    description_box = tk.Text(detail, height=12, bg="#111519", fg="#d8f6ff", relief="flat",
+                               wrap="word", font=("Segoe UI", 10))
     description_box.grid(row=2, column=0, sticky="nsew")
+    description_scroll = tk.Scrollbar(detail, orient="vertical", command=description_box.yview)
+    description_scroll.grid(row=2, column=1, sticky="ns")
+    description_box.config(yscrollcommand=description_scroll.set)
     description_box.config(state="disabled")
+
+    detail_actions = tk.Frame(detail, bg="#181b1e")
+    detail_actions.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(7, 0))
+    copy_status_var = tk.StringVar(value="")
+    tk.Label(detail_actions, textvariable=copy_status_var, bg="#181b1e", fg="#8dfa9f",
+             font=("Segoe UI", 8, "italic")).pack(side="left")
 
     form = tk.LabelFrame(detail, text="Guardar escena actual en banco", bg="#181b1e", fg="#20bdec",
                          padx=8, pady=8, font=("Segoe UI", 9, "bold"))
-    form.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+    form.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(8, 0))
     form.grid_columnconfigure(1, weight=1)
 
     tk.Label(form, text="Nombre", bg="#181b1e", fg="#b9e3f7").grid(row=0, column=0, sticky="w", padx=(0, 8))
     bank_name_var = tk.StringVar()
     tk.Entry(form, textvariable=bank_name_var, bg="#111519", fg="#d8f6ff", insertbackground="#20bdec",
              relief="flat").grid(row=0, column=1, sticky="ew")
-    tk.Label(form, text="Descripcion", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=0, sticky="nw", padx=(0, 8), pady=(6, 0))
-    bank_desc = tk.Text(form, height=3, bg="#111519", fg="#d8f6ff", insertbackground="#20bdec",
+    tk.Label(form, text="Descripción detallada", bg="#181b1e", fg="#b9e3f7").grid(row=1, column=0, sticky="nw", padx=(0, 8), pady=(6, 0))
+    bank_desc = tk.Text(form, height=4, bg="#111519", fg="#d8f6ff", insertbackground="#20bdec",
                         relief="flat", wrap="word", font=("Segoe UI", 9))
     bank_desc.grid(row=1, column=1, sticky="ew", pady=(6, 0))
 
@@ -4989,13 +5122,36 @@ def open_bank_scenes_panel():
         if not name:
             selected_name_var.set("Sin escena seleccionada")
             summary_var.set("")
+            copy_status_var.set("")
             description_box.config(state="disabled")
             return
         entry = current_bank["data"].get("datos", {}).get(name, {})
         selected_name_var.set(name)
         summary_var.set(entry.get("summary") or bank_scene_summary(entry.get("scene_data", {})))
-        description_box.insert("1.0", entry.get("description", "Sin descripcion."))
+        description_box.insert("1.0", bank_scene_record_text(entry))
         description_box.config(state="disabled")
+        copy_status_var.set("")
+
+    def copy_selected_record():
+        name = selected_bank_name()
+        if not name:
+            messagebox.showwarning("Banco de escenas", "Selecciona una escena para copiar su ficha.")
+            return
+        entry = current_bank["data"].get("datos", {}).get(name, {})
+        win.clipboard_clear()
+        win.clipboard_append(f"ESCENA: {name}\n\n{bank_scene_record_text(entry)}")
+        win.update_idletasks()
+        copy_status_var.set("Ficha copiada")
+
+    tk.Button(
+        detail_actions,
+        text="Copiar ficha",
+        command=copy_selected_record,
+        bg="#2b343b",
+        fg="#d9f3ff",
+        relief="flat",
+        font=("Segoe UI", 9, "bold"),
+    ).pack(side="right")
 
     def refresh_bank_list(select_name=None):
         current_bank["data"] = load_bank_scenes()
@@ -6156,8 +6312,16 @@ def refresh_espacio_midi_leds():
 
 
 def set_active_scene_runtime(name=None, scene_data=None):
+    previous_hold_override = active_scene_runtime.get("midi_hold_override")
+    if isinstance(previous_hold_override, dict):
+        previous_ips = set(previous_hold_override.get("ips", set()))
+        hold_states = globals().get("espacio_midi_hold_states", {})
+        for note, state in list(hold_states.items()):
+            if state.get("ip") in previous_ips:
+                hold_states.pop(note, None)
     active_scene_runtime["name"] = name
     active_scene_runtime["data"] = scene_data
+    active_scene_runtime["midi_hold_override"] = None
     if scene_data:
         try:
             target_ips = resolve_scene_effect_target_ips(scene_data)
@@ -6334,7 +6498,33 @@ def espacio_midi_trigger_lamp(ip, restore_after_ms=320, snapshot=None):
         return None
     selected_devices[ip].set(True)
     trigger = espacio_midi_trigger_var.get()
-    if trigger == "Pulso blanco":
+    hold_override = active_scene_runtime.get("midi_hold_override")
+    override_ips = hold_override.get("ips", set()) if isinstance(hold_override, dict) else set()
+    if (
+        espacio_midi_action_var.get() == "hold"
+        and isinstance(hold_override, dict)
+        and ip in override_ips
+    ):
+        hue = float(hold_override.get("h", 163)) % 360
+        saturation = max(0.0, min(1.0, float(hold_override.get("s", 0.53))))
+        brightness = safe_brightness(hold_override.get("brillo", 89))
+        panel.last_mode = "colour"
+        panel.last_hue = hue
+        panel.last_sat = saturation
+        panel.last_brillo = brightness
+        try:
+            panel.brillo_var.set(brightness)
+            panel.colorwheel_lamp.set_color(
+                hue,
+                saturation,
+                max(0.01, brightness / 255),
+            )
+        except Exception:
+            pass
+        set_panel_mode(panel, "colour", send=False)
+        send_lamp_color_safe(ip, hue, saturation, brightness)
+        update_lamp_state(ip, "colour", hue, saturation, 4000, brightness)
+    elif trigger == "Pulso blanco":
         panel.last_mode = "white"
         panel.last_brillo = 255
         panel.last_temp = 170
@@ -8128,6 +8318,16 @@ def mostrar_estado_escena_en_paneles(nombre_escena, actualizar_seleccion=True):
             except Exception:
                 pass
 
+        scripted = escena.get("scripted_scene", {})
+        if isinstance(scripted, dict):
+            for lamp_id in scripted.get("target_lamps") or []:
+                try:
+                    lamp_ip = get_scripted_lamp_ip(lamp_id)
+                except Exception:
+                    lamp_ip = None
+                if lamp_ip:
+                    involved.add(lamp_ip)
+
         for lamp_ip in LAMP_IPS:
             estado, has_state = estado_escena_para_ip(lamp_ip)
             if not has_state:
@@ -8938,6 +9138,7 @@ def finalizar_escena(token, nombre):
     try:
         set_estado_escena(f"Escena '{nombre}' terminada", "#28a745")
         scene_progress_var.set(100)
+        finish_scene_timer()
     except:
         pass
 
@@ -9038,6 +9239,13 @@ def active_scene_effect_names(scene_data):
     }
 
 
+def get_scene_timing_for_display(scene_data):
+    target_ips = resolve_scene_effect_target_ips(scene_data)
+    if target_ips is None:
+        target_ips = [ip for ip in LAMP_IPS if ip in scene_data]
+    return get_scene_timing(scene_data, lamp_count=len(target_ips))
+
+
 def fade_scene_lamps_outside_effect_target(scene_data, target_ips, fade_out_val, token):
     if target_ips is None:
         return
@@ -9120,11 +9328,25 @@ def scripted_color_at(keyframes, elapsed):
     return keyframes[-1]
 
 
-def run_scripted_flower_wither_scene(scene_data, token, scene_name):
+def complete_scripted_stage(on_finish, token, scene_name):
+    if callable(on_finish):
+        on_finish()
+    else:
+        finalizar_escena(token, scene_name)
+
+
+def run_scripted_flower_wither_scene(
+    scene_data,
+    token,
+    scene_name,
+    start_at_ms=0,
+    on_finish=None,
+    manage_progress=True,
+):
     scripted = scene_data.get("scripted_scene", {})
     target_ips = get_scripted_scene_target_ips(scene_data)
     if not target_ips:
-        root.after(0, lambda: finalizar_escena(token, scene_name))
+        root.after(0, lambda: complete_scripted_stage(on_finish, token, scene_name))
         return True
 
     fade_in_ms = int(scripted.get("fade_in_ms", 5000))
@@ -9133,6 +9355,8 @@ def run_scripted_flower_wither_scene(scene_data, token, scene_name):
     final_hold_brightness = safe_brightness(scripted.get("final_hold_brightness", 0))
     tick_ms = int(scripted.get("tick_ms", 250))
     tick_ms = max(80, min(1000, tick_ms))
+    total_ms = fade_in_ms + transition_ms + final_fade_ms
+    start_at_ms = max(0, min(max(0, total_ms - 1), int(start_at_ms or 0)))
 
     keyframes = scripted.get("keyframes") or [
         {"t": 0, "h": 285, "s": 1.0, "brillo": 255},
@@ -9163,13 +9387,13 @@ def run_scripted_flower_wither_scene(scene_data, token, scene_name):
         set_panel_mode(panel, "colour", send=False)
         update_panel_visual(panel)
 
-    total_seconds = (fade_in_ms + transition_ms + final_fade_ms) / 1000.0
-    try:
-        start_scene_progress(token, total_seconds)
-    except Exception:
-        pass
+    if manage_progress:
+        try:
+            start_scene_progress(token, total_ms / 1000.0, start_at_ms / 1000.0)
+        except Exception:
+            pass
 
-    start_time = time.monotonic()
+    start_time = time.monotonic() - (start_at_ms / 1000.0)
 
     def apply_to_targets(h, s, brightness, selected_state=True):
         brightness = safe_brightness(brightness)
@@ -9221,7 +9445,7 @@ def run_scripted_flower_wither_scene(scene_data, token, scene_name):
                 send_off(ip)
                 update_lamp_state(ip, "colour", end_color["h"], end_color["s"], 4000, 0)
         sync_espacio_laberintos_current_state(target_ips)
-        finalizar_escena(token, scene_name)
+        complete_scripted_stage(on_finish, token, scene_name)
 
     def tick():
         if fade_token[0] != token:
@@ -9272,14 +9496,21 @@ def get_scripted_lamp_ip(lamp_id):
     return None
 
 
-def run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_ms=0):
+def run_scripted_sunset_sequence_scene(
+    scene_data,
+    token,
+    scene_name,
+    start_at_ms=0,
+    on_finish=None,
+    manage_progress=True,
+):
     scripted = scene_data.get("scripted_scene", {})
     duration_ms = int(scripted.get("duration_ms", 60000))
     start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
     tick_ms = max(80, min(1000, int(scripted.get("tick_ms", 250))))
     steps = scripted.get("steps") or []
     if not steps:
-        root.after(0, lambda: finalizar_escena(token, scene_name))
+        root.after(0, lambda: complete_scripted_stage(on_finish, token, scene_name))
         return True
 
     scheduled_steps = []
@@ -9317,7 +9548,7 @@ def run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_m
                 final_steps_by_ip[ip] = scheduled_steps[-1]
 
     if not target_ips:
-        root.after(0, lambda: finalizar_escena(token, scene_name))
+        root.after(0, lambda: complete_scripted_stage(on_finish, token, scene_name))
         return True
 
     claim_lamps_for_manual_control(target_ips)
@@ -9337,10 +9568,11 @@ def run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_m
         send_off(ip)
         update_lamp_state(ip, "colour", getattr(panel, "last_hue", 0) if panel else 0, getattr(panel, "last_sat", 1) if panel else 1, 4000, 0)
 
-    try:
-        start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
-    except Exception:
-        pass
+    if manage_progress:
+        try:
+            start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+        except Exception:
+            pass
 
     def apply_scripted_lamp(ip, step, brightness):
         if fade_token[0] != token:
@@ -9841,7 +10073,7 @@ def run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_m
 
     def finish():
         sync_espacio_laberintos_current_state(target_ips)
-        finalizar_escena(token, scene_name)
+        complete_scripted_stage(on_finish, token, scene_name)
 
     print(f"[ESCENA PROGRAMADA] {scene_name}: agenda " + ", ".join(
         f"{step['at_ms']}ms={','.join(str(get_lamp_id(ip)) for ip in step['ips'])}" for step in scheduled_steps
@@ -10038,9 +10270,17 @@ def run_scripted_blue_ocean_pulse_scene(scene_data, token, scene_name):
     return True
 
 
-def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
+def run_scripted_firefly_petals_scene(
+    scene_data,
+    token,
+    scene_name,
+    start_at_ms=0,
+    on_finish=None,
+    manage_progress=True,
+):
     scripted = scene_data.get("scripted_scene", {})
     duration_ms = int(scripted.get("duration_ms", 90000))
+    start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
     intro_ms = int(scripted.get("intro_ms", 15000))
     outro_ms = int(scripted.get("outro_ms", 15000))
     final_dim_ms = max(0, int(scripted.get("final_dim_ms", 0)))
@@ -10076,45 +10316,56 @@ def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
         if ip and ip in target_ips and lamp_status.get(ip, True):
             sequence_ips.append(ip)
 
+    final_dim_hold_brightness = safe_brightness(
+        scripted.get("final_dim_hold_brightness", 255)
+    )
+    final_dim_hold_ips = set()
+    for lamp_id in scripted.get("final_dim_hold_lamps") or []:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip and ip in target_ips:
+            final_dim_hold_ips.add(ip)
+
     if not target_ips:
-        root.after(0, lambda: finalizar_escena(token, scene_name))
+        root.after(0, lambda: complete_scripted_stage(on_finish, token, scene_name))
         return True
 
     middle_ms = max(0, duration_ms - intro_ms - outro_ms - final_dim_ms)
     slot_ms = max(1, int(middle_ms / max(1, len(sequence_ips))))
 
     claim_lamps_for_manual_control(target_ips)
-    for ip in target_ips:
-        panel = panels.get(ip)
-        initial_h = background_h if start_from_background else h
-        initial_s = background_s if start_from_background else s
-        initial_brightness = background_brightness if start_from_background else 0
-        selected_devices[ip].set(initial_brightness > 0)
-        if panel is not None:
-            panel.last_mode = "colour"
-            panel.mode_var.set("colour")
-            panel.last_hue = initial_h
-            panel.last_sat = initial_s
-            panel.last_brillo = initial_brightness
-            try:
-                panel.brillo_var.set(initial_brightness)
-                panel.colorwheel_lamp.set_color(initial_h, initial_s, max(0.01, initial_brightness / 255))
-            except Exception:
-                pass
-            set_panel_mode(panel, "colour", send=False)
-            update_panel_visual(panel)
-        if initial_brightness > 0:
-            send_lamp_color_safe(ip, initial_h, initial_s, initial_brightness)
-        else:
-            send_off(ip)
-        update_lamp_state(ip, "colour", initial_h, initial_s, 4000, initial_brightness)
+    if start_at_ms <= 0:
+        for ip in target_ips:
+            panel = panels.get(ip)
+            initial_h = background_h if start_from_background else h
+            initial_s = background_s if start_from_background else s
+            initial_brightness = background_brightness if start_from_background else 0
+            selected_devices[ip].set(initial_brightness > 0)
+            if panel is not None:
+                panel.last_mode = "colour"
+                panel.mode_var.set("colour")
+                panel.last_hue = initial_h
+                panel.last_sat = initial_s
+                panel.last_brillo = initial_brightness
+                try:
+                    panel.brillo_var.set(initial_brightness)
+                    panel.colorwheel_lamp.set_color(initial_h, initial_s, max(0.01, initial_brightness / 255))
+                except Exception:
+                    pass
+                set_panel_mode(panel, "colour", send=False)
+                update_panel_visual(panel)
+            if initial_brightness > 0:
+                send_lamp_color_safe(ip, initial_h, initial_s, initial_brightness)
+            else:
+                send_off(ip)
+            update_lamp_state(ip, "colour", initial_h, initial_s, 4000, initial_brightness)
 
-    try:
-        start_scene_progress(token, duration_ms / 1000.0)
-    except Exception:
-        pass
+    if manage_progress:
+        try:
+            start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+        except Exception:
+            pass
 
-    start_time = time.monotonic()
+    start_time = time.monotonic() - (start_at_ms / 1000.0)
     last_middle_slot = [-1]
 
     def apply_petalo_state(ip, brightness, hue=None, sat=None):
@@ -10163,31 +10414,36 @@ def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
         return low_brightness + ((firefly_peak - low_brightness) * eased)
 
     def force_petalo_off(ip):
+        end_brightness = (
+            final_dim_hold_brightness
+            if ip in final_dim_hold_ips
+            else final_dim_end_brightness
+        )
         panel = panels.get(ip)
-        selected_devices[ip].set(final_dim_end_brightness > 0)
+        selected_devices[ip].set(end_brightness > 0)
         if panel is not None:
             panel.last_mode = "colour"
             panel.mode_var.set("colour")
             panel.last_hue = final_dim_h
             panel.last_sat = final_dim_s
-            panel.last_brillo = final_dim_end_brightness
+            panel.last_brillo = end_brightness
             try:
-                panel.brillo_var.set(final_dim_end_brightness)
-                panel.colorwheel_lamp.set_color(final_dim_h, final_dim_s, max(0.01, final_dim_end_brightness / 255))
+                panel.brillo_var.set(end_brightness)
+                panel.colorwheel_lamp.set_color(final_dim_h, final_dim_s, max(0.01, end_brightness / 255))
             except Exception:
                 pass
             update_panel_visual(panel)
-        if final_dim_end_brightness > 0:
-            send_lamp_color_safe(ip, final_dim_h, final_dim_s, final_dim_end_brightness)
+        if end_brightness > 0:
+            send_lamp_color_safe(ip, final_dim_h, final_dim_s, end_brightness)
         else:
             send_off(ip)
-        update_lamp_state(ip, "colour", final_dim_h, final_dim_s, 4000, final_dim_end_brightness)
+        update_lamp_state(ip, "colour", final_dim_h, final_dim_s, 4000, end_brightness)
 
     def finish():
         for ip in target_ips:
             force_petalo_off(ip)
         sync_espacio_laberintos_current_state(target_ips)
-        finalizar_escena(token, scene_name)
+        complete_scripted_stage(on_finish, token, scene_name)
 
     def tick():
         if fade_token[0] != token:
@@ -10233,7 +10489,12 @@ def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
             eased = -(math.cos(math.pi * progress) - 1) / 2
             current_brightness = interpolate_value(final_dim_start_brightness, final_dim_end_brightness, eased)
             for ip in target_ips:
-                apply_petalo_state(ip, current_brightness, final_dim_h, final_dim_s)
+                brightness = (
+                    final_dim_hold_brightness
+                    if ip in final_dim_hold_ips
+                    else current_brightness
+                )
+                apply_petalo_state(ip, brightness, final_dim_h, final_dim_s)
             sync_espacio_laberintos_current_state(target_ips)
             root.after(tick_ms, tick)
             return
@@ -10253,6 +10514,1939 @@ def run_scripted_firefly_petals_scene(scene_data, token, scene_name):
         root.after(tick_ms, tick)
 
     print(f"[ESCENA PROGRAMADA] {scene_name}: petalos/luciernaga " + ", ".join(str(get_lamp_id(ip)) for ip in target_ips))
+    tick()
+    return True
+
+
+def load_composite_scene_phase(source_name):
+    # El proyecto actual es la fuente de verdad: así el movimiento compuesto
+    # reproduce exactamente la misma versión que se ejecuta por separado.
+    phase_data = load_escenas().get("datos", {}).get(source_name)
+    if not isinstance(phase_data, dict) or not phase_data.get("scripted_scene"):
+        bank_entry = load_bank_scenes().get("datos", {}).get(source_name, {})
+        phase_data = bank_entry.get("scene_data") if isinstance(bank_entry, dict) else None
+    if not isinstance(phase_data, dict):
+        return None
+    return json.loads(json.dumps(phase_data))
+
+
+def fit_composite_phase_duration(phase_data, target_duration_ms):
+    """Ajusta una copia del tramo sin modificar su escena de origen."""
+    scripted = phase_data.get("scripted_scene", {})
+    if scripted.get("type") != "bichos_flor_marchita":
+        return phase_data
+
+    fade_in_ms = max(0, int(scripted.get("fade_in_ms", 5000)))
+    transition_ms = max(1, int(scripted.get("transition_ms", 90000)))
+    final_fade_ms = max(0, int(scripted.get("final_fade_ms", 2500)))
+    source_duration_ms = fade_in_ms + transition_ms + final_fade_ms
+    target_duration_ms = max(1000, int(target_duration_ms))
+    if source_duration_ms == target_duration_ms:
+        return phase_data
+
+    scale = target_duration_ms / source_duration_ms
+    fitted_fade_in_ms = int(round(fade_in_ms * scale))
+    fitted_final_fade_ms = int(round(final_fade_ms * scale))
+    fitted_transition_ms = max(
+        1,
+        target_duration_ms - fitted_fade_in_ms - fitted_final_fade_ms,
+    )
+    transition_scale = fitted_transition_ms / transition_ms
+
+    scripted["fade_in_ms"] = fitted_fade_in_ms
+    scripted["transition_ms"] = fitted_transition_ms
+    scripted["final_fade_ms"] = fitted_final_fade_ms
+    for keyframe in scripted.get("keyframes") or []:
+        keyframe["t"] = int(round(float(keyframe.get("t", 0)) * transition_scale))
+
+    return phase_data
+
+
+def run_scripted_composite_scene(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    phase_specs = scripted.get("phases") or []
+    preserve_source_timing = bool(scripted.get("preserve_source_timing", False))
+    phases = []
+    for phase_spec in phase_specs:
+        source_name = str(phase_spec.get("source_scene") or "").strip()
+        phase_data = load_composite_scene_phase(source_name)
+        if phase_data is None:
+            print(f"[ESCENA COMPUESTA] No se encontró el tramo: {source_name}")
+            continue
+        scripted_overrides = phase_spec.get("scripted_overrides")
+        if isinstance(scripted_overrides, dict):
+            phase_data.setdefault("scripted_scene", {}).update(
+                json.loads(json.dumps(scripted_overrides))
+            )
+        phase_timing = get_scene_timing(phase_data, lamp_count=len(LAMP_IPS))
+        source_duration_ms = int(round((phase_timing.get("seconds") or 0) * 1000))
+        configured_duration_ms = int(phase_spec.get("duration_ms") or 0)
+        if preserve_source_timing and source_duration_ms > 0:
+            duration_ms = source_duration_ms
+        else:
+            duration_ms = configured_duration_ms or source_duration_ms
+            if configured_duration_ms > 0 and configured_duration_ms != source_duration_ms:
+                phase_data = fit_composite_phase_duration(phase_data, configured_duration_ms)
+        if duration_ms <= 0:
+            print(f"[ESCENA COMPUESTA] El tramo no tiene duración: {source_name}")
+            continue
+        phases.append({
+            "name": source_name,
+            "data": phase_data,
+            "duration_ms": duration_ms,
+        })
+
+    if not phases:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    calculated_total_ms = sum(phase["duration_ms"] for phase in phases)
+    if preserve_source_timing:
+        total_ms = calculated_total_ms
+    else:
+        total_ms = int(scripted.get("duration_ms") or calculated_total_ms)
+        total_ms = max(calculated_total_ms, total_ms)
+    start_at_ms = max(0, min(max(0, total_ms - 1), int(start_at_ms or 0)))
+
+    try:
+        start_scene_progress(token, total_ms / 1000.0, start_at_ms / 1000.0)
+    except Exception:
+        pass
+
+    phase_index = 0
+    phase_offset_ms = start_at_ms
+    while phase_index < len(phases) and phase_offset_ms >= phases[phase_index]["duration_ms"]:
+        phase_offset_ms -= phases[phase_index]["duration_ms"]
+        phase_index += 1
+
+    def finish_composite():
+        if fade_token[0] != token:
+            return
+        finalizar_escena(token, scene_name)
+
+    def start_phase(index, local_start_ms=0):
+        if fade_token[0] != token:
+            return
+        if index >= len(phases):
+            finish_composite()
+            return
+
+        phase = phases[index]
+        phase_data = phase["data"]
+        phase_type = phase_data.get("scripted_scene", {}).get("type")
+        try:
+            set_estado_escena(
+                f"Ejecutando {scene_name} | Tramo {index + 1}/{len(phases)}: {phase['name']}",
+                "#ff4d4d",
+            )
+        except Exception:
+            pass
+
+        next_phase = lambda: root.after(0, lambda: start_phase(index + 1, 0))
+        if phase_type in ("laberintos_sunset_sequence", "laberintos_rect_sequence"):
+            run_scripted_sunset_sequence_scene(
+                phase_data,
+                token,
+                scene_name,
+                start_at_ms=local_start_ms,
+                on_finish=next_phase,
+                manage_progress=False,
+            )
+            return
+        if phase_type == "bichos_flor_marchita":
+            run_scripted_flower_wither_scene(
+                phase_data,
+                token,
+                scene_name,
+                start_at_ms=local_start_ms,
+                on_finish=next_phase,
+                manage_progress=False,
+            )
+            return
+        if phase_type == "laberintos_firefly_petals":
+            run_scripted_firefly_petals_scene(
+                phase_data,
+                token,
+                scene_name,
+                start_at_ms=local_start_ms,
+                on_finish=next_phase,
+                manage_progress=False,
+            )
+            return
+
+        print(f"[ESCENA COMPUESTA] Tipo de tramo no compatible: {phase_type}")
+        next_phase()
+
+    print(
+        f"[ESCENA COMPUESTA] {scene_name}: "
+        + " -> ".join(f"{phase['name']} ({phase['duration_ms']} ms)" for phase in phases)
+    )
+    if phase_index >= len(phases):
+        root.after(0, finish_composite)
+    else:
+        start_phase(phase_index, phase_offset_ms)
+    return True
+
+
+def run_scripted_collapse_vicente_scene(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = max(1000, int(scripted.get("duration_ms", 666000)))
+    tick_ms = max(100, min(1000, int(scripted.get("tick_ms", 250))))
+    initial_hold_ms = max(0, int(scripted.get("initial_hold_ms", 1000)))
+    rage = scripted.get("rage_impulses") or {}
+    impulse_start_ms = max(initial_hold_ms, int(rage.get("start_ms", 51000)))
+    impulse_end_ms = max(impulse_start_ms + 1, int(rage.get("end_ms", 108000)))
+    impact_dark_end_ms = max(
+        impulse_start_ms + 1,
+        int(rage.get("impact_dark_end_ms", 51400)),
+    )
+    impact_recover_end_ms = max(
+        impact_dark_end_ms + 1,
+        int(rage.get("impact_recover_end_ms", 52000)),
+    )
+    impact_brightness = safe_brightness(rage.get("impact_brightness", 15))
+    impulse_tick_ms = max(120, min(500, int(rage.get("tick_ms", 200))))
+    impulse_stages = []
+    for stage in rage.get("stages") or []:
+        stage_start_ms = max(impact_recover_end_ms, int(stage.get("start_ms", 52000)))
+        stage_end_ms = max(stage_start_ms + 1, int(stage.get("end_ms", impulse_end_ms)))
+        impulse_stages.append({
+            "start_ms": stage_start_ms,
+            "end_ms": min(impulse_end_ms, stage_end_ms),
+            "interval_ms": max(400, int(stage.get("interval_ms", 5000))),
+            "width_ms": max(400, int(stage.get("width_ms", 1600))),
+            "brillo_min": safe_brightness(stage.get("brillo_min", 120)),
+        })
+    calm = scripted.get("sax_calm") or {}
+    calm_start_ms = max(impulse_end_ms, int(calm.get("start_ms", 100000)))
+    calm_end_ms = max(calm_start_ms + 1, int(calm.get("end_ms", 141000)))
+    calm_period_ms = max(2000, int(calm.get("period_ms", 10584)))
+    calm_min_brightness = safe_brightness(calm.get("brillo_min", 215))
+    calm_max_brightness = safe_brightness(calm.get("brillo_max", 255))
+    collapse = scripted.get("collapse_pulses") or {}
+    collapse_start_ms = max(calm_end_ms, int(collapse.get("start_ms", 141000)))
+    collapse_end_ms = max(collapse_start_ms + 1, int(collapse.get("end_ms", 231000)))
+    collapse_impact_dark_end_ms = max(
+        collapse_start_ms + 1,
+        int(collapse.get("impact_dark_end_ms", 141250)),
+    )
+    collapse_impact_recover_end_ms = max(
+        collapse_impact_dark_end_ms + 1,
+        int(collapse.get("impact_recover_end_ms", 141700)),
+    )
+    collapse_impact_brightness = safe_brightness(collapse.get("impact_brightness", 8))
+    collapse_tick_ms = max(100, min(400, int(collapse.get("tick_ms", 120))))
+    collapse_stages = []
+    for stage in collapse.get("stages") or []:
+        stage_start_ms = max(
+            collapse_impact_recover_end_ms,
+            int(stage.get("start_ms", collapse_impact_recover_end_ms)),
+        )
+        stage_end_ms = max(stage_start_ms + 1, int(stage.get("end_ms", collapse_end_ms)))
+        collapse_stages.append({
+            "start_ms": stage_start_ms,
+            "end_ms": min(collapse_end_ms, stage_end_ms),
+            "interval_ms": max(400, int(stage.get("interval_ms", 1323))),
+            "width_ms": max(300, int(stage.get("width_ms", 750))),
+            "brillo_min": safe_brightness(stage.get("brillo_min", 35)),
+        })
+    puppet = scripted.get("final_puppet") or {}
+    puppet_start_ms = max(collapse_end_ms, int(puppet.get("start_ms", 231000)))
+    puppet_end_ms = max(puppet_start_ms + 1, int(puppet.get("end_ms", duration_ms)))
+    puppet_hue = float(puppet.get("h", 313)) % 360
+    puppet_saturation = max(0.0, min(1.0, float(puppet.get("s", 0.37))))
+    puppet_min_brightness = safe_brightness(puppet.get("brillo_min", 80))
+    puppet_max_brightness = safe_brightness(puppet.get("brillo_max", 180))
+    puppet_period_ms = max(2000, int(puppet.get("period_ms", 7000)))
+    puppet_tick_ms = max(60, min(500, int(puppet.get("tick_ms", 200))))
+    heartbeat = puppet.get("heartbeat") or {}
+    heartbeat_lamp_id = str(heartbeat.get("lamp", "L8"))
+    heartbeat_hue = float(heartbeat.get("h", 5)) % 360
+    heartbeat_saturation = max(0.0, min(1.0, float(heartbeat.get("s", 0.51))))
+    heartbeat_min_brightness = safe_brightness(heartbeat.get("brillo_min", 8))
+    heartbeat_max_brightness = safe_brightness(heartbeat.get("brillo_max", 180))
+    heartbeat_period_ms = max(700, int(heartbeat.get("period_ms", 1500)))
+    heartbeat_second_peak_factor = max(
+        0.5,
+        min(1.0, float(heartbeat.get("second_peak_factor", 0.90))),
+    )
+    violet_lamp_ids = [str(lamp_id) for lamp_id in puppet.get("violet_lamps") or ["L13", "L14", "L15"]]
+
+    thunder = scripted.get("thunder") or {}
+    thunder_start_ms = max(puppet_start_ms, int(thunder.get("start_ms", 239300)))
+    thunder_sound_start_ms = max(
+        thunder_start_ms,
+        int(thunder.get("sound_start_ms", 240000)),
+    )
+    thunder_duration_ms = max(500, int(thunder.get("duration_ms", 4700)))
+    thunder_end_ms = thunder_start_ms + thunder_duration_ms
+    thunder_mode = str(thunder.get("mode", "white")).strip().lower()
+    thunder_temp = max(0, min(255, int(thunder.get("temp", 235))))
+    thunder_preview_h = float(thunder.get("preview_h", 205)) % 360
+    thunder_hue = float(thunder.get("h", 210)) % 360
+    thunder_saturation = max(0.0, min(1.0, float(thunder.get("s", 0.08))))
+    thunder_pattern = thunder.get("pattern") or [
+        [0, 255], [260, 0], [430, 255], [650, 0],
+        [700, 255], [1220, 0], [1440, 255], [1740, 0],
+        [2050, 255], [2400, 0], [2850, 255], [3300, 0],
+        [3650, 255], [4050, 0],
+        [4700, 0],
+    ]
+    thunder_pattern = sorted(
+        (
+            max(0, int(entry[0])),
+            safe_brightness(entry[1]),
+        )
+        for entry in thunder_pattern
+        if isinstance(entry, (list, tuple)) and len(entry) >= 2
+    )
+
+    manual = scripted.get("manual_hold_window") or {}
+    manual_start_ms = max(thunder_end_ms, int(manual.get("start_ms", thunder_end_ms)))
+    manual_end_ms = max(manual_start_ms + 1, int(manual.get("end_ms", 300000)))
+    manual_hue = float(manual.get("h", 163)) % 360
+    manual_saturation = max(0.0, min(1.0, float(manual.get("s", 0.53))))
+    manual_brightness = safe_brightness(manual.get("brillo", 89))
+
+    rebirth = scripted.get("rebirth_sequence") or {}
+    rebirth_hue = float(rebirth.get("h", 155)) % 360
+    rebirth_saturation = max(0.0, min(1.0, float(rebirth.get("s", 0.67))))
+    rebirth_brightness = safe_brightness(rebirth.get("brillo", 255))
+    rebirth_tick_ms = max(100, min(500, int(rebirth.get("tick_ms", 200))))
+    rebirth_entries = []
+    for entry in rebirth.get("entries") or []:
+        at_ms = max(manual_end_ms, int(entry.get("at_ms", manual_end_ms)))
+        fade_ms = max(1, int(entry.get("fade_ms", 5000)))
+        rebirth_entries.append({
+            "at_ms": at_ms,
+            "fade_ms": fade_ms,
+            "lamps": [str(lamp_id) for lamp_id in entry.get("lamps") or []],
+        })
+    rebirth_start_ms = min(
+        (entry["at_ms"] for entry in rebirth_entries),
+        default=max(manual_end_ms, 305000),
+    )
+    dance = scripted.get("dance") or {}
+    dance_start_ms = max(rebirth_start_ms, int(dance.get("start_ms", 360000)))
+    dance_all_join_ms = max(
+        dance_start_ms + 1,
+        int(dance.get("all_join_ms", 416000)),
+    )
+    dance_partial_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in dance.get("partial_lamps") or ["L14", "L15", "L16", "L17"]
+    ]
+    dance_partial_order_ids = [
+        str(lamp_id)
+        for lamp_id in dance.get("partial_order") or dance_partial_lamp_ids
+    ]
+    dance_full_order_ids = [
+        str(lamp_id)
+        for lamp_id in dance.get("full_order")
+        or ["L16", "L17", "L18", "L9", "L10", "L11", "L12", "L13", "L14", "L15"]
+    ]
+    dance_base_brightness = safe_brightness(
+        dance.get("brillo_base", dance.get("brillo_min", 95))
+    )
+    dance_peak_brightness = safe_brightness(
+        dance.get("brillo_pico", dance.get("brillo_max", rebirth_brightness))
+    )
+    dance_tick_ms = max(70, min(500, int(dance.get("tick_ms", 120))))
+    dance_ramp_ms = max(500, int(dance.get("ramp_ms", 2500)))
+    dance_join_ramp_ms = max(500, int(dance.get("join_ramp_ms", 3500)))
+    dance_step_ms = max(400, int(dance.get("step_ms", 900)))
+    dance_crest_width = max(0.35, min(1.5, float(dance.get("crest_width", 0.62))))
+    dance_tail_strength = max(0.0, min(0.75, float(dance.get("tail_strength", 0.28))))
+    dance_palette = dance.get("mixed_palette") or {}
+    dance_palette_start_ms = max(
+        dance_all_join_ms,
+        int(dance_palette.get("start_ms", dance_all_join_ms)),
+    )
+    dance_color_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in dance_palette.get("color_lamps")
+        or dance_palette.get("magenta_lamps")
+        or ["L16", "L18", "L10", "L12", "L14"]
+    ]
+    dance_warm_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in dance_palette.get("warm_lamps")
+        or ["L17", "L9", "L11", "L13", "L15"]
+    ]
+    dance_color = dance_palette.get("color") or dance_palette.get("magenta") or {}
+    dance_color_hue = float(dance_color.get("h", rebirth_hue)) % 360
+    dance_color_saturation = max(
+        0.0,
+        min(1.0, float(dance_color.get("s", rebirth_saturation))),
+    )
+    dance_warm = dance_palette.get("warm") or {}
+    dance_warm_temp = max(0, min(255, int(dance_warm.get("temp", 22))))
+    dance_warm_preview_h = float(dance_warm.get("preview_h", 34)) % 360
+    late_hold = scripted.get("late_warm_hold") or {}
+    late_hold_start_ms = max(
+        dance_palette_start_ms + 1,
+        int(late_hold.get("start_ms", 486700)),
+    )
+    late_hold_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in late_hold.get("lamps") or ["L18", "L17", "L12", "L13"]
+    ]
+    late_hold_temp = max(0, min(255, int(late_hold.get("temp", 0))))
+    late_hold_brightness = safe_brightness(late_hold.get("brillo", 255))
+    late_hold_preview_h = float(late_hold.get("preview_h", 34)) % 360
+    late_thunder = scripted.get("late_thunder") or {}
+    late_thunder_duration_ms = max(
+        500,
+        int(late_thunder.get("duration_ms", thunder_duration_ms)),
+    )
+    late_thunder_starts_ms = sorted(
+        {
+            max(late_hold_start_ms, int(start_ms))
+            for start_ms in late_thunder.get("start_times_ms") or [591580, 600000]
+        }
+    )
+    if late_thunder_starts_ms:
+        duration_ms = max(
+            duration_ms,
+            late_thunder_starts_ms[-1] + late_thunder_duration_ms,
+        )
+    final_blue = scripted.get("final_blue_hold") or {}
+    final_blue_start_ms = max(
+        late_thunder_starts_ms[-1] + late_thunder_duration_ms
+        if late_thunder_starts_ms
+        else late_hold_start_ms,
+        int(final_blue.get("start_ms", 604700)),
+    )
+    final_blue_end_ms = max(
+        final_blue_start_ms + 1,
+        int(final_blue.get("end_ms", 666000)),
+    )
+    final_blue_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in final_blue.get("lamps")
+        or ["L9", "L10", "L11", "L14", "L15", "L16"]
+    ]
+    final_blue_hue = float(final_blue.get("h", 199)) % 360
+    final_blue_saturation = max(
+        0.0,
+        min(1.0, float(final_blue.get("s", 0.96))),
+    )
+    final_blue_brightness = safe_brightness(final_blue.get("brillo", 180))
+    duration_ms = max(duration_ms, final_blue_end_ms)
+    warm = scripted.get("warm_color", {})
+    warm_temp = max(0, min(255, int(warm.get("temp", 22))))
+    warm_brightness = safe_brightness(warm.get("brillo", 255))
+    warm_preview_h = float(warm.get("preview_h", 34)) % 360
+    start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
+
+    target_ips = []
+    target_ids_by_ip = {}
+    for lamp_id in scripted.get("main_lamps") or scripted.get("target_lamps") or []:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip and lamp_status.get(ip, True):
+            target_ips.append(ip)
+            target_ids_by_ip[ip] = str(lamp_id)
+    target_ips = list(dict.fromkeys(target_ips))
+    puppet_ips = []
+    for lamp_id in puppet.get("lamps") or []:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip and lamp_status.get(ip, True):
+            puppet_ips.append(ip)
+    puppet_ips = list(dict.fromkeys(puppet_ips))
+    violet_ips = []
+    for lamp_id in violet_lamp_ids:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip and lamp_status.get(ip, True):
+            violet_ips.append(ip)
+    violet_ips = list(dict.fromkeys(violet_ips))
+    heartbeat_ip = get_scripted_lamp_ip(heartbeat_lamp_id)
+    if heartbeat_ip and not lamp_status.get(heartbeat_ip, True):
+        heartbeat_ip = None
+    dance_partial_ips = []
+    for lamp_id in dance_partial_lamp_ids:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip in target_ips and ip not in dance_partial_ips:
+            dance_partial_ips.append(ip)
+    dance_partial_order_ips = []
+    for lamp_id in dance_partial_order_ids:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip in dance_partial_ips and ip not in dance_partial_order_ips:
+            dance_partial_order_ips.append(ip)
+    for ip in dance_partial_ips:
+        if ip not in dance_partial_order_ips:
+            dance_partial_order_ips.append(ip)
+    dance_full_order_ips = []
+    for lamp_id in dance_full_order_ids:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip in target_ips and ip not in dance_full_order_ips:
+            dance_full_order_ips.append(ip)
+    for ip in target_ips:
+        if ip not in dance_full_order_ips:
+            dance_full_order_ips.append(ip)
+    dance_color_ips = {
+        ip
+        for lamp_id in dance_color_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) in target_ips
+    }
+    dance_warm_ips = {
+        ip
+        for lamp_id in dance_warm_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) in target_ips
+    }
+    late_hold_ips = {
+        ip
+        for lamp_id in late_hold_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) in target_ips
+    }
+    final_blue_ips = {
+        ip
+        for lamp_id in final_blue_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) in target_ips
+    }
+    all_scene_ips = list(dict.fromkeys(target_ips + puppet_ips))
+    extra_puppet_ips = [ip for ip in puppet_ips if ip not in target_ips]
+    if not all_scene_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    steps_by_ip = {}
+    for step in scripted.get("steps") or []:
+        normalized = {
+            "at_ms": max(initial_hold_ms, int(step.get("at_ms", initial_hold_ms))),
+            "fade_ms": max(1, int(step.get("fade_ms", 5000))),
+            "start_brightness": safe_brightness(step.get("start_brightness", 0)),
+        }
+        for lamp_id in step.get("lamps") or []:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip in target_ips:
+                steps_by_ip[ip] = normalized
+
+    initial_states = scripted.get("initial_states") or {}
+    rebirth_entry_by_ip = {}
+    for entry in rebirth_entries:
+        for lamp_id in entry["lamps"]:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip in target_ips:
+                rebirth_entry_by_ip[ip] = entry
+    last_sent = {}
+    manual_window_state = {"prepared": False}
+    claim_lamps_for_manual_control(all_scene_ips)
+
+    def apply_colour(ip, hue, saturation, brightness):
+        brightness = safe_brightness(brightness)
+        panel = panels.get(ip)
+        selected_devices[ip].set(brightness > 0)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = hue
+            panel.last_sat = saturation
+            panel.last_brillo = brightness
+            try:
+                panel.brillo_var.set(brightness)
+                panel.colorwheel_lamp.set_color(hue, saturation, max(0.01, brightness / 255))
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+        send_lamp_color_safe(ip, hue, saturation, brightness)
+        update_lamp_state(ip, "colour", hue, saturation, 4000, brightness)
+        last_sent[ip] = ("colour", round(hue, 2), round(saturation, 3), brightness)
+
+    def apply_white(ip, brightness, temperature=None, preview_h=None):
+        brightness = safe_brightness(brightness)
+        effective_temp = warm_temp if temperature is None else max(0, min(255, int(temperature)))
+        effective_preview_h = warm_preview_h if preview_h is None else float(preview_h) % 360
+        panel = panels.get(ip)
+        selected_devices[ip].set(brightness > 0)
+        if panel is not None:
+            panel.last_mode = "white"
+            panel.mode_var.set("white")
+            panel.last_temp = effective_temp
+            panel.last_brillo = brightness
+            try:
+                panel.temp_var.set(effective_temp)
+                panel.brillo_var.set(brightness)
+                panel.whitewheel_lamp.set_temp_value(effective_temp)
+            except Exception:
+                pass
+            set_panel_mode(panel, "white", send=False)
+            update_panel_visual(panel)
+        if brightness > 0:
+            send_lamp_white_scene(ip, brightness, effective_temp)
+        else:
+            send_off(ip)
+        update_lamp_state(
+            ip,
+            "white",
+            effective_preview_h,
+            0.0,
+            effective_temp,
+            brightness,
+        )
+        last_sent[ip] = ("white", effective_temp, brightness)
+
+    def apply_off(ip):
+        if last_sent.get(ip) == ("off",):
+            return
+        selected_devices[ip].set(False)
+        panel = panels.get(ip)
+        if panel is not None:
+            panel.last_brillo = 0
+            try:
+                panel.brillo_var.set(0)
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        send_off(ip)
+        update_lamp_state(ip, "white", warm_preview_h, 0.0, warm_temp, 0)
+        last_sent[ip] = ("off",)
+
+    def apply_initial_state():
+        for ip in target_ips:
+            lamp_id = target_ids_by_ip.get(ip, "")
+            state = initial_states.get(lamp_id, {})
+            apply_colour(
+                ip,
+                float(state.get("h", 216)) % 360,
+                max(0.0, min(1.0, float(state.get("s", 0.90)))),
+                safe_brightness(state.get("brillo", 8)),
+            )
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_progressive_warm(elapsed_ms):
+        for ip in target_ips:
+            step = steps_by_ip.get(ip)
+            if step is None or elapsed_ms < step["at_ms"]:
+                apply_off(ip)
+                continue
+            progress = min(1.0, (elapsed_ms - step["at_ms"]) / max(1, step["fade_ms"]))
+            brightness = interpolate_value(
+                step["start_brightness"],
+                warm_brightness,
+                ease_in_out_sine(progress),
+            )
+            apply_white(ip, brightness)
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_rage_impulses(elapsed_ms):
+        if elapsed_ms < impact_dark_end_ms:
+            brightness = impact_brightness
+        elif elapsed_ms < impact_recover_end_ms:
+            progress = ease_in_out_sine(
+                (elapsed_ms - impact_dark_end_ms)
+                / max(1, impact_recover_end_ms - impact_dark_end_ms)
+            )
+            brightness = interpolate_value(impact_brightness, warm_brightness, progress)
+        else:
+            brightness = warm_brightness
+            active_stage = next(
+                (
+                    stage for stage in impulse_stages
+                    if stage["start_ms"] <= elapsed_ms < stage["end_ms"]
+                ),
+                None,
+            )
+            if active_stage is not None:
+                local_ms = (elapsed_ms - active_stage["start_ms"]) % active_stage["interval_ms"]
+                if local_ms < active_stage["width_ms"]:
+                    pulse_progress = local_ms / active_stage["width_ms"]
+                    if pulse_progress < 0.28:
+                        fall = ease_in_out_sine(pulse_progress / 0.28)
+                        brightness = interpolate_value(
+                            warm_brightness,
+                            active_stage["brillo_min"],
+                            fall,
+                        )
+                    else:
+                        rise = ease_in_out_sine((pulse_progress - 0.28) / 0.72)
+                        brightness = interpolate_value(
+                            active_stage["brillo_min"],
+                            warm_brightness,
+                            rise,
+                        )
+        for ip in target_ips:
+            apply_white(ip, brightness)
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_sax_calm(elapsed_ms):
+        phase = ((elapsed_ms - calm_start_ms) % calm_period_ms) / calm_period_ms
+        wave = phase * 2.0 if phase < 0.5 else (1.0 - phase) * 2.0
+        brightness = interpolate_value(
+            calm_max_brightness,
+            calm_min_brightness,
+            ease_in_out_sine(wave),
+        )
+        for ip in target_ips:
+            apply_white(ip, brightness)
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_collapse_pulses(elapsed_ms):
+        if elapsed_ms < collapse_impact_dark_end_ms:
+            brightness = collapse_impact_brightness
+        elif elapsed_ms < collapse_impact_recover_end_ms:
+            progress = ease_in_out_sine(
+                (elapsed_ms - collapse_impact_dark_end_ms)
+                / max(1, collapse_impact_recover_end_ms - collapse_impact_dark_end_ms)
+            )
+            brightness = interpolate_value(
+                collapse_impact_brightness,
+                warm_brightness,
+                progress,
+            )
+        else:
+            brightness = warm_brightness
+            active_stage = next(
+                (
+                    stage for stage in collapse_stages
+                    if stage["start_ms"] <= elapsed_ms < stage["end_ms"]
+                ),
+                None,
+            )
+            if active_stage is not None:
+                local_ms = (elapsed_ms - active_stage["start_ms"]) % active_stage["interval_ms"]
+                pulse_width_ms = min(active_stage["width_ms"], active_stage["interval_ms"])
+                if local_ms < pulse_width_ms:
+                    pulse_progress = local_ms / pulse_width_ms
+                    if pulse_progress < 0.22:
+                        fall = ease_in_out_sine(pulse_progress / 0.22)
+                        brightness = interpolate_value(
+                            warm_brightness,
+                            active_stage["brillo_min"],
+                            fall,
+                        )
+                    else:
+                        rise = ease_in_out_sine((pulse_progress - 0.22) / 0.78)
+                        brightness = interpolate_value(
+                            active_stage["brillo_min"],
+                            warm_brightness,
+                            rise,
+                        )
+        for ip in target_ips:
+            apply_white(ip, brightness)
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def heartbeat_brightness(elapsed_ms):
+        local_ms = (elapsed_ms - puppet_start_ms) % heartbeat_period_ms
+        first_peak_ms = max(80, int(heartbeat_period_ms * 0.10))
+        first_fall_ms = max(first_peak_ms + 80, int(heartbeat_period_ms * 0.20))
+        second_peak_ms = max(first_fall_ms + 70, int(heartbeat_period_ms * 0.30))
+        second_fall_ms = max(second_peak_ms + 100, int(heartbeat_period_ms * 0.43))
+        second_level = interpolate_value(
+            heartbeat_min_brightness,
+            heartbeat_max_brightness,
+            heartbeat_second_peak_factor,
+        )
+        if local_ms < first_peak_ms:
+            return interpolate_value(
+                heartbeat_min_brightness,
+                heartbeat_max_brightness,
+                ease_in_out_sine(local_ms / first_peak_ms),
+            )
+        if local_ms < first_fall_ms:
+            return interpolate_value(
+                heartbeat_max_brightness,
+                heartbeat_min_brightness,
+                ease_in_out_sine(
+                    (local_ms - first_peak_ms) / max(1, first_fall_ms - first_peak_ms)
+                ),
+            )
+        if local_ms < second_peak_ms:
+            return interpolate_value(
+                heartbeat_min_brightness,
+                second_level,
+                ease_in_out_sine(
+                    (local_ms - first_fall_ms) / max(1, second_peak_ms - first_fall_ms)
+                ),
+            )
+        if local_ms < second_fall_ms:
+            return interpolate_value(
+                second_level,
+                heartbeat_min_brightness,
+                ease_in_out_sine(
+                    (local_ms - second_peak_ms) / max(1, second_fall_ms - second_peak_ms)
+                ),
+            )
+        return heartbeat_min_brightness
+
+    def apply_puppet_final(elapsed_ms):
+        phase = ((elapsed_ms - puppet_start_ms) % puppet_period_ms) / puppet_period_ms
+        wave = phase * 2.0 if phase < 0.5 else (1.0 - phase) * 2.0
+        violet_brightness = interpolate_value(
+            puppet_min_brightness,
+            puppet_max_brightness,
+            ease_in_out_sine(wave),
+        )
+        violet_set = set(violet_ips)
+        for ip in all_scene_ips:
+            if ip in violet_set:
+                apply_colour(ip, puppet_hue, puppet_saturation, violet_brightness)
+            elif heartbeat_ip is not None and ip == heartbeat_ip:
+                apply_colour(
+                    ip,
+                    heartbeat_hue,
+                    heartbeat_saturation,
+                    heartbeat_brightness(elapsed_ms),
+                )
+            else:
+                apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_thunder(elapsed_ms, event_start_ms):
+        local_ms = max(0, elapsed_ms - event_start_ms)
+        brightness = 0
+        for at_ms, level in thunder_pattern:
+            if local_ms < at_ms:
+                break
+            brightness = level
+        for ip in target_ips:
+            if brightness <= 0:
+                apply_off(ip)
+                continue
+            if thunder_mode == "white":
+                apply_white(
+                    ip,
+                    brightness,
+                    temperature=thunder_temp,
+                    preview_h=thunder_preview_h,
+                )
+            else:
+                apply_colour(
+                    ip,
+                    thunder_hue,
+                    thunder_saturation,
+                    brightness,
+                )
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def clear_manual_hold_override():
+        override = active_scene_runtime.get("midi_hold_override")
+        if isinstance(override, dict) and override.get("scene_token") == token:
+            override_ips = set(override.get("ips", set()))
+            for note, state in list(espacio_midi_hold_states.items()):
+                if state.get("ip") in override_ips:
+                    espacio_midi_hold_states.pop(note, None)
+            active_scene_runtime["midi_hold_override"] = None
+
+    def prepare_manual_hold_window():
+        if manual_window_state["prepared"]:
+            return
+        manual_window_state["prepared"] = True
+        for ip in all_scene_ips:
+            apply_off(ip)
+            panel = panels.get(ip)
+            if panel is None:
+                continue
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = manual_hue
+            panel.last_sat = manual_saturation
+            panel.last_brillo = manual_brightness
+            try:
+                panel.brillo_var.set(manual_brightness)
+                panel.colorwheel_lamp.set_color(
+                    manual_hue,
+                    manual_saturation,
+                    max(0.01, manual_brightness / 255),
+                )
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+            update_lamp_state(ip, "colour", manual_hue, manual_saturation, 4000, 0)
+            last_sent[ip] = ("manual_ready",)
+        active_scene_runtime["midi_hold_override"] = {
+            "scene_token": token,
+            "ips": set(all_scene_ips),
+            "h": manual_hue,
+            "s": manual_saturation,
+            "brillo": manual_brightness,
+        }
+        espacio_midi_action_var.set("hold")
+        espacio_midi_trigger_var.set("Pulso color")
+        try:
+            espacio_status_var.set(
+                "Escena 6C-M1: Sostener MIDI habilitado en C-H163-S053-I089."
+            )
+            refresh_espacio_midi_leds()
+        except Exception:
+            pass
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_blackout_between_phases():
+        clear_manual_hold_override()
+        for ip in all_scene_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_rebirth_sequence(elapsed_ms):
+        clear_manual_hold_override()
+        for ip in target_ips:
+            entry = rebirth_entry_by_ip.get(ip)
+            if entry is None or elapsed_ms < entry["at_ms"]:
+                apply_off(ip)
+                continue
+            progress = min(
+                1.0,
+                (elapsed_ms - entry["at_ms"]) / max(1, entry["fade_ms"]),
+            )
+            apply_colour(
+                ip,
+                rebirth_hue,
+                rebirth_saturation,
+                interpolate_value(
+                    0,
+                    rebirth_brightness,
+                    ease_in_out_sine(progress),
+                ),
+            )
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_dance(elapsed_ms):
+        clear_manual_hold_override()
+        partial_set = set(dance_partial_ips)
+
+        def traveling_wave_brightness(ip, ordered_ips, local_ms):
+            if ip not in ordered_ips or not ordered_ips:
+                return dance_peak_brightness
+            count = len(ordered_ips)
+            lamp_index = ordered_ips.index(ip)
+            position = (max(0, local_ms) / dance_step_ms) % count
+            raw_distance = abs(lamp_index - position)
+            distance = min(raw_distance, count - raw_distance)
+            crest = math.exp(-0.5 * (distance / dance_crest_width) ** 2)
+            trailing_distance = (position - lamp_index) % count
+            tail = 0.0
+            if 0.65 < trailing_distance < 2.65:
+                tail = dance_tail_strength * (1.0 - (trailing_distance - 0.65) / 2.0)
+            level = min(1.0, crest + max(0.0, tail))
+            return interpolate_value(
+                dance_base_brightness,
+                dance_peak_brightness,
+                ease_in_out_sine(level),
+            )
+
+        partial_local_ms = max(0, elapsed_ms - dance_start_ms)
+        partial_ramp = ease_in_out_sine(
+            min(1.0, partial_local_ms / dance_ramp_ms)
+        )
+        join_local_ms = max(0, elapsed_ms - dance_all_join_ms)
+        join_ramp = ease_in_out_sine(
+            min(1.0, join_local_ms / dance_join_ramp_ms)
+        )
+        for ip in target_ips:
+            if ip in partial_set:
+                partial_wave = traveling_wave_brightness(
+                    ip,
+                    dance_partial_order_ips,
+                    partial_local_ms,
+                )
+                previous_brightness = interpolate_value(
+                    dance_peak_brightness,
+                    partial_wave,
+                    partial_ramp,
+                )
+            else:
+                previous_brightness = dance_peak_brightness
+
+            if elapsed_ms < dance_all_join_ms:
+                brightness = previous_brightness
+            else:
+                full_wave = traveling_wave_brightness(
+                    ip,
+                    dance_full_order_ips,
+                    join_local_ms,
+                )
+                brightness = interpolate_value(
+                    previous_brightness,
+                    full_wave,
+                    join_ramp,
+                )
+            if elapsed_ms >= dance_palette_start_ms and ip in dance_warm_ips:
+                apply_white(
+                    ip,
+                    brightness,
+                    temperature=dance_warm_temp,
+                    preview_h=dance_warm_preview_h,
+                )
+            elif elapsed_ms >= dance_palette_start_ms and ip in dance_color_ips:
+                apply_colour(
+                    ip,
+                    dance_color_hue,
+                    dance_color_saturation,
+                    brightness,
+                )
+            else:
+                apply_colour(
+                    ip,
+                    rebirth_hue,
+                    rebirth_saturation,
+                    brightness,
+                )
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_late_warm_hold():
+        clear_manual_hold_override()
+        for ip in target_ips:
+            if ip in late_hold_ips:
+                apply_white(
+                    ip,
+                    late_hold_brightness,
+                    temperature=late_hold_temp,
+                    preview_h=late_hold_preview_h,
+                )
+            else:
+                apply_off(ip)
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_final_blue_hold():
+        clear_manual_hold_override()
+        for ip in target_ips:
+            if ip in late_hold_ips:
+                apply_white(
+                    ip,
+                    late_hold_brightness,
+                    temperature=late_hold_temp,
+                    preview_h=late_hold_preview_h,
+                )
+            elif ip in final_blue_ips:
+                apply_colour(
+                    ip,
+                    final_blue_hue,
+                    final_blue_saturation,
+                    final_blue_brightness,
+                )
+            else:
+                apply_off(ip)
+        for ip in extra_puppet_ips:
+            apply_off(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_final_state():
+        if duration_ms >= final_blue_start_ms:
+            apply_final_blue_hold()
+        elif duration_ms >= late_hold_start_ms:
+            apply_late_warm_hold()
+        elif duration_ms >= dance_start_ms:
+            apply_dance(duration_ms)
+        else:
+            apply_rebirth_sequence(duration_ms)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+    except Exception:
+        pass
+    start_time = time.monotonic() - (start_at_ms / 1000.0)
+
+    def finish():
+        if fade_token[0] != token:
+            return
+        apply_final_state()
+        finalizar_escena(token, scene_name)
+
+    def tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        if elapsed_ms >= duration_ms:
+            finish()
+            return
+        if elapsed_ms < initial_hold_ms:
+            apply_initial_state()
+            root.after(max(1, initial_hold_ms - elapsed_ms), tick)
+            return
+        if elapsed_ms < impulse_start_ms:
+            apply_progressive_warm(elapsed_ms)
+            root.after(min(tick_ms, max(1, impulse_start_ms - elapsed_ms)), tick)
+            return
+        if elapsed_ms < impulse_end_ms:
+            apply_rage_impulses(elapsed_ms)
+            root.after(impulse_tick_ms, tick)
+            return
+        if elapsed_ms < calm_end_ms:
+            apply_sax_calm(elapsed_ms)
+            root.after(min(tick_ms, max(1, collapse_start_ms - elapsed_ms)), tick)
+            return
+        if elapsed_ms < collapse_end_ms:
+            apply_collapse_pulses(elapsed_ms)
+            root.after(collapse_tick_ms, tick)
+            return
+        if elapsed_ms < thunder_start_ms:
+            apply_puppet_final(elapsed_ms)
+            root.after(
+                min(puppet_tick_ms, max(1, thunder_start_ms - elapsed_ms)),
+                tick,
+            )
+            return
+        if elapsed_ms < thunder_end_ms:
+            apply_thunder(elapsed_ms, thunder_start_ms)
+            root.after(
+                min(55, max(1, thunder_end_ms - elapsed_ms)),
+                tick,
+            )
+            return
+        if elapsed_ms < manual_start_ms:
+            apply_blackout_between_phases()
+            root.after(min(tick_ms, max(1, manual_start_ms - elapsed_ms)), tick)
+            return
+        if elapsed_ms < manual_end_ms:
+            prepare_manual_hold_window()
+            root.after(min(tick_ms, max(1, manual_end_ms - elapsed_ms)), tick)
+            return
+        if elapsed_ms < rebirth_start_ms:
+            apply_blackout_between_phases()
+            root.after(min(tick_ms, max(1, rebirth_start_ms - elapsed_ms)), tick)
+            return
+        if elapsed_ms < dance_start_ms:
+            apply_rebirth_sequence(elapsed_ms)
+            root.after(
+                min(rebirth_tick_ms, max(1, dance_start_ms - elapsed_ms)),
+                tick,
+            )
+            return
+        if elapsed_ms < late_hold_start_ms:
+            apply_dance(elapsed_ms)
+            root.after(
+                min(dance_tick_ms, max(1, late_hold_start_ms - elapsed_ms)),
+                tick,
+            )
+            return
+        for late_thunder_start_ms in late_thunder_starts_ms:
+            late_thunder_end_ms = late_thunder_start_ms + late_thunder_duration_ms
+            if elapsed_ms < late_thunder_start_ms:
+                apply_late_warm_hold()
+                root.after(
+                    min(tick_ms, max(1, late_thunder_start_ms - elapsed_ms)),
+                    tick,
+                )
+                return
+            if elapsed_ms < late_thunder_end_ms:
+                apply_thunder(elapsed_ms, late_thunder_start_ms)
+                root.after(
+                    min(55, max(1, late_thunder_end_ms - elapsed_ms)),
+                    tick,
+                )
+                return
+        if elapsed_ms >= final_blue_start_ms:
+            apply_final_blue_hold()
+        else:
+            apply_late_warm_hold()
+        root.after(tick_ms, tick)
+
+    print(
+        f"[ESCENA PROGRAMADA] {scene_name}: azul inicial 1 s | "
+        f"expansión cálida hasta {impulse_start_ms / 1000:.1f} s | "
+        f"calma de saxofón {calm_start_ms / 1000:.1f}-{calm_end_ms / 1000:.1f} s | "
+        f"colapso {collapse_start_ms / 1000:.1f}-{collapse_end_ms / 1000:.1f} s | "
+        f"títere {puppet_start_ms / 1000:.1f}-{thunder_start_ms / 1000:.3f} s | "
+        f"relámpago {thunder_start_ms / 1000:.3f} s, trueno {thunder_sound_start_ms / 1000:.3f} s | "
+        f"Sostener MIDI {manual_start_ms / 1000:.3f}-{manual_end_ms / 1000:.1f} s | "
+        f"renacer desde {rebirth_start_ms / 1000:.1f} s | "
+        f"danza L14-L17 {dance_start_ms / 1000:.1f}-{dance_all_join_ms / 1000:.1f} s | "
+        f"danza mixta hasta {late_hold_start_ms / 1000:.3f} s | "
+        f"truenos tardíos {', '.join(f'{start / 1000:.3f}' for start in late_thunder_starts_ms)} s | "
+        f"azul final {final_blue_start_ms / 1000:.3f}-{final_blue_end_ms / 1000:.1f} s"
+    )
+    root.after(0, tick)
+    return True
+
+
+def run_scripted_separation_scene(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = max(1000, int(scripted.get("duration_ms", 330000)))
+    transition_ms = max(1, int(scripted.get("opening_transition_ms", 60000)))
+    swap_start_ms = max(transition_ms, int(scripted.get("swap_start_ms", 62000)))
+    swap_end_ms = max(swap_start_ms + 1, int(scripted.get("swap_end_ms", 157000)))
+    white_start_ms = max(swap_end_ms, int(scripted.get("white_start_ms", 157000)))
+    white_end_ms = max(white_start_ms + 1, int(scripted.get("white_end_ms", 240000)))
+    isolation_start_ms = max(
+        white_end_ms,
+        int(scripted.get("isolation_start_ms", 245000)),
+    )
+    tick_ms = max(100, min(1000, int(scripted.get("tick_ms", 250))))
+    start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
+
+    initial = scripted.get("initial_color", {})
+    initial_h = float(initial.get("h", 16)) % 360
+    initial_s = max(0.0, min(1.0, float(initial.get("s", 1.0))))
+    initial_brightness = safe_brightness(initial.get("brillo", 8))
+    opening_neutral_s = max(0.0, min(0.2, float(scripted.get("opening_neutral_s", 0.04))))
+    white_target = scripted.get("white_target", {})
+    white_temp = max(0, min(255, int(white_target.get("temp", 128))))
+    white_brightness = safe_brightness(white_target.get("brillo", 255))
+    white_preview_h = float(white_target.get("preview_h", 34)) % 360
+    white_preview_s = max(0.0, min(1.0, float(white_target.get("preview_s", 0.27))))
+    isolation_lamp_id = str(scripted.get("isolation_lamp", "L14"))
+    isolation_color = scripted.get("isolation_color", {})
+    isolation_temp = max(0, min(255, int(isolation_color.get("temp", 14))))
+    isolation_brightness = safe_brightness(isolation_color.get("brillo", 255))
+    isolation_steps = scripted.get("isolation_steps") or [
+        {
+            "at_ms": isolation_start_ms,
+            "lamps": [isolation_lamp_id],
+            "color": {"temp": isolation_temp, "brillo": isolation_brightness},
+        }
+    ]
+    candle_effect = scripted.get("candle_effect", {})
+    candle_start_ms = max(
+        isolation_start_ms,
+        int(candle_effect.get("start_ms", 299500)),
+    )
+    candle_end_ms = min(
+        duration_ms,
+        max(candle_start_ms + 1, int(candle_effect.get("end_ms", duration_ms))),
+    )
+    candle_h = float(candle_effect.get("h", 28)) % 360
+    candle_s = max(0.0, min(1.0, float(candle_effect.get("s", 1.0))))
+    candle_brightness_min = safe_brightness(candle_effect.get("brillo_min", 165))
+    candle_brightness_max = max(
+        candle_brightness_min,
+        safe_brightness(candle_effect.get("brillo_max", 255)),
+    )
+    candle_period_ms = max(2400, int(candle_effect.get("periodo_ms", 5600)))
+    candle_frame_ms = max(180, min(750, int(candle_effect.get("frame_ms", 250))))
+    candle_entry_ms = max(0, int(candle_effect.get("entrada_ms", 2500)))
+    candle_settle_ms = max(0, int(candle_effect.get("cierre_ms", 3000)))
+    candle_end_brightness = safe_brightness(
+        candle_effect.get("brillo_final", candle_brightness_max)
+    )
+    candle_hue_drift = max(0.0, min(4.0, float(candle_effect.get("variacion_h", 1.5))))
+    candle_sat_drift = max(0.0, min(0.08, float(candle_effect.get("variacion_s", 0.025))))
+    candle_entry_h = float(candle_effect.get("entrada_h", 34)) % 360
+    candle_entry_s = max(0.0, min(1.0, float(candle_effect.get("entrada_s", 0.55))))
+    candle_next_update_ms = [candle_start_ms]
+    candle_entry_states = {}
+    candle_last_states = {}
+
+    post_candle = scripted.get("post_candle") or {}
+    post_candle_enabled = bool(post_candle) and duration_ms > candle_end_ms
+    post_warm_fade_end_ms = min(
+        duration_ms,
+        max(candle_end_ms + 1, int(post_candle.get("warm_fade_end_ms", candle_end_ms + 5000))),
+    )
+    post_warm_hold_end_ms = min(
+        duration_ms,
+        max(post_warm_fade_end_ms, int(post_candle.get("warm_hold_end_ms", 388000))),
+    )
+    post_return_end_ms = min(
+        duration_ms,
+        max(post_warm_hold_end_ms + 1, int(post_candle.get("return_end_ms", 393000))),
+    )
+    post_blue_end_ms = min(
+        duration_ms,
+        max(post_return_end_ms + 1, int(post_candle.get("blue_end_ms", duration_ms))),
+    )
+    post_warm_brightness = safe_brightness(post_candle.get("warm_brightness", 255))
+    post_warm_h = float(post_candle.get("warm_preview_h", 34)) % 360
+    post_warm_s = max(0.0, min(1.0, float(post_candle.get("warm_preview_s", 0.52))))
+    post_blue_h = float(post_candle.get("blue_h", 216)) % 360
+    post_blue_s = max(0.0, min(1.0, float(post_candle.get("blue_s", 0.90))))
+    post_blue_brightness = safe_brightness(post_candle.get("blue_brightness", 255))
+
+    blue_variations = scripted.get("blue_variations") or {}
+    blue_variations_enabled = bool(blue_variations) and duration_ms > post_blue_end_ms
+    blue_variations_start_ms = max(
+        post_blue_end_ms,
+        int(blue_variations.get("start_ms", post_blue_end_ms)),
+    )
+    blue_variations_end_ms = min(
+        duration_ms,
+        max(
+            blue_variations_start_ms + 1,
+            int(blue_variations.get("end_ms", 480000)),
+        ),
+    )
+    blue_fade_end_ms = min(
+        duration_ms,
+        max(
+            blue_variations_end_ms + 1,
+            int(blue_variations.get("fade_end_ms", duration_ms)),
+        ),
+    )
+    blue_variation_step_ms = max(4000, int(blue_variations.get("step_ms", 10000)))
+    blue_variation_frame_ms = max(
+        200,
+        min(1000, int(blue_variations.get("frame_ms", 400))),
+    )
+    blue_low_brightness = safe_brightness(blue_variations.get("brillo_final", 8))
+    blue_variation_style = str(blue_variations.get("style", "palette_rotation"))
+    blue_tide_period_ms = max(12000, int(blue_variations.get("period_ms", 24000)))
+    blue_tide_entry_ms = max(0, int(blue_variations.get("entry_ms", 6000)))
+    blue_tide_center_h = float(blue_variations.get("center_h", post_blue_h)) % 360
+    blue_tide_hue_range = max(6.0, min(30.0, float(blue_variations.get("hue_range", 24))))
+    blue_tide_center_s = max(0.0, min(1.0, float(blue_variations.get("center_s", 0.92))))
+    blue_tide_sat_range = max(0.0, min(0.12, float(blue_variations.get("sat_range", 0.07))))
+    blue_tide_brightness_min = safe_brightness(
+        blue_variations.get("brillo_min", 215)
+    )
+    blue_tide_brightness_max = max(
+        blue_tide_brightness_min,
+        safe_brightness(blue_variations.get("brillo_max", 255)),
+    )
+    blue_variation_order_ids = [
+        str(lamp_id) for lamp_id in blue_variations.get("lamp_order") or []
+    ]
+    blue_palette = []
+    for color in blue_variations.get("palette") or []:
+        blue_palette.append(
+            (
+                float(color.get("h", post_blue_h)) % 360,
+                max(0.0, min(1.0, float(color.get("s", post_blue_s)))),
+                safe_brightness(color.get("brillo", post_blue_brightness)),
+            )
+        )
+    if not blue_palette:
+        blue_palette = [
+            (204.0, 0.84, 245),
+            (210.0, 0.88, 255),
+            (216.0, 0.90, 250),
+            (222.0, 0.94, 240),
+            (228.0, 0.98, 232),
+        ]
+
+    zones = []
+    target_ips = []
+    for zone in scripted.get("zones") or []:
+        color = zone.get("color", {})
+        zone_ips = []
+        for lamp_id in zone.get("lamps") or []:
+            ip = get_scripted_lamp_ip(lamp_id)
+            if ip and lamp_status.get(ip, True):
+                zone_ips.append(ip)
+        if not zone_ips:
+            continue
+        zones.append({
+            "name": str(zone.get("name") or "Zona"),
+            "ips": zone_ips,
+            "h": float(color.get("h", initial_h)) % 360,
+            "s": max(0.0, min(1.0, float(color.get("s", initial_s)))),
+            "brillo": safe_brightness(color.get("brillo", 255)),
+        })
+        target_ips.extend(zone_ips)
+
+    target_ips = list(dict.fromkeys(target_ips))
+    if not target_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    blue_variation_ips = []
+    for lamp_id in blue_variation_order_ids:
+        ip = get_scripted_lamp_ip(lamp_id)
+        if ip in target_ips and ip not in blue_variation_ips:
+            blue_variation_ips.append(ip)
+    for ip in target_ips:
+        if ip not in blue_variation_ips:
+            blue_variation_ips.append(ip)
+
+    claim_lamps_for_manual_control(target_ips)
+
+    def apply_zone_state(zone, hue, sat, brightness):
+        brightness = safe_brightness(brightness)
+        live_ips = []
+        for ip in zone["ips"]:
+            if fade_token[0] != token or not lamp_status.get(ip, True):
+                continue
+            panel = panels.get(ip)
+            selected_devices[ip].set(brightness > 0)
+            if panel is not None:
+                panel.last_mode = "colour"
+                panel.mode_var.set("colour")
+                panel.last_hue = hue
+                panel.last_sat = sat
+                panel.last_brillo = brightness
+                try:
+                    panel.brillo_var.set(brightness)
+                    panel.colorwheel_lamp.set_color(hue, sat, max(0.01, brightness / 255))
+                except Exception:
+                    pass
+                set_panel_mode(panel, "colour", send=False)
+                update_panel_visual(panel)
+            update_lamp_state(ip, "colour", hue, sat, 4000, brightness)
+            live_ips.append(ip)
+        if not live_ips:
+            return
+        if brightness <= 0:
+            for ip in live_ips:
+                send_off(ip)
+        else:
+            send_color_to_lamps(live_ips, hue, sat, brightness)
+
+    def apply_white_state():
+        for ip in target_ips:
+            if fade_token[0] != token or not lamp_status.get(ip, True):
+                continue
+            panel = panels.get(ip)
+            selected_devices[ip].set(white_brightness > 0)
+            if panel is not None:
+                panel.last_mode = "white"
+                panel.mode_var.set("white")
+                panel.last_temp = white_temp
+                panel.last_brillo = white_brightness
+                try:
+                    panel.temp_var.set(white_temp)
+                    panel.brillo_var.set(white_brightness)
+                    panel.whitewheel_lamp.set_temp_value(white_temp)
+                except Exception:
+                    pass
+                set_panel_mode(panel, "white", send=False)
+                update_panel_visual(panel)
+            if white_brightness > 0:
+                send_lamp_white_scene(ip, white_brightness, white_temp)
+            else:
+                send_off(ip)
+            update_lamp_state(ip, "white", white_preview_h, 0.0, white_temp, white_brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def apply_isolation_state(elapsed_ms):
+        active_states = {}
+        for step in isolation_steps:
+            at_ms = max(isolation_start_ms, int(step.get("at_ms", isolation_start_ms)))
+            if elapsed_ms < at_ms:
+                continue
+            color = step.get("color", {})
+            temp = max(0, min(255, int(color.get("temp", isolation_temp))))
+            target_brightness = safe_brightness(color.get("brillo", isolation_brightness))
+            fade_ms = max(0, int(step.get("fade_ms", 0)))
+            if fade_ms > 0:
+                progress = max(0.0, min(1.0, (elapsed_ms - at_ms) / fade_ms))
+                brightness = safe_brightness(
+                    target_brightness * ease_in_out_sine(progress)
+                )
+            else:
+                brightness = target_brightness
+            for lamp_id in step.get("lamps") or []:
+                ip = get_scripted_lamp_ip(lamp_id)
+                if ip and ip in target_ips:
+                    active_states[ip] = (temp, brightness)
+
+        for ip in target_ips:
+            if fade_token[0] != token or not lamp_status.get(ip, True):
+                continue
+            panel = panels.get(ip)
+            active_state = active_states.get(ip)
+            temp, brightness = active_state if active_state else (white_temp, 0)
+            selected_devices[ip].set(brightness > 0)
+            if panel is not None:
+                panel.last_mode = "white"
+                panel.mode_var.set("white")
+                panel.last_temp = temp
+                panel.last_brillo = brightness
+                try:
+                    panel.temp_var.set(temp)
+                    panel.brillo_var.set(brightness)
+                    panel.whitewheel_lamp.set_temp_value(temp)
+                except Exception:
+                    pass
+                set_panel_mode(panel, "white", send=False)
+                update_panel_visual(panel)
+            if brightness > 0:
+                send_lamp_white_scene(ip, brightness, temp)
+                update_lamp_state(ip, "white", white_preview_h, 0.0, temp, brightness)
+            else:
+                send_off(ip)
+                update_lamp_state(ip, "white", white_preview_h, 0.0, white_temp, 0)
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def apply_candle_state(elapsed_ms):
+        if elapsed_ms < candle_next_update_ms[0]:
+            return max(1, candle_next_update_ms[0] - elapsed_ms)
+
+        local_ms = max(0, elapsed_ms - candle_start_ms)
+        local_seconds = local_ms / 1000.0
+        entry_progress = 1.0
+        if candle_entry_ms > 0:
+            entry_progress = ease_in_out_sine(min(1.0, local_ms / candle_entry_ms))
+
+        settle_progress = 0.0
+        settle_start_ms = max(candle_start_ms, candle_end_ms - candle_settle_ms)
+        if candle_settle_ms > 0 and elapsed_ms >= settle_start_ms:
+            settle_progress = ease_in_out_sine(
+                min(1.0, (elapsed_ms - settle_start_ms) / candle_settle_ms)
+            )
+
+        shared_wave = math.sin((2.0 * math.pi * local_ms) / candle_period_ms)
+        brightness_middle = (candle_brightness_min + candle_brightness_max) / 2.0
+        brightness_amplitude = (candle_brightness_max - candle_brightness_min) / 2.0
+        candle_next_update_ms[0] = elapsed_ms + candle_frame_ms
+
+        for index, ip in enumerate(target_ips):
+            if fade_token[0] != token or not lamp_status.get(ip, True):
+                continue
+            panel = panels.get(ip)
+            if ip not in candle_entry_states:
+                previous_brightness = getattr(panel, "last_brillo", candle_brightness_max)
+                previous_hue = (
+                    getattr(panel, "last_hue", candle_entry_h)
+                    if getattr(panel, "last_mode", "white") == "colour"
+                    else candle_entry_h
+                )
+                previous_saturation = (
+                    getattr(panel, "last_sat", candle_entry_s)
+                    if getattr(panel, "last_mode", "white") == "colour"
+                    else candle_entry_s
+                )
+                candle_entry_states[ip] = (
+                    safe_brightness(previous_brightness),
+                    float(previous_hue) % 360,
+                    max(0.0, min(1.0, float(previous_saturation))),
+                )
+
+            phase = index * 0.18
+            individual_wave = math.sin(
+                (2.0 * math.pi * local_seconds / 4.35) + phase
+            )
+            soft_detail = math.sin(
+                (2.0 * math.pi * local_seconds / 2.15) + (phase * 1.7)
+            )
+            combined_wave = (
+                (shared_wave * 0.72)
+                + (individual_wave * 0.22)
+                + (soft_detail * 0.06)
+            )
+
+            wave_brightness = brightness_middle + brightness_amplitude * combined_wave
+            wave_brightness = interpolate_value(
+                wave_brightness,
+                candle_end_brightness,
+                settle_progress,
+            )
+            wave_hue = candle_h + candle_hue_drift * individual_wave
+            wave_hue = interpolate_hue(wave_hue, candle_h, settle_progress)
+            wave_saturation = candle_s + candle_sat_drift * soft_detail
+            wave_saturation = interpolate_value(
+                wave_saturation,
+                candle_s,
+                settle_progress,
+            )
+
+            previous_brightness, previous_hue, previous_saturation = candle_entry_states[ip]
+            brightness = safe_brightness(
+                interpolate_value(previous_brightness, wave_brightness, entry_progress)
+            )
+            hue = interpolate_hue(previous_hue, wave_hue, entry_progress)
+            saturation = max(
+                0.0,
+                min(
+                    1.0,
+                    interpolate_value(previous_saturation, wave_saturation, entry_progress),
+                ),
+            )
+            selected_devices[ip].set(True)
+            if panel is not None:
+                panel.last_mode = "colour"
+                panel.mode_var.set("colour")
+                panel.last_hue = hue
+                panel.last_sat = saturation
+                panel.last_brillo = brightness
+                try:
+                    panel.brillo_var.set(brightness)
+                    panel.colorwheel_lamp.set_color(
+                        hue,
+                        saturation,
+                        max(0.01, brightness / 255),
+                    )
+                except Exception:
+                    pass
+                set_panel_mode(panel, "colour", send=False)
+                update_panel_visual(panel)
+            send_lamp_color_safe(ip, hue, saturation, brightness)
+            update_lamp_state(ip, "colour", hue, saturation, 4000, brightness)
+            candle_last_states[ip] = (hue, saturation, brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+        return max(1, candle_next_update_ms[0] - elapsed_ms)
+
+    def apply_candle_final_state():
+        for ip in target_ips:
+            if fade_token[0] != token or not lamp_status.get(ip, True):
+                continue
+            panel = panels.get(ip)
+            selected_devices[ip].set(True)
+            if panel is not None:
+                panel.last_mode = "colour"
+                panel.mode_var.set("colour")
+                panel.last_hue = candle_h
+                panel.last_sat = candle_s
+                panel.last_brillo = candle_end_brightness
+                try:
+                    panel.brillo_var.set(candle_end_brightness)
+                    panel.colorwheel_lamp.set_color(
+                        candle_h,
+                        candle_s,
+                        max(0.01, candle_end_brightness / 255),
+                    )
+                except Exception:
+                    pass
+                set_panel_mode(panel, "colour", send=False)
+                update_panel_visual(panel)
+            send_lamp_color_safe(ip, candle_h, candle_s, candle_end_brightness)
+            update_lamp_state(
+                ip,
+                "colour",
+                candle_h,
+                candle_s,
+                4000,
+                candle_end_brightness,
+            )
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def apply_post_colour_state(hue, saturation, brightness):
+        for zone in zones:
+            apply_zone_state(zone, hue, saturation, brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def apply_individual_colour_states(states):
+        for ip, state in states.items():
+            if fade_token[0] != token or not lamp_status.get(ip, True):
+                continue
+            hue, saturation, brightness = state
+            brightness = safe_brightness(brightness)
+            panel = panels.get(ip)
+            selected_devices[ip].set(brightness > 0)
+            if panel is not None:
+                panel.last_mode = "colour"
+                panel.mode_var.set("colour")
+                panel.last_hue = hue
+                panel.last_sat = saturation
+                panel.last_brillo = brightness
+                try:
+                    panel.brillo_var.set(brightness)
+                    panel.colorwheel_lamp.set_color(
+                        hue,
+                        saturation,
+                        max(0.01, brightness / 255),
+                    )
+                except Exception:
+                    pass
+                set_panel_mode(panel, "colour", send=False)
+                update_panel_visual(panel)
+            if brightness > 0:
+                send_lamp_color_safe(ip, hue, saturation, brightness)
+            else:
+                send_off(ip)
+            update_lamp_state(ip, "colour", hue, saturation, 4000, brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def blue_variation_state(index, elapsed_ms):
+        local_ms = max(
+            0,
+            min(
+                blue_variations_end_ms - blue_variations_start_ms,
+                elapsed_ms - blue_variations_start_ms,
+            ),
+        )
+        if blue_variation_style == "tidal_wave":
+            entry_progress = 1.0
+            if blue_tide_entry_ms > 0:
+                entry_progress = ease_in_out_sine(
+                    min(1.0, local_ms / blue_tide_entry_ms)
+                )
+            lamp_count = max(1, len(blue_variation_ips))
+            spatial_phase = (2.0 * math.pi * index) / lamp_count
+            travel_phase = (2.0 * math.pi * local_ms) / blue_tide_period_ms
+            wave = math.sin(spatial_phase - travel_phase)
+            target_hue = (blue_tide_center_h + blue_tide_hue_range * wave) % 360
+            target_saturation = max(
+                0.0,
+                min(1.0, blue_tide_center_s + (blue_tide_sat_range * wave)),
+            )
+            crest = ((1.0 - wave) / 2.0) ** 1.35
+            target_brightness = interpolate_value(
+                blue_tide_brightness_min,
+                blue_tide_brightness_max,
+                crest,
+            )
+            hue = interpolate_hue(post_blue_h, target_hue, entry_progress)
+            saturation = max(
+                0.0,
+                min(
+                    1.0,
+                    interpolate_value(post_blue_s, target_saturation, entry_progress),
+                ),
+            )
+            brightness = safe_brightness(
+                interpolate_value(
+                    post_blue_brightness,
+                    target_brightness,
+                    entry_progress,
+                )
+            )
+            return hue, saturation, brightness
+
+        segment = int(local_ms // blue_variation_step_ms)
+        segment_progress = (local_ms % blue_variation_step_ms) / blue_variation_step_ms
+        segment_progress = ease_in_out_sine(segment_progress)
+
+        if segment == 0:
+            source = (post_blue_h, post_blue_s, post_blue_brightness)
+            target = blue_palette[index % len(blue_palette)]
+        else:
+            source = blue_palette[(index + segment - 1) % len(blue_palette)]
+            target = blue_palette[(index + segment) % len(blue_palette)]
+
+        return (
+            interpolate_hue(source[0], target[0], segment_progress),
+            interpolate_value(source[1], target[1], segment_progress),
+            safe_brightness(interpolate_value(source[2], target[2], segment_progress)),
+        )
+
+    def apply_blue_variations(elapsed_ms, fade_progress=None):
+        states = {}
+        for index, ip in enumerate(blue_variation_ips):
+            hue, saturation, brightness = blue_variation_state(index, elapsed_ms)
+            if fade_progress is not None:
+                brightness = safe_brightness(
+                    interpolate_value(brightness, blue_low_brightness, fade_progress)
+                )
+            states[ip] = (hue, saturation, brightness)
+        apply_individual_colour_states(states)
+
+    def apply_post_candle_timeline(elapsed_ms):
+        if elapsed_ms < post_warm_fade_end_ms:
+            progress = ease_in_out_sine(
+                (elapsed_ms - candle_end_ms)
+                / max(1, post_warm_fade_end_ms - candle_end_ms)
+            )
+            states = {}
+            for ip in target_ips:
+                source_h, source_s, source_brightness = candle_last_states.get(
+                    ip,
+                    (candle_h, candle_s, candle_end_brightness),
+                )
+                states[ip] = (
+                    interpolate_hue(source_h, post_warm_h, progress),
+                    interpolate_value(source_s, post_warm_s, progress),
+                    safe_brightness(
+                        interpolate_value(
+                            source_brightness,
+                            post_warm_brightness,
+                            progress,
+                        )
+                    ),
+                )
+            apply_individual_colour_states(states)
+            return tick_ms
+
+        if elapsed_ms < post_warm_hold_end_ms:
+            apply_post_colour_state(post_warm_h, post_warm_s, post_warm_brightness)
+            return max(1, post_warm_hold_end_ms - elapsed_ms)
+
+        if elapsed_ms < post_return_end_ms:
+            progress = ease_in_out_sine(
+                (elapsed_ms - post_warm_hold_end_ms)
+                / max(1, post_return_end_ms - post_warm_hold_end_ms)
+            )
+            apply_post_colour_state(
+                interpolate_hue(post_warm_h, candle_h, progress),
+                interpolate_value(post_warm_s, candle_s, progress),
+                interpolate_value(
+                    post_warm_brightness,
+                    candle_end_brightness,
+                    progress,
+                ),
+            )
+            return tick_ms
+
+        if elapsed_ms < post_blue_end_ms:
+            progress = ease_in_out_sine(
+                (elapsed_ms - post_return_end_ms)
+                / max(1, post_blue_end_ms - post_return_end_ms)
+            )
+            apply_post_colour_state(
+                interpolate_hue(candle_h, post_blue_h, progress),
+                interpolate_value(candle_s, post_blue_s, progress),
+                interpolate_value(
+                    candle_end_brightness,
+                    post_blue_brightness,
+                    progress,
+                ),
+            )
+            return tick_ms
+
+        if blue_variations_enabled and elapsed_ms < blue_variations_end_ms:
+            apply_blue_variations(elapsed_ms)
+            return blue_variation_frame_ms
+
+        if blue_variations_enabled and elapsed_ms < blue_fade_end_ms:
+            fade_progress = ease_in_out_sine(
+                (elapsed_ms - blue_variations_end_ms)
+                / max(1, blue_fade_end_ms - blue_variations_end_ms)
+            )
+            apply_blue_variations(blue_variations_end_ms, fade_progress)
+            return blue_variation_frame_ms
+
+        if blue_variations_enabled:
+            apply_blue_variations(blue_variations_end_ms, 1.0)
+            return max(1, duration_ms - elapsed_ms)
+
+        apply_post_colour_state(post_blue_h, post_blue_s, post_blue_brightness)
+        return max(1, duration_ms - elapsed_ms)
+
+    def apply_opening_progress(progress):
+        progress = max(0.0, min(1.0, float(progress)))
+        eased = ease_in_out_sine(progress)
+        for zone in zones:
+            if eased < 0.34:
+                neutral_progress = ease_in_out_sine(eased / 0.34)
+                hue = initial_h
+                sat = interpolate_value(initial_s, opening_neutral_s, neutral_progress)
+            else:
+                colour_progress = (eased - 0.34) / 0.66
+                hue_progress = ease_in_out_sine(min(1.0, colour_progress / 0.35))
+                saturation_progress = ease_in_out_sine(
+                    max(0.0, min(1.0, (colour_progress - 0.35) / 0.65))
+                )
+                hue = interpolate_hue(initial_h, zone["h"], hue_progress)
+                sat = interpolate_value(opening_neutral_s, zone["s"], saturation_progress)
+            apply_zone_state(
+                zone,
+                hue,
+                sat,
+                interpolate_value(initial_brightness, zone["brillo"], eased),
+            )
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def apply_swap_progress(progress):
+        progress = max(0.0, min(1.0, float(progress)))
+        eased = ease_in_out_sine(progress)
+        for index, zone in enumerate(zones):
+            opposite = zones[-(index + 1)] if len(zones) > 1 else zone
+            apply_zone_state(
+                zone,
+                interpolate_hue(zone["h"], opposite["h"], eased),
+                interpolate_value(zone["s"], opposite["s"], eased),
+                interpolate_value(zone["brillo"], opposite["brillo"], eased),
+            )
+        sync_espacio_laberintos_current_state(target_ips)
+
+    def apply_white_transition_progress(progress):
+        progress = max(0.0, min(1.0, float(progress)))
+        eased = ease_in_out_sine(progress)
+        for index, zone in enumerate(zones):
+            source = zones[-(index + 1)] if len(zones) > 1 else zone
+            if eased < 0.72:
+                desaturate = ease_in_out_sine(eased / 0.72)
+                hue = source["h"]
+                sat = interpolate_value(source["s"], opening_neutral_s, desaturate)
+            elif eased < 0.90:
+                hue_shift = ease_in_out_sine((eased - 0.72) / 0.18)
+                hue = interpolate_hue(source["h"], white_preview_h, hue_shift)
+                sat = opening_neutral_s
+            else:
+                warm_progress = ease_in_out_sine((eased - 0.90) / 0.10)
+                hue = white_preview_h
+                sat = interpolate_value(opening_neutral_s, white_preview_s, warm_progress)
+            apply_zone_state(zone, hue, sat, white_brightness)
+        sync_espacio_laberintos_current_state(target_ips)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+    except Exception:
+        pass
+
+    start_time = time.monotonic() - (start_at_ms / 1000.0)
+
+    def finish():
+        if fade_token[0] != token:
+            return
+        if blue_variations_enabled:
+            apply_blue_variations(blue_variations_end_ms, 1.0)
+        elif post_candle_enabled:
+            apply_post_colour_state(post_blue_h, post_blue_s, post_blue_brightness)
+        elif candle_end_ms >= duration_ms:
+            apply_candle_final_state()
+        else:
+            apply_isolation_state(duration_ms)
+        finalizar_escena(token, scene_name)
+
+    def tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        if elapsed_ms >= duration_ms:
+            finish()
+            return
+        if elapsed_ms < transition_ms:
+            apply_opening_progress(elapsed_ms / transition_ms)
+            root.after(tick_ms, tick)
+            return
+        if elapsed_ms < swap_start_ms:
+            apply_opening_progress(1.0)
+            root.after(tick_ms, tick)
+            return
+        if elapsed_ms < swap_end_ms:
+            apply_swap_progress((elapsed_ms - swap_start_ms) / (swap_end_ms - swap_start_ms))
+            root.after(tick_ms, tick)
+            return
+        if elapsed_ms < white_start_ms:
+            apply_swap_progress(1.0)
+            root.after(tick_ms, tick)
+            return
+        if elapsed_ms < white_end_ms:
+            apply_white_transition_progress((elapsed_ms - white_start_ms) / (white_end_ms - white_start_ms))
+            root.after(tick_ms, tick)
+            return
+        if elapsed_ms < isolation_start_ms:
+            apply_white_state()
+            root.after(max(1, isolation_start_ms - elapsed_ms), tick)
+            return
+        if candle_start_ms <= elapsed_ms < candle_end_ms:
+            candle_delay_ms = apply_candle_state(elapsed_ms)
+            root.after(
+                max(1, min(candle_delay_ms, candle_end_ms - elapsed_ms)),
+                tick,
+            )
+            return
+
+        if post_candle_enabled and candle_end_ms <= elapsed_ms < duration_ms:
+            post_delay_ms = apply_post_candle_timeline(elapsed_ms)
+            root.after(max(1, min(post_delay_ms, duration_ms - elapsed_ms)), tick)
+            return
+
+        apply_isolation_state(elapsed_ms)
+        active_fade = any(
+            int(step.get("fade_ms", 0)) > 0
+            and int(step.get("at_ms", isolation_start_ms)) <= elapsed_ms
+            < int(step.get("at_ms", isolation_start_ms)) + int(step.get("fade_ms", 0))
+            for step in isolation_steps
+        )
+        if active_fade:
+            root.after(tick_ms, tick)
+            return
+        next_step_ms = min(
+            (
+                int(step.get("at_ms", isolation_start_ms))
+                for step in isolation_steps
+                if int(step.get("at_ms", isolation_start_ms)) > elapsed_ms
+            ),
+            default=duration_ms,
+        )
+        root.after(max(1, min(duration_ms, next_step_ms) - elapsed_ms), tick)
+
+    print(
+        f"[ESCENA PROGRAMADA] {scene_name}: separación por zonas durante {transition_ms} ms | "
+        + " | ".join(
+            f"{zone['name']}: {', '.join(str(get_lamp_id(ip)) for ip in zone['ips'])}"
+            for zone in zones
+        )
+    )
     tick()
     return True
 
@@ -11220,12 +13414,306 @@ def run_scripted_maria_birth_scene(scene_data, token, scene_name, start_at_ms=0)
     return True
 
 
+def run_scripted_cenando_pez_scene(scene_data, token, scene_name, start_at_ms=0):
+    scripted = scene_data.get("scripted_scene", {})
+    duration_ms = max(1000, int(scripted.get("duration_ms", 416000)))
+    start_at_ms = max(0, min(max(0, duration_ms - 1), int(start_at_ms or 0)))
+    opening = scripted.get("opening_state") or {}
+    warm_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in opening.get("warm_lamps") or ["L18", "L17", "L12", "L13"]
+    ]
+    blue_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in opening.get("blue_lamps")
+        or ["L9", "L10", "L11", "L14", "L15", "L16"]
+    ]
+    off_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in opening.get("off_lamps") or ["L8"]
+    ]
+    warm = opening.get("warm") or {}
+    warm_temp = max(0, min(255, int(warm.get("temp", 0))))
+    warm_brightness = safe_brightness(warm.get("brillo", 255))
+    warm_preview_h = float(warm.get("preview_h", 34)) % 360
+    blue = opening.get("blue") or {}
+    blue_hue = float(blue.get("h", 199)) % 360
+    blue_saturation = max(0.0, min(1.0, float(blue.get("s", 0.96))))
+    blue_brightness = safe_brightness(blue.get("brillo", 180))
+    opening_fade = scripted.get("opening_fade") or {}
+    opening_fade_duration_ms = max(1, int(opening_fade.get("duration_ms", 10000)))
+    opening_fade_tick_ms = max(80, min(500, int(opening_fade.get("tick_ms", 120))))
+    survivor_lamp_id = str(opening_fade.get("survivor_lamp", "L18"))
+    survivor_start = opening_fade.get("start_preview") or {}
+    survivor_start_hue = float(survivor_start.get("h", warm_preview_h)) % 360
+    survivor_start_saturation = max(
+        0.0,
+        min(1.0, float(survivor_start.get("s", 0.59))),
+    )
+    survivor_target = opening_fade.get("target") or {}
+    survivor_target_hue = float(survivor_target.get("h", 13)) % 360
+    survivor_target_saturation = max(
+        0.0,
+        min(1.0, float(survivor_target.get("s", 0.90))),
+    )
+    survivor_target_brightness = safe_brightness(survivor_target.get("brillo", 255))
+    first_group = scripted.get("first_group_entry") or {}
+    first_group_at_ms = max(
+        opening_fade_duration_ms,
+        int(first_group.get("at_ms", 21500)),
+    )
+    first_group_lamp_ids = [
+        str(lamp_id)
+        for lamp_id in first_group.get("lamps") or ["L16", "L17", "L15"]
+    ]
+    first_group_hue = float(first_group.get("h", survivor_target_hue)) % 360
+    first_group_saturation = max(
+        0.0,
+        min(1.0, float(first_group.get("s", survivor_target_saturation))),
+    )
+    first_group_brightness = safe_brightness(
+        first_group.get("brillo", survivor_target_brightness)
+    )
+
+    warm_ips = {
+        ip
+        for lamp_id in warm_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) is not None
+    }
+    blue_ips = {
+        ip
+        for lamp_id in blue_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) is not None
+    }
+    off_ips = {
+        ip
+        for lamp_id in off_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) is not None
+    }
+    survivor_ip = get_scripted_lamp_ip(survivor_lamp_id)
+    first_group_ips = {
+        ip
+        for lamp_id in first_group_lamp_ids
+        if (ip := get_scripted_lamp_ip(lamp_id)) is not None
+    }
+    all_scene_ips = list(dict.fromkeys(warm_ips | blue_ips | off_ips))
+    if not all_scene_ips:
+        root.after(0, lambda: finalizar_escena(token, scene_name))
+        return True
+
+    claim_lamps_for_manual_control(all_scene_ips)
+
+    def apply_white(ip, brightness):
+        brightness = safe_brightness(brightness)
+        selected_devices[ip].set(brightness > 0)
+        panel = panels.get(ip)
+        if panel is not None:
+            panel.last_mode = "white"
+            panel.mode_var.set("white")
+            panel.last_temp = warm_temp
+            panel.last_brillo = brightness
+            try:
+                panel.temp_var.set(warm_temp)
+                panel.brillo_var.set(brightness)
+                panel.whitewheel_lamp.set_temp_value(warm_temp)
+            except Exception:
+                pass
+            set_panel_mode(panel, "white", send=False)
+            update_panel_visual(panel)
+        if brightness > 0:
+            send_lamp_white_scene(ip, brightness, warm_temp)
+        else:
+            send_off(ip)
+        update_lamp_state(
+            ip,
+            "white",
+            warm_preview_h,
+            0.0,
+            warm_temp,
+            brightness,
+        )
+
+    def apply_colour(ip, hue, saturation, brightness):
+        brightness = safe_brightness(brightness)
+        selected_devices[ip].set(brightness > 0)
+        panel = panels.get(ip)
+        if panel is not None:
+            panel.last_mode = "colour"
+            panel.mode_var.set("colour")
+            panel.last_hue = hue
+            panel.last_sat = saturation
+            panel.last_brillo = brightness
+            try:
+                panel.brillo_var.set(brightness)
+                panel.colorwheel_lamp.set_color(
+                    hue,
+                    saturation,
+                    max(0.01, brightness / 255),
+                )
+            except Exception:
+                pass
+            set_panel_mode(panel, "colour", send=False)
+            update_panel_visual(panel)
+        if brightness > 0:
+            send_lamp_color_safe(ip, hue, saturation, brightness)
+        else:
+            send_off(ip)
+        update_lamp_state(
+            ip,
+            "colour",
+            hue,
+            saturation,
+            4000,
+            brightness,
+        )
+
+    def apply_off_state(ip):
+        selected_devices[ip].set(False)
+        panel = panels.get(ip)
+        if panel is not None:
+            panel.last_brillo = 0
+            try:
+                panel.brillo_var.set(0)
+            except Exception:
+                pass
+            update_panel_visual(panel)
+        send_off(ip)
+        update_lamp_state(ip, "colour", 0, 0.0, 4000, 0)
+
+    def apply_opening_frame(elapsed_ms):
+        progress = ease_in_out_sine(
+            min(1.0, max(0.0, elapsed_ms / opening_fade_duration_ms))
+        )
+        for ip in warm_ips:
+            if ip == survivor_ip:
+                if progress <= 0.0:
+                    apply_white(ip, warm_brightness)
+                else:
+                    apply_colour(
+                        ip,
+                        interpolate_value(
+                            survivor_start_hue,
+                            survivor_target_hue,
+                            progress,
+                        ),
+                        interpolate_value(
+                            survivor_start_saturation,
+                            survivor_target_saturation,
+                            progress,
+                        ),
+                        interpolate_value(
+                            warm_brightness,
+                            survivor_target_brightness,
+                            progress,
+                        ),
+                    )
+            else:
+                brightness = interpolate_value(warm_brightness, 0, progress)
+                if brightness > 0:
+                    apply_white(ip, brightness)
+                else:
+                    apply_off_state(ip)
+        for ip in blue_ips:
+            brightness = interpolate_value(blue_brightness, 0, progress)
+            if brightness > 0:
+                apply_colour(ip, blue_hue, blue_saturation, brightness)
+            else:
+                apply_off_state(ip)
+        for ip in off_ips:
+            apply_off_state(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_opening_final():
+        for ip in warm_ips | blue_ips:
+            if ip == survivor_ip:
+                apply_colour(
+                    ip,
+                    survivor_target_hue,
+                    survivor_target_saturation,
+                    survivor_target_brightness,
+                )
+            else:
+                apply_off_state(ip)
+        for ip in off_ips:
+            apply_off_state(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    def apply_first_group_state():
+        active_ips = set(first_group_ips)
+        if survivor_ip is not None:
+            active_ips.add(survivor_ip)
+        for ip in warm_ips | blue_ips:
+            if ip in active_ips:
+                apply_colour(
+                    ip,
+                    first_group_hue,
+                    first_group_saturation,
+                    first_group_brightness,
+                )
+            else:
+                apply_off_state(ip)
+        for ip in off_ips:
+            apply_off_state(ip)
+        sync_espacio_laberintos_current_state(all_scene_ips)
+
+    try:
+        start_scene_progress(token, duration_ms / 1000.0, start_at_ms / 1000.0)
+    except Exception:
+        pass
+
+    def finish():
+        if fade_token[0] != token:
+            return
+        finalizar_escena(token, scene_name)
+
+    start_time = time.monotonic() - (start_at_ms / 1000.0)
+
+    def opening_fade_tick():
+        if fade_token[0] != token:
+            return
+        elapsed_ms = int((time.monotonic() - start_time) * 1000)
+        if elapsed_ms >= opening_fade_duration_ms:
+            apply_opening_final()
+            return
+        apply_opening_frame(elapsed_ms)
+        root.after(
+            min(
+                opening_fade_tick_ms,
+                max(1, opening_fade_duration_ms - elapsed_ms),
+            ),
+            opening_fade_tick,
+        )
+
+    def activate_first_group():
+        if fade_token[0] != token:
+            return
+        apply_first_group_state()
+
+    if start_at_ms < opening_fade_duration_ms:
+        opening_fade_tick()
+    elif start_at_ms < first_group_at_ms:
+        apply_opening_final()
+    else:
+        apply_first_group_state()
+    if start_at_ms < first_group_at_ms:
+        root.after(max(1, first_group_at_ms - start_at_ms), activate_first_group)
+    root.after(max(1, duration_ms - start_at_ms), finish)
+    print(
+        f"[ESCENA PROGRAMADA] {scene_name}: continuidad de 6C-M1 | fade 10 s | "
+        f"grupo L16/L17/L15 en {first_group_at_ms / 1000:.3f} s | "
+        f"duración {duration_ms / 1000:.3f} s"
+    )
+    return True
+
+
 def apply_scripted_scene_if_needed(scene_data, token, scene_name, start_at_ms=0):
     scripted = scene_data.get("scripted_scene", {})
     if not scripted:
         return False
+    if scripted.get("type") == "laberintos_composite_scene":
+        return run_scripted_composite_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
     if scripted.get("type") == "bichos_flor_marchita":
-        return run_scripted_flower_wither_scene(scene_data, token, scene_name)
+        return run_scripted_flower_wither_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
     if scripted.get("type") == "laberintos_sunset_sequence":
         return run_scripted_sunset_sequence_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
     if scripted.get("type") == "laberintos_rect_sequence":
@@ -11233,7 +13721,23 @@ def apply_scripted_scene_if_needed(scene_data, token, scene_name, start_at_ms=0)
     if scripted.get("type") == "laberintos_blue_ocean_pulse":
         return run_scripted_blue_ocean_pulse_scene(scene_data, token, scene_name)
     if scripted.get("type") == "laberintos_firefly_petals":
-        return run_scripted_firefly_petals_scene(scene_data, token, scene_name)
+        return run_scripted_firefly_petals_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
+    if scripted.get("type") == "laberintos_collapse_vicente":
+        return run_scripted_collapse_vicente_scene(
+            scene_data,
+            token,
+            scene_name,
+            start_at_ms=start_at_ms,
+        )
+    if scripted.get("type") == "laberintos_cenando_pez":
+        return run_scripted_cenando_pez_scene(
+            scene_data,
+            token,
+            scene_name,
+            start_at_ms=start_at_ms,
+        )
+    if scripted.get("type") == "laberintos_separation_vicente_maria":
+        return run_scripted_separation_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
     if scripted.get("type") == "laberintos_parto_maria":
         return run_scripted_maria_birth_scene(scene_data, token, scene_name, start_at_ms=start_at_ms)
     return False
@@ -11361,7 +13865,11 @@ def aplicar_escena(nombre_escena, start_at_ms=0):
         except Exception:
             pass
     try:
-        start_scene_timer(start_at_ms / 1000.0)
+        start_scene_timer(
+            nombre_escena,
+            get_scene_timing_for_display(escena),
+            start_at_ms / 1000.0,
+        )
     except Exception:
         pass
     if apply_scripted_scene_if_needed(escena, nuevo_token, nombre_escena, start_at_ms=start_at_ms):
@@ -11581,6 +14089,7 @@ def marcar_escena_terminada():
     try:
         set_estado_escena("Escena finalizada", "#03fc7f")
         scene_progress_var.set(100)
+        finish_scene_timer(keep_continuous=True)
     except:
         pass
     avanzar_lista_escenas_si_corresponde()
@@ -11702,6 +14211,7 @@ def mostrar_fades_de_escena(event=None):
             escena,
             actualizar_seleccion=False
         )
+        show_selected_scene_duration(datos)
                
 def cargar():
     global ultima_idx_escena
@@ -11843,6 +14353,7 @@ def stop_running_scene(source="manual"):
         listbox_escenas.config(state="normal")
         scene_progress_var.set(0)
         reset_scene_timer()
+        show_selected_scene_duration()
         label = "MIDI" if source == "MIDI" else "boton"
         set_estado_escena(f"Escena detenida desde {label}", "#ffcc66")
     except Exception:
@@ -11938,9 +14449,15 @@ from tkinter import ttk
 
 estado_escena_var = tk.StringVar(value="Sin escenas en ejecución")
 scene_progress_var = tk.DoubleVar(value=0.0)
-scene_timer_var = tk.StringVar(value="00:00")
+scene_timer_var = tk.StringVar(value="Dur. --:--")
 rehearsal_time_var = tk.StringVar(value="05:40")
-scene_timer_token = {"value": None, "start": None}
+scene_timer_token = {
+    "value": None,
+    "start": None,
+    "total": None,
+    "kind": TIMING_INSTANT,
+    "scene_name": None,
+}
 lbl_estado_escena = tk.Label(
     frame_right,
     textvariable=estado_escena_var,
@@ -12015,12 +14532,51 @@ def format_scene_elapsed(seconds):
     return f"{minutes:02d}:{rest:02d}"
 
 
-def start_scene_timer(start_offset_seconds=0.0):
+def set_scene_timer_text(text, running=False):
+    scene_timer_var.set(text)
+    label = globals().get("scene_timer_label")
+    if label is not None:
+        label.config(fg="#8dfa9f" if running else "#8fd8f2")
+
+
+def scene_timing_label(timing):
+    kind = timing.get("kind")
+    if kind == TIMING_TIMED:
+        return f"Dur. {format_scene_duration(timing.get('seconds', 0))}"
+    if kind == TIMING_CONTINUOUS:
+        return "Dur. continua"
+    return "Instantánea"
+
+
+def show_selected_scene_duration(scene_data=None):
+    if escena_en_ejecucion and scene_timer_token.get("value"):
+        return
+    if scene_data is None:
+        try:
+            selected_name = escena_seleccionada_en_listbox()
+            if not selected_name:
+                set_scene_timer_text("Dur. --:--")
+                return
+            scene_data = load_escenas().get("datos", {}).get(selected_name, {})
+        except Exception:
+            set_scene_timer_text("Dur. --:--")
+            return
+    set_scene_timer_text(scene_timing_label(get_scene_timing_for_display(scene_data)))
+
+
+def start_scene_timer(scene_name, timing, start_offset_seconds=0.0):
     token = str(uuid.uuid4())
     scene_timer_token["value"] = token
+    scene_timer_token["scene_name"] = scene_name
+    scene_timer_token["kind"] = timing.get("kind", TIMING_INSTANT)
+    total_seconds = timing.get("seconds")
+    if total_seconds is not None:
+        total_seconds = max(0.0, float(total_seconds or 0.0))
+    scene_timer_token["total"] = total_seconds
     start_offset_seconds = max(0.0, float(start_offset_seconds or 0.0))
+    if total_seconds is not None:
+        start_offset_seconds = min(total_seconds, start_offset_seconds)
     scene_timer_token["start"] = time.monotonic() - start_offset_seconds
-    scene_timer_var.set(format_scene_elapsed(start_offset_seconds))
 
     def tick():
         if scene_timer_token.get("value") != token:
@@ -12028,16 +14584,49 @@ def start_scene_timer(start_offset_seconds=0.0):
         start = scene_timer_token.get("start")
         if start is None:
             return
-        scene_timer_var.set(format_scene_elapsed(time.monotonic() - start))
-        root.after(1000, tick)
+        elapsed = max(0.0, time.monotonic() - start)
+        kind = scene_timer_token.get("kind")
+        total = scene_timer_token.get("total")
+        if kind == TIMING_TIMED and total is not None:
+            visible_elapsed = min(elapsed, total)
+            set_scene_timer_text(
+                f"{format_scene_elapsed(visible_elapsed)} / {format_scene_duration(total)}",
+                running=True,
+            )
+            if elapsed >= total:
+                return
+        elif kind == TIMING_CONTINUOUS:
+            set_scene_timer_text(f"{format_scene_elapsed(elapsed)} / continuo", running=True)
+        else:
+            set_scene_timer_text(format_scene_elapsed(elapsed), running=True)
+        root.after(250, tick)
 
     tick()
+
+
+def finish_scene_timer(keep_continuous=False):
+    kind = scene_timer_token.get("kind")
+    if keep_continuous and kind == TIMING_CONTINUOUS:
+        return
+    total = scene_timer_token.get("total")
+    scene_timer_token["value"] = None
+    scene_timer_token["start"] = None
+    if kind == TIMING_TIMED and total is not None:
+        formatted = format_scene_duration(total)
+        set_scene_timer_text(f"{formatted} / {formatted}")
+    elif kind == TIMING_CONTINUOUS:
+        set_scene_timer_text("Dur. continua")
+    else:
+        set_scene_timer_text("Instantánea")
 
 
 def reset_scene_timer():
     scene_timer_token["value"] = None
     scene_timer_token["start"] = None
-    scene_timer_var.set("00:00")
+    scene_timer_token["total"] = None
+    scene_timer_token["kind"] = TIMING_INSTANT
+    scene_timer_token["scene_name"] = None
+    set_scene_timer_text("Dur. --:--")
 
 
 def start_scene_progress(token, total_seconds, start_offset_seconds=0.0):
@@ -12201,12 +14790,13 @@ tk.Label(
     bg="#202428", fg="#b9e3f7",
     font=("Segoe UI", 10, "bold")
 ).pack(side="left")
-tk.Label(
+scene_timer_label = tk.Label(
     frame_saved_scenes_title,
     textvariable=scene_timer_var,
     bg="#202428", fg="#8dfa9f",
     font=("Consolas", 11, "bold")
-).pack(side="right")
+)
+scene_timer_label.pack(side="right")
 lista_escenas = tk.StringVar(value=[])
 
 btn_cargar = tk.Button(

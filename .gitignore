@@ -19,9 +19,13 @@ lamp_ips - copia.txt
 lamp_groups.json
 lamps_config.json
 
-# Escenas y proyectos locales
-#escenas.json
-#proyectos.json
+# DATOS COMPARTIDOS DEL ESPECTACULO
+# Estos archivos deben viajar con cada version estable para que la segunda
+# computadora reciba las escenas, proyectos y distribucion del espacio.
+!escenas.json
+!proyectos.json
+!banco_escenas.json
+!espacio_laberintos.json
 
 # -----------------------------
 # COPIAS / BACKUPS LOCALES
@@ -50,3 +54,6 @@ Thumbs.db
 # ARCHIVOS TEMPORALES
 # -----------------------------
 *.tmp
+.codex-remote-attachments/
+output/
+tmp/
