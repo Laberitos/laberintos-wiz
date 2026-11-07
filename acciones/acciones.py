@@ -1054,26 +1054,36 @@ def efecto_vela_wiz(
     efecto_var,
     root,
     brillo_base=120,
+    _state=None,
 ):
     """
-    Vela cálida, pequeñas variaciones.
+    Vela cálida con pequeñas variaciones independientes por lámpara.
     """
     if not efecto_var.get():
         return
 
-    h = 28   # cálido
-    s = 1
-    # variación pequeñita
-    brillo = brillo_base + random.randint(-25, 40)
-    brillo = max(40, min(200, brillo))
+    if _state is None:
+        _state = {}
 
     activos = [ip for ip in LAMP_IPS if selected_devices[ip].get()]
-    for ip in activos:
-        send_lamp_color(ip, h, s, brillo)
+    for index, ip in enumerate(activos):
+        previous = _state.get(ip, brillo_base)
+        target = brillo_base + random.randint(-25, 40)
+        brightness = round(previous + ((target - previous) * 0.58))
+        brightness = max(40, min(200, brightness))
+        _state[ip] = brightness
+
+        hue = 28 + random.uniform(-2.2, 2.2)
+        saturation = max(0.84, min(1.0, 0.94 + random.uniform(-0.05, 0.04)))
+        send_lamp_color(ip, hue, saturation, brightness)
+
+    for ip in list(_state):
+        if ip not in activos:
+            _state.pop(ip, None)
 
     root.after(random.randint(250, 600), efecto_vela_wiz,
                send_lamp_color, LAMP_IPS, panels, selected_devices,
-               efecto_var, root, brillo_base)
+               efecto_var, root, brillo_base, _state)
 
 
 def efecto_atardecer_wiz_(
