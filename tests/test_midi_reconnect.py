@@ -55,6 +55,14 @@ class MidiReconnectTests(unittest.TestCase):
     def tearDown(self):
         midi_listener.stop_midi()
 
+    def test_formats_notes_with_ableton_octaves(self):
+        self.assertEqual(midi_listener.midi_note_name(0), "C-2")
+        self.assertEqual(midi_listener.midi_note_name(24), "C0")
+        self.assertEqual(midi_listener.midi_note_name(26), "D0")
+        self.assertEqual(midi_listener.midi_note_name(60), "C3")
+        self.assertEqual(midi_listener.midi_note_name(127), "G8")
+        self.assertEqual(midi_listener.midi_note_name(128), "--")
+
     def test_init_reopens_apc_after_ports_return(self):
         with patch.object(midi_listener.rtmidi, "MidiIn", FakeMidiIn), patch.object(
             midi_listener.rtmidi,
@@ -77,6 +85,47 @@ class MidiReconnectTests(unittest.TestCase):
         self.assertTrue(status["apc_connected"])
         self.assertIn("Laberintos MIDI 1", status["input_port"])
         self.assertEqual(status["output_port"], "APC mini mk2 1")
+
+    def test_windows_instance_suffix_does_not_break_saved_ports(self):
+        FakeMidiIn.ports = ["Laberintos MIDI 2", "APC mini mk2 3"]
+        FakeMidiOut.ports = ["Laberintos MIDI 3", "APC mini mk2 4"]
+
+        with patch.object(midi_listener.rtmidi, "MidiIn", FakeMidiIn), patch.object(
+            midi_listener.rtmidi,
+            "MidiOut",
+            FakeMidiOut,
+        ):
+            self.assertTrue(
+                midi_listener.init_midi(
+                    "Laberintos MIDI 0",
+                    "APC mini mk2 1",
+                )
+            )
+
+        status = midi_listener.get_midi_status()
+        self.assertIn("Laberintos MIDI 2", status["input_port"])
+        self.assertIn("APC mini mk2 3", status["input_port"])
+        self.assertEqual(status["output_port"], "APC mini mk2 4")
+
+    def test_stale_setting_falls_back_to_laberintos_input(self):
+        FakeMidiIn.ports = ["Laberintos MIDI 4", "APC mini mk2 5"]
+        FakeMidiOut.ports = ["APC mini mk2 6"]
+
+        with patch.object(midi_listener.rtmidi, "MidiIn", FakeMidiIn), patch.object(
+            midi_listener.rtmidi,
+            "MidiOut",
+            FakeMidiOut,
+        ):
+            self.assertTrue(
+                midi_listener.init_midi(
+                    "Puerto Ableton anterior 0",
+                    "APC mini mk2 1",
+                )
+            )
+
+        status = midi_listener.get_midi_status()
+        self.assertIn("Laberintos MIDI 4", status["input_port"])
+        self.assertIn("APC mini mk2 5", status["input_port"])
 
     def test_supervisor_connects_when_apc_appears(self):
         events = []

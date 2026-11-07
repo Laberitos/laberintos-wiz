@@ -42,11 +42,13 @@ def get_or_create_event_loop():
 # UTILIDADES
 # ===========================================================
 def safe_brightness(val):
-    """Brillo seguro para evitar fallback rojo de Wiz (<8)."""
+    """Conserva el apagado y evita el fallback rojo en brillos encendidos."""
     try:
         v = int(val)
     except:
-        return 8
+        return 0
+    if v <= 0:
+        return 0
     return max(8, min(255, v))
 
 
@@ -164,4 +166,4 @@ def restore_lamp_state(ip, estado, send_lamp_color):
     if estado:
         h, s, b = estado
         send_lamp_color(ip, h, s, b)
-    
+

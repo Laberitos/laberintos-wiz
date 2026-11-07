@@ -1,3 +1,4 @@
+import re
 import threading
 import time
 
@@ -44,13 +45,55 @@ LED_CYAN = 37
 LED_BLANCO = 3
 LED_AMARILLO_INTENSO = 63
 
+MIDI_NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
+
+def midi_note_name(note):
+    """Devuelve la nomenclatura de octavas usada por Ableton Live."""
+    try:
+        note = int(note)
+    except (TypeError, ValueError):
+        return "--"
+    if not 0 <= note <= 127:
+        return "--"
+    return f"{MIDI_NOTE_NAMES[note % 12]}{(note // 12) - 2}"
+
+
+def _normalize_port_name(name):
+    return " ".join(str(name or "").strip().lower().split())
+
+
+def _stable_port_name(name):
+    # Los backends MIDI de Windows agregan un numero de instancia variable.
+    return re.sub(r"\s+\d+$", "", _normalize_port_name(name))
+
 
 def _find_port_index(ports, include_text="APC", exclude_text=None):
-    include_text = include_text.lower()
-    exclude_text = exclude_text.lower() if exclude_text else None
+    include_name = _normalize_port_name(include_text)
+    include_stable = _stable_port_name(include_text)
+    exclude_name = _normalize_port_name(exclude_text) if exclude_text else None
+
+    candidates = []
     for index, port_name in enumerate(ports):
-        name = port_name.lower()
-        if include_text in name and (exclude_text is None or exclude_text not in name):
+        normalized = _normalize_port_name(port_name)
+        if exclude_name and exclude_name in normalized:
+            continue
+        candidates.append((index, normalized, _stable_port_name(port_name)))
+
+    for index, normalized, _stable in candidates:
+        if normalized == include_name:
+            return index
+
+    for index, normalized, _stable in candidates:
+        if include_name and include_name in normalized:
+            return index
+
+    for index, _normalized, stable in candidates:
+        if include_stable and (
+            stable == include_stable
+            or include_stable in stable
+            or stable in include_stable
+        ):
             return index
     return None
 
@@ -144,12 +187,20 @@ def init_midi(input_port_name=None, output_port_name=None):
         last_port_inventory = (tuple(input_ports), tuple(output_ports))
 
         input_specs = []
+        preferred_index = None
         if input_port_name:
             preferred_index = _find_port_index(input_ports, input_port_name)
             if preferred_index is not None:
                 preferred_name = input_ports[preferred_index]
                 preferred_role = "apc" if "apc" in preferred_name.lower() else "ableton"
                 input_specs.append((preferred_index, preferred_role))
+
+        if preferred_index is None:
+            for fallback_name in ("Laberintos MIDI", "loopMIDI"):
+                fallback_index = _find_port_index(input_ports, fallback_name)
+                if fallback_index is not None:
+                    input_specs.append((fallback_index, "ableton"))
+                    break
 
         apc_index = _find_port_index(input_ports, "APC")
         if apc_index is not None and all(index != apc_index for index, _role in input_specs):

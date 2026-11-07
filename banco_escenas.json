@@ -1,10 +1,15 @@
 {
   "version": 2,
   "orden": [
+    "0C-M1-Nacimiento",
+    "0C-M2-Caminata",
+    "0C-M3-Lucha_pieles",
     "4C-M1-Maria_en_su_jardin",
     "5C-M1-Separación_Vicente_Maria",
     "6C-M1-Colapso_de_Vicente",
     "7C-M1-Cenando_pez",
+    "8C-M1-Barca_y_muerte_Vicente",
+    "9C-M1-Vicente_y_las_lilas",
     "4C-M2-Se_marchita_el_jardín",
     "4C-M3-Petalos-luciernaga",
     "3C-M2-Vicente_navega_con_Franc",
@@ -17,6 +22,687 @@
     "3C-M1-Parto_de_Maria"
   ],
   "datos": {
+    "0C-M1-Nacimiento": {
+      "name": "0C-M1-Nacimiento",
+      "source_scene": "programada",
+      "description": "Primer momento de la introducción. Las lámparas entran cada 5 segundos hasta 00:40 y luego reproducen la respiración senoidal validada del panel hasta 01:26. El conjunto pasa entonces a blanco cálido y acelera desde un pulso orgánico hasta un estrobo real: crecimiento hasta 02:38, apagón hasta 02:41, estrobo potente y explosión en 03:40. Los golpes finales quedan sincronizados con el audio. L8, L9 y L16 permanecen apagadas.",
+      "documentation": {
+        "purpose": "Construir el nacimiento gradual del espacio lumínico antes de desarrollar el resto de la introducción.",
+        "lamps": "Participan L10, L11, L12, L13, L14, L15, L17, L18, L19 y L20. L8, L9 y L16 se apagan al comenzar y quedan excluidas.",
+        "timeline": [
+          "00:00: L10 se enciende.",
+          "00:05: L11 se enciende.",
+          "00:10: L12 se enciende.",
+          "00:15: L13 se enciende.",
+          "00:20: L14 se enciende.",
+          "00:25: L15 se enciende.",
+          "00:30: L17 se enciende.",
+          "00:35: L18 se enciende.",
+          "00:40: L19 y L20 se encienden juntas.",
+          "00:40-01:26: las diez lámparas activas reproducen la respiración senoidal del efecto guardado, entre el mínimo técnico I008 y el máximo I255.",
+          "01:26-02:38: pasan a blanco cálido B-T004; el pulso acelera y amplía su contraste hasta convertirse progresivamente en estrobo real de 70 ms encendido y 70 ms apagado.",
+          "02:38-02:41: apagón dramático de las diez lámparas, conservando internamente su participación en la escena.",
+          "02:41-03:40: arranca directamente el estrobo potente a brillo máximo y apagado total, hasta una explosión conjunta.",
+          "03:40-03:46.813: la base baja y los destellos siguen individualmente los golpes finales del audio."
+        ],
+        "palette": "Referencia exacta de 1-Inicio_Nacimiento: C-H016-S096-I180, modo color.",
+        "ending": "Las diez lámparas participantes terminan encendidas en blanco cálido B-T004-I180, preparadas para el siguiente momento de la introducción.",
+        "notes": "Audio de referencia: intro_nacimiento.wav, duración 03:46.813. El apagón visual queda fijado en 02:38.000-02:41.000. Los golpes finales se programan desde 03:40.700 hasta 03:46.350."
+      },
+      "summary": "Intro 03:46.813 | respiración | nacimiento cálido | explosión 03:40 | sin L8/L9/L16",
+      "created_at": "2026-10-31T11:28:03",
+      "updated_at": "2026-10-31T12:30:46",
+      "scene_data": {
+        "tipo": "escena_luces",
+        "version": 3,
+        "scene_kind": "scripted",
+        "nombre": "0C-M1-Nacimiento",
+        "fade_in": 0.0,
+        "fade_out": 0.0,
+        "effects": {},
+        "effects_config": {
+          "version": 1,
+          "active": {}
+        },
+        "effects_layers": [],
+        "lamparas": {},
+        "scripted_scene": {
+          "type": "laberintos_sunset_sequence",
+          "summary": "Intro 03:46.813 | respiración | nacimiento cálido | explosión 03:40 | sin L8/L9/L16",
+          "duration_ms": 226813,
+          "tick_ms": 250,
+          "steps": [
+            {
+              "at_ms": 0,
+              "fade_ms": 0,
+              "mode": "off",
+              "lamps": [
+                "L8",
+                "L9",
+                "L16"
+              ],
+              "color": {
+                "h": 16.336042889718442,
+                "s": 0.9593659197626397,
+                "brillo": 0
+              }
+            },
+            {
+              "at_ms": 0,
+              "fade_ms": 0,
+              "lamps": ["L10"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 5000,
+              "fade_ms": 0,
+              "lamps": ["L11"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 10000,
+              "fade_ms": 0,
+              "lamps": ["L12"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L13"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 20000,
+              "fade_ms": 0,
+              "lamps": ["L14"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 25000,
+              "fade_ms": 0,
+              "lamps": ["L15"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 30000,
+              "fade_ms": 0,
+              "lamps": ["L17"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 35000,
+              "fade_ms": 0,
+              "lamps": ["L18"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            },
+            {
+              "at_ms": 40000,
+              "fade_ms": 0,
+              "lamps": ["L19", "L20"],
+              "color": {"h": 16.336042889718442, "s": 0.9593659197626397, "brillo": 180}
+            }
+          ],
+          "respiration": {
+            "start_ms": 40000,
+            "end_ms": 86000,
+            "tick_ms": 40,
+            "period_ms": 8378,
+            "brightness_min": 1,
+            "brightness_max": 255,
+            "restore_brightness": 180,
+            "start_brightness": 180,
+            "lamps": [
+              "L10",
+              "L11",
+              "L12",
+              "L13",
+              "L14",
+              "L15",
+              "L17",
+              "L18",
+              "L19",
+              "L20"
+            ]
+          },
+          "birth_flicker": {
+            "start_ms": 86000,
+            "first_end_ms": 158000,
+            "second_start_ms": 161000,
+            "explosion_ms": 220000,
+            "explosion_duration_ms": 500,
+            "end_ms": 226813,
+            "tick_ms": 20,
+            "temp": 4,
+            "base_brightness": 180,
+            "pause_brightness": 0,
+            "first_low": 40,
+            "second_low": 0,
+            "peak": 255,
+            "first_period_start_ms": 3200,
+            "first_period_end_ms": 140,
+            "second_period_start_ms": 140,
+            "second_period_end_ms": 140,
+            "final_base": 55,
+            "final_pulse_width_ms": 260,
+            "final_beats_ms": [
+              220700,
+              221300,
+              221850,
+              222400,
+              222950,
+              223550,
+              224100,
+              224650,
+              225200,
+              225800,
+              226350
+            ],
+            "lamps": [
+              "L10",
+              "L11",
+              "L12",
+              "L13",
+              "L14",
+              "L15",
+              "L17",
+              "L18",
+              "L19",
+              "L20"
+            ]
+          }
+        }
+      }
+    },
+    "0C-M2-Caminata": {
+      "name": "0C-M2-Caminata",
+      "source_scene": "programada",
+      "description": "Segundo momento de la introducción, con duración de 04:30. Parte del final de Nacimiento y realiza un blackout inmediato. L10-L15, L17 y L18 nacen durante 15 segundos desde azul puro hacia ocho tonos azules/cian distintos, hasta I255. En 00:15.850 ocurre un impacto seco a I008 y, 180 ms después, todas regresan a I255. Los apagados siguen el orden L18, L17, L15, L12, L14, L10, L13 y L11; esta última completa el blackout en 03:45, quince segundos antes que en la versión anterior. L8, L9, L16, L19 y L20 permanecen apagadas.",
+      "documentation": {
+        "purpose": "Convertir el nacimiento en una caminata nocturna: el espacio aparece lentamente como un campo azul y luego desaparece lámpara por lámpara.",
+        "lamps": "Participan L10, L11, L12, L13, L14, L15, L17 y L18. L8, L9, L16, L19 y L20 quedan excluidas y apagadas durante toda la escena.",
+        "timeline": [
+          "00:00: blackout inmediato del estado heredado de 0C-M1-Nacimiento.",
+          "00:00-00:15: las ocho participantes suben de I000 a I255 mientras transicionan desde C-H240-S100 hacia tonos individuales entre H190 y H234.",
+          "00:15.850: impacto seco; las ocho lámparas caen instantáneamente de I255 a I008, conservando su azul individual.",
+          "00:16.030: resolución inmediata del impacto; las ocho lámparas regresan a I255.",
+          "00:16.030 en adelante: cada lámpara conserva su azul/cian a I255 hasta el inicio de su propio fade de apagado.",
+          "00:35.002-00:45.002: L18 realiza el primer fade de apagado.",
+          "Después continúan L17, L15, L12, L14, L10 y L13, separados aproximadamente por 25.714 segundos.",
+          "03:35-03:45: L11 realiza el último fade y completa el blackout.",
+          "03:45-04:30: blackout sostenido."
+        ],
+        "palette": "Apertura desde azul puro C-H240-S100; llegada distribuida en H190, H195, H205, H210, H216, H222, H228 y H234, siempre a I255.",
+        "ending": "A las 03:45 todas las lámparas están apagadas y el blackout se sostiene hasta 04:30.",
+        "notes": "Orden de apagado validado: L18, L17, L15, L12, L14, L10, L13 y L11. El intervalo de 25.714 s se conserva; toda la secuencia fue adelantada 15 segundos para completar el blackout en 03:45."
+      },
+      "summary": "04:30 | azul-cian 15s | impacto 15.850 | blackout progresivo 03:45",
+      "created_at": "2026-10-31T12:45:08",
+      "updated_at": "2026-11-07T00:17:56",
+      "scene_data": {
+        "tipo": "escena_luces",
+        "version": 3,
+        "scene_kind": "scripted",
+        "nombre": "0C-M2-Caminata",
+        "fade_in": 0.0,
+        "fade_out": 0.0,
+        "effects": {},
+        "effects_config": {
+          "version": 1,
+          "active": {}
+        },
+        "effects_layers": [],
+        "lamparas": {},
+        "scripted_scene": {
+          "type": "laberintos_sunset_sequence",
+          "summary": "04:30 | azul-cian 15s | impacto 15.850 | blackout progresivo 03:45",
+          "duration_ms": 270000,
+          "tick_ms": 100,
+          "steps": [
+            {
+              "at_ms": 0,
+              "fade_ms": 0,
+              "mode": "off",
+              "lamps": ["L8", "L9", "L16", "L19", "L20"],
+              "color": {"h": 240, "s": 1.0, "brillo": 0}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L17"],
+              "color": {"h": 190, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L18"],
+              "color": {"h": 195, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L10"],
+              "color": {"h": 205, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L11"],
+              "color": {"h": 210, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L12"],
+              "color": {"h": 216, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L13"],
+              "color": {"h": 222, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L14"],
+              "color": {"h": 228, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15000,
+              "fade_ms": 0,
+              "lamps": ["L15"],
+              "color": {"h": 234, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L17"],
+              "color": {"h": 190, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L18"],
+              "color": {"h": 195, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L10"],
+              "color": {"h": 205, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L11"],
+              "color": {"h": 210, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L12"],
+              "color": {"h": 216, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L13"],
+              "color": {"h": 222, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L14"],
+              "color": {"h": 228, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 15850, "fade_ms": 0, "lamps": ["L15"],
+              "color": {"h": 234, "s": 1.0, "brillo_inicio": 255, "brillo": 8}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L17"],
+              "color": {"h": 190, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L18"],
+              "color": {"h": 195, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L10"],
+              "color": {"h": 205, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L11"],
+              "color": {"h": 210, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L12"],
+              "color": {"h": 216, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L13"],
+              "color": {"h": 222, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L14"],
+              "color": {"h": 228, "s": 1.0, "brillo": 255}
+            },
+            {
+              "at_ms": 16030, "fade_ms": 0, "lamps": ["L15"],
+              "color": {"h": 234, "s": 1.0, "brillo": 255}
+            }
+          ],
+          "opening_color_transition": {
+            "start_ms": 0,
+            "end_ms": 15000,
+            "tick_ms": 80,
+            "lamps": ["L17", "L18", "L10", "L11", "L12", "L13", "L14", "L15"],
+            "start_color": {"h": 240, "s": 1.0, "brillo": 0},
+            "end_colors": {
+              "L17": {"h": 190, "s": 1.0, "brillo": 255},
+              "L18": {"h": 195, "s": 1.0, "brillo": 255},
+              "L10": {"h": 205, "s": 1.0, "brillo": 255},
+              "L11": {"h": 210, "s": 1.0, "brillo": 255},
+              "L12": {"h": 216, "s": 1.0, "brillo": 255},
+              "L13": {"h": 222, "s": 1.0, "brillo": 255},
+              "L14": {"h": 228, "s": 1.0, "brillo": 255},
+              "L15": {"h": 234, "s": 1.0, "brillo": 255}
+            }
+          },
+          "sequential_fade_out": {
+            "first_start_ms": 35002,
+            "interval_ms": 25714,
+            "fade_ms": 10000,
+            "tick_ms": 100,
+            "order": ["L18", "L17", "L15", "L12", "L14", "L10", "L13", "L11"]
+          }
+        }
+      }
+    },
+    "0C-M3-Lucha_pieles": {
+      "name": "0C-M3-Lucha_pieles",
+      "source_scene": "programada",
+      "description": "Tercer momento de la introducción, sincronizado con intro_lucha_pieles.wav (09:04). Desde blackout, las diez lámparas activas del rectángulo, L9 a L18, entran mediante un fade de 14 segundos. Dos tonos de piel se alternan alrededor del perímetro hasta media intensidad I128. Entre 00:14.250 y 00:28.325 aparecen cinco alertas crecientes. En 00:31.100 irrumpe un pulso violento y comienza un estrobo sincronizado con los picos reales del audio. Desde 01:01.750 hasta 01:31.950 continúa el ritmo mientras los dos grupos intercambian sus colores en cada pulso. Enseguida el grupo rojizo transiciona durante 5 segundos al tono claro amarillento del otro grupo; todas bajan luego a I077 en 01:41.760 y a I046 en 01:52.700. Desde allí las diez lámparas se encienden progresivamente como un conjunto de velas y construyen una atmósfera cálida, íntima y romántica hasta 04:23.800, migrando suavemente hacia naranja. Luego suben juntas a I255 en un fade de 5 segundos y una señal luminosa recorre el rectángulo, acelerando hasta convertirse en un estrobo viajero en 06:37.150. Desde allí todo el rectángulo entra en estrobo simultáneo hasta el corte drástico de 06:47.500, cuando queda en rojo mínimo C-H002-S079-I003. L8 permanece apagada.",
+      "documentation": {
+        "purpose": "Abrir la lucha de pieles haciendo aparecer el rectángulo como dos tonalidades corporales entrelazadas.",
+        "lamps": "Participan las diez lámparas del rectángulo: L9 a L18. Tono A: L16, L18, L10, L12 y L14. Tono B: L17, L9, L11, L13 y L15. L8 es la luz independiente del títere y queda excluida.",
+        "timeline": [
+          "00:00: se fuerza L8 apagada y el resto del rectángulo parte de I000.",
+          "00:00-00:14: fade in simultáneo y suave hasta I128, alternando los dos tonos por lámpara alrededor del rectángulo.",
+          "00:14.250: primera alerta breve, pico I152 y regreso a I128.",
+          "00:17.450: segunda alerta, pico I176 y regreso a I128.",
+          "00:20.780: tercera alerta, pico I202 y regreso a I128.",
+          "00:24.220: cuarta alerta, pico I228 y regreso a I128.",
+          "00:28.325: quinta y última alerta, pico I255 y regreso a I128.",
+          "00:29.025-00:31.100: los dos tonos permanecen estables en I128.",
+          "00:31.100: pulso violento conjunto a I255, más largo que los destellos siguientes.",
+          "00:31.454-01:01.750: estrobo musical sobre los picos detectados en el audio; cada destello sube a I255 durante 90 ms y cae a I032.",
+          "01:01.750-01:31.950: el estrobo sigue los nuevos picos de la música y los dos grupos intercambian sus tonos en cada pulso.",
+          "01:31.950-01:36.950: las lámparas que terminan rojizas transicionan al tono claro amarillento H097; el rectángulo queda unificado en I128.",
+          "01:41.760: primera caída de brillo del 40 %, de I128 a I077.",
+          "01:52.700: segunda caída del 40 % sobre el nivel anterior, de I077 a I046.",
+          "01:52.700: las diez lámparas parten unificadas en H097-S013-I046.",
+          "01:52.700-02:10.300: las lámparas se encienden progresivamente como velas, en un orden espacial alternado, con entradas suaves de 5 segundos hacia naranjas cálidos.",
+          "02:10.300-04:18.800: atmósfera íntima de velas; cada lámpara oscila con una curva propia entre I082 e I158, acompañada por una respiración compartida muy sutil.",
+          "04:18.800-04:23.800: las variaciones convergen suavemente al naranja H028-S092-I120 para cerrar el movimiento sin salto.",
+          "04:23.800-04:28.800: las diez lámparas suben juntas mediante fade desde I120 hasta I255.",
+          "04:28.800-06:37.150: una señal luminosa recorre el rectángulo en sentido horario. Comienza con una vuelta cada 5 segundos y acelera cada vez más hasta una vuelta cada 0.6 segundos.",
+          "Durante la aceleración la cresta muy estrecha se mantiene en I255 y el fondo baja hasta I008, haciendo contundente el paso de la onda.",
+          "Tramo final: la separación aproximada entre el pico de una lámpara y la siguiente llega a 60 ms, creando un estrobo circular sin perder el recorrido espacial.",
+          "06:37.150-06:47.500: las diez lámparas abandonan el recorrido espacial y ejecutan un estrobo simultáneo de 60 ms encendido y 60 ms apagado en H028-S092.",
+          "06:47.500: corte seco del estrobo y cambio inmediato de todas las lámparas a C-H002-S079-I003 #FF3C35."
+        ],
+        "palette": "Tono A C-H006-S029-I128 #FFBCB5; tono B C-H097-S013 #EAFFDD. La atmósfera toma como base el efecto Vela mejorado y migra gradualmente hacia C-H028-S092, con pequeñas variaciones independientes de matiz, saturación y brillo.",
+        "ending": "Provisional: desde 06:47.500 el rectángulo queda en rojo mínimo C-H002-S079-I003 #FF3C35; el controlador WiZ lo transmite como I008 por seguridad.",
+        "notes": "Audio de referencia: intro_lucha_pieles.wav, 44.1 kHz estéreo, duración 09:04. Las cinco alertas iniciales sostienen el pico 180 ms y vuelven a I128 con una caída de 520 ms. El estrobo usa los picos reales de la pista, incluidos los acentos dobles y las ráfagas. A partir de 01:01.750 cada nuevo pulso intercambia los tonos entre ambos grupos y restaura I128 exactamente en 01:31.950. El fade de unificación comienza inmediatamente después de esa restauración para evitar un salto de color. La onda parte de una vuelta de 5 s y acelera con una curva de potencia 1.4 hasta 0.6 s; el cierre espacial llega a 60 ms entre lámparas antes de transformarse en estrobo simultáneo."
+      },
+      "summary": "09:04 | onda acelerada hasta 397.150 | estrobo hasta 407.500 | rojo mínimo | sin L8",
+      "created_at": "2026-11-01T20:51:51",
+      "updated_at": "2026-11-07T02:11:21",
+      "scene_data": {
+        "tipo": "escena_luces",
+        "version": 3,
+        "scene_kind": "scripted",
+        "nombre": "0C-M3-Lucha_pieles",
+        "fade_in": 0.0,
+        "fade_out": 0.0,
+        "effects": {},
+        "effects_config": {
+          "version": 1,
+          "active": {}
+        },
+        "effects_layers": [],
+        "lamparas": {},
+        "scripted_scene": {
+          "type": "laberintos_sunset_sequence",
+          "summary": "09:04 | onda acelerada hasta 397.150 | estrobo hasta 407.500 | rojo mínimo | sin L8",
+          "duration_ms": 544000,
+          "tick_ms": 80,
+          "realtime_timeline": true,
+          "realtime_tick_ms": 20,
+          "steps": [
+            {
+              "at_ms": 0,
+              "fade_ms": 0,
+              "mode": "off",
+              "lamps": ["L8"],
+              "color": {"h": 0, "s": 0.0, "brillo": 0}
+            },
+            {
+              "at_ms": 0,
+              "fade_ms": 14000,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo_inicio": 0, "brillo": 128}
+            },
+            {
+              "at_ms": 0,
+              "fade_ms": 14000,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 0, "brillo": 128}
+            },
+            {
+              "at_ms": 14250, "fade_ms": 0,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo": 152}
+            },
+            {
+              "at_ms": 14250, "fade_ms": 0,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo": 152}
+            },
+            {
+              "at_ms": 14430, "fade_ms": 520,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo_inicio": 152, "brillo": 128}
+            },
+            {
+              "at_ms": 14430, "fade_ms": 520,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 152, "brillo": 128}
+            },
+            {
+              "at_ms": 17450, "fade_ms": 0,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo": 176}
+            },
+            {
+              "at_ms": 17450, "fade_ms": 0,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo": 176}
+            },
+            {
+              "at_ms": 17630, "fade_ms": 520,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo_inicio": 176, "brillo": 128}
+            },
+            {
+              "at_ms": 17630, "fade_ms": 520,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 176, "brillo": 128}
+            },
+            {
+              "at_ms": 20780, "fade_ms": 0,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo": 202}
+            },
+            {
+              "at_ms": 20780, "fade_ms": 0,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo": 202}
+            },
+            {
+              "at_ms": 20960, "fade_ms": 520,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo_inicio": 202, "brillo": 128}
+            },
+            {
+              "at_ms": 20960, "fade_ms": 520,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 202, "brillo": 128}
+            },
+            {
+              "at_ms": 24220, "fade_ms": 0,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo": 228}
+            },
+            {
+              "at_ms": 24220, "fade_ms": 0,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo": 228}
+            },
+            {
+              "at_ms": 24400, "fade_ms": 520,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo_inicio": 228, "brillo": 128}
+            },
+            {
+              "at_ms": 24400, "fade_ms": 520,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 228, "brillo": 128}
+            },
+            {
+              "at_ms": 28325, "fade_ms": 0,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo": 255}
+            },
+            {
+              "at_ms": 28325, "fade_ms": 0,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo": 255}
+            },
+            {
+              "at_ms": 28505, "fade_ms": 520,
+              "lamps": ["L16", "L18", "L10", "L12", "L14"],
+              "color": {"h": 6, "s": 0.29, "brillo_inicio": 255, "brillo": 128}
+            },
+            {
+              "at_ms": 28505, "fade_ms": 520,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 255, "brillo": 128}
+            },
+            {
+              "at_ms": 91951, "fade_ms": 5000,
+              "lamps": ["L17", "L9", "L11", "L13", "L15"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 128, "brillo": 128}
+            },
+            {
+              "at_ms": 101760, "fade_ms": 0,
+              "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 128, "brillo": 77}
+            },
+            {
+              "at_ms": 112700, "fade_ms": 0,
+              "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+              "color": {"h": 97, "s": 0.13, "brillo_inicio": 77, "brillo": 46}
+            },
+            {
+              "at_ms": 263800, "fade_ms": 5000,
+              "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+              "color": {"h": 28, "s": 0.92, "brillo_inicio": 120, "brillo": 255}
+            },
+            {
+              "at_ms": 397150, "fade_ms": 0,
+              "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+              "color": {"h": 28, "s": 0.92, "brillo_inicio": 255, "brillo": 255}
+            },
+            {
+              "at_ms": 407500, "fade_ms": 0,
+              "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+              "color": {"h": 2, "s": 0.79, "brillo_inicio": 3, "brillo": 3}
+            }
+          ],
+          "peak_strobe": {
+            "end_ms": 91950,
+            "flash_ms": 90,
+            "flash_brightness": 255,
+            "rest_brightness": 32,
+            "restore_brightness": 128,
+            "alternate_group_colors_from_ms": 61750,
+            "preserve_alternated_colors_at_end": true,
+            "groups": [
+              {
+                "lamps": ["L16", "L18", "L10", "L12", "L14"],
+                "color": {"h": 6, "s": 0.29}
+              },
+              {
+                "lamps": ["L17", "L9", "L11", "L13", "L15"],
+                "color": {"h": 97, "s": 0.13}
+              }
+            ],
+            "peaks_ms": [
+              {"at_ms": 31100, "flash_ms": 180, "brightness": 255},
+              31454, 31783, 32451, 33110, 33783, 34442, 35115, 35774,
+              36517, 36801, 37116, 37784, 38438, 39116, 39785, 40453,
+              40782, 41112, 41960, 42449, 43561, 44449, 45107, 45786,
+              46115, 46444, 47203, 47557, 48674, 49123, 49787, 50450,
+              51119, 51453, 51777, 52760, 53114, 54007, 54446, 55120,
+              55783, 56452, 57110, 57868, 58208, 59121, 59789, 60453,
+              61950, 62280, 62620, 63060, 64520, 65060, 65950, 66620,
+              67280, 67620, 67960, 68400, 69730, 70170, 70620, 71280,
+              71960, 72620, 72950, 73290, 73950, 74620, 74970, 75960,
+              76630, 77290, 77620, 77950, 78630, 78960, 79280, 79950,
+              80300, 80610, 81290, 81950, 82620, 82960, 83280, 83620,
+              83960, 84630, 85300, 85630, 86390, 86850, 87280, 87950,
+              88290, 88610, 88950, 89290, 89950, 90630, 91500
+            ]
+          },
+          "candle_atmosphere": {
+            "start_ms": 112700,
+            "end_ms": 263800,
+            "lamps": ["L18", "L13", "L17", "L12", "L9", "L14", "L16", "L11", "L10", "L15"],
+            "source_color": {"h": 97, "s": 0.13, "brillo": 46},
+            "target_color": {"h": 28, "s": 0.92, "brillo": 120},
+            "brillo_min": 82,
+            "brillo_max": 165,
+            "stagger_ms": 1400,
+            "entry_ms": 5000,
+            "frame_ms": 240,
+            "settle_ms": 5000,
+            "periods_ms": [5200, 6100, 6900, 7600, 8500],
+            "variacion_h": 2.2,
+            "variacion_s": 0.05,
+            "micro_flicker": 0.26,
+            "micro_min_ms": 280,
+            "micro_max_ms": 560
+          },
+          "perimeter_wave": {
+            "start_ms": 268800,
+            "end_ms": 397150,
+            "lamps": ["L16", "L17", "L18", "L9", "L10", "L11", "L12", "L13", "L14", "L15"],
+            "h": 28,
+            "s": 0.92,
+            "brillo_min": 8,
+            "brillo_max": 255,
+            "period_ms": 5000,
+            "period_start_ms": 5000,
+            "period_end_ms": 600,
+            "frame_ms": 60,
+            "entry_ms": 3000,
+            "settle_ms": 0,
+            "direction": 1,
+            "shape_power": 4.5,
+            "acceleration_power": 1.4
+          },
+          "simultaneous_strobe": {
+            "start_ms": 397150,
+            "end_ms": 407500,
+            "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+            "h": 28,
+            "s": 0.92,
+            "brillo_on": 255,
+            "brillo_off": 0,
+            "on_ms": 60,
+            "off_ms": 60
+          }
+        }
+      }
+    },
     "3C-M2-Vicente_navega_con_Franc": {
       "name": "3C-M2-Vicente_navega_con_Franc",
       "source_scene": "programada",
@@ -1232,28 +1918,28 @@
     "1C-M1-Vicente-cardumen": {
       "name": "1C-M1-Vicente-cardumen",
       "source_scene": "programada",
-      "description": "Vicente cardumen: despues del estrobo frenetico, en 4:43.696 todo el cardumen pasa a azul puro C-H240-S100-I255 #0000FF como explosion final. Inmediatamente despues, todas esas luces se apagan en fade de 5 segundos. El estado final deja solo L16 encendida en blanco calido como farol. L19 no participa.",
+      "description": "Vicente cardumen: L16 permanece como farol cálido mientras cinco impactos de agua, sincronizados con Escena1.wav, incorporan progresivamente el cardumen. Cada golpe tiene un ataque inmediato, una caída profunda y ondas de intensidad decreciente. El desarrollo continúa con oleaje y colapso; en 4:43.700 llega la explosión azul final con sus rebotes originales y el cardumen se apaga en el cierre exacto del audio, 4:47.285. Solo L16 queda encendida y L19 no participa.",
       "documentation": {
         "purpose": "Construir el cardumen alrededor del farol cálido de Vicente: impactos que incorporan peces, oleaje espacial, colapso progresivo y una explosión azul final.",
         "lamps": "L16 es el farol cálido y permanece fuera del cardumen. El cardumen usa L9, L10, L11, L12, L13, L14, L15, L17 y L18. L19 no participa.",
         "timeline": [
           "00:00-00:10: L16 entra como farol viejo en blanco cálido y L11 entra en cian H190.",
-          "00:31-01:15: cinco impactos; primero vibran L11+L10+L12 y luego se incorporan L18+L9, L17+L13 y L15+L14; los últimos golpes afectan a todo el cardumen.",
+          "00:30.940-01:14.910: cinco impactos sincronizados con el audio; un ataque inmediato genera una caída profunda y ondas de intensidad decreciente. Se incorporan L10+L12, L18+L9, L17+L13 y L15+L14; el quinto golpe afecta a todo el cardumen.",
           "Después de los impactos: una ola lenta recorre el rectángulo mediante cambios de brillo.",
-          "Alrededor de 02:39: cuatro cortocircuitos de 2.2 s con 2.2 s de descanso.",
+          "02:39.200-02:54.206: cuatro descargas eléctricas sincronizadas con el audio. Cada bloque sigue doce chasquidos separados aproximadamente 139 ms y alterna cian brillante con azul profundo; la intensidad crece hasta la cuarta descarga.",
           "02:55: el conjunto pasa hacia C-H142-S083-I180 #2BFF78 y el oleaje acelera.",
           "03:05: cinco golpes tipo campana alternan grupos aproximadamente cada 7 s.",
           "Tramo hacia 04:00: degradado espacial desde azul oscuro en L9 hasta cian/verde brillante en L15+L17.",
           "04:00-04:22: estrobo progresivo; 04:22-04:43: colapso más intenso.",
-          "04:43: impacto final azul como los golpes iniciales; después el cardumen se apaga en fade de 5 s."
+          "04:43.700: impacto final azul como los golpes iniciales, con caída, dos rebotes y ondas azules; desde 04:46.550 el cardumen se apaga y la escena cierra en 04:47.285."
         ],
         "palette": "Farol blanco cálido T004; cardumen inicial H190; colapso verde/cian H142-H149; explosión final C-H240-S100.",
         "ending": "Solo L16 queda encendida en blanco cálido; todas las luces del cardumen llegan a brillo 0.",
-        "notes": "El impacto final debe conservar la misma caída y vibración de los primeros golpes. Para sincronía musical, referir el punto 04:43."
+        "notes": "Los cinco impactos iniciales están medidos sobre Escena1.wav en 00:30.940, 00:41.030, 00:50.975, 01:00.925 y 01:11.010. Las descargas eléctricas comienzan en 02:39.200, 02:43.618, 02:48.041 y 02:52.465; el último pulso cae en 02:53.986 y la estabilización termina en 02:54.206. Las campanas de vidrio permanecen programadas desde 03:05."
       },
-      "summary": "Vicente cardumen | estrobo frenetico | explosion azul | fade out 5s",
+      "summary": "Vicente cardumen | 5 impactos de agua sincronizados | oleaje | explosión azul",
       "created_at": "2026-08-14T12:00:00",
-      "updated_at": "2026-08-14T18:25:00",
+      "updated_at": "2026-11-01T17:39:05",
       "scene_data": {
         "tipo": "escena_luces",
         "version": 3,
@@ -1270,8 +1956,24 @@
         "lamparas": {},
         "scripted_scene": {
           "type": "laberintos_sunset_sequence",
-          "summary": "Vicente cardumen | estrobo frenetico | explosion azul | fade out 5s",
-          "duration_ms": 291050,
+          "summary": "Vicente cardumen | 5 impactos de agua sincronizados | oleaje | explosión azul",
+          "duration_ms": 287285,
+          "hard_stop_at_duration": true,
+          "realtime_timeline": true,
+          "realtime_tick_ms": 40,
+          "off_lamps": [
+            "L8",
+            "L19",
+            "L20"
+          ],
+          "repeat_step_windows": [
+            {
+              "source_start_ms": 278524,
+              "source_end_ms": 278804,
+              "start_ms": 279084,
+              "end_ms": 283700
+            }
+          ],
           "tick_ms": 250,
           "steps": [
             {
@@ -1305,8 +2007,8 @@
               "descripcion": "L11 entra en azul cyan C-H190-S098-I255 #05D5FF."
             },
             {
-              "at_ms": 31000,
-              "fade_ms": 90,
+              "at_ms": 30940,
+              "fade_ms": 0,
               "lamps": [
                 "L10",
                 "L12"
@@ -1318,10 +2020,11 @@
                 "brillo_inicio": 0,
                 "brillo": 255
               },
-              "descripcion": "Impacto 1: entran L10 + L12 a maxima potencia en cyan."
+              "descripcion": "Impacto 1: ataque inmediato sincronizado con el impacto del agua.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 31320,
+              "at_ms": 31100,
               "fade_ms": 180,
               "lamps": [
                 "L11",
@@ -1333,13 +2036,14 @@
                 "h": 190,
                 "s": 0.98,
                 "brillo_inicio": 255,
-                "brillo": 62
+                "brillo": 38
               },
-              "descripcion": "Impacto 1: caida fuerte del golpe."
+              "descripcion": "Impacto 1: caida profunda tras el golpe.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 31680,
-              "fade_ms": 160,
+              "at_ms": 31370,
+              "fade_ms": 300,
               "lamps": [
                 "L11",
                 "L10",
@@ -1349,14 +2053,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 62,
-                "brillo": 245
+                "brillo_inicio": 38,
+                "brillo": 225
               },
-              "descripcion": "Impacto 1: primera onda de rebote."
+              "descripcion": "Impacto 1: primera onda de rebote.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 32100,
-              "fade_ms": 220,
+              "at_ms": 31790,
+              "fade_ms": 420,
               "lamps": [
                 "L11",
                 "L10",
@@ -1366,14 +2071,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 96
+                "brillo_inicio": 225,
+                "brillo": 78
               },
-              "descripcion": "Impacto 1: segunda caida de vibracion."
+              "descripcion": "Impacto 1: retroceso de la onda.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 32650,
-              "fade_ms": 260,
+              "at_ms": 32290,
+              "fade_ms": 520,
               "lamps": [
                 "L11",
                 "L10",
@@ -1383,14 +2089,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 96,
-                "brillo": 220
+                "brillo_inicio": 78,
+                "brillo": 180
               },
-              "descripcion": "Impacto 1: rebote controlado."
+              "descripcion": "Impacto 1: segunda onda, mas contenida.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 33400,
-              "fade_ms": 450,
+              "at_ms": 32990,
+              "fade_ms": 700,
               "lamps": [
                 "L11",
                 "L10",
@@ -1400,14 +2107,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 220,
-                "brillo": 150
+                "brillo_inicio": 180,
+                "brillo": 125
               },
-              "descripcion": "Impacto 1: ondas finales."
+              "descripcion": "Impacto 1: cola del agua en disipacion.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 34500,
-              "fade_ms": 900,
+              "at_ms": 33840,
+              "fade_ms": 1000,
               "lamps": [
                 "L11",
                 "L10",
@@ -1417,14 +2125,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 150,
+                "brillo_inicio": 125,
                 "brillo": 255
               },
-              "descripcion": "Impacto 1: estabilizacion en cyan pleno."
+              "descripcion": "Impacto 1: estabilizacion fluida en cyan pleno.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 41000,
-              "fade_ms": 90,
+              "at_ms": 41030,
+              "fade_ms": 0,
               "lamps": [
                 "L18",
                 "L9"
@@ -1436,10 +2145,11 @@
                 "brillo_inicio": 0,
                 "brillo": 255
               },
-              "descripcion": "Impacto 2: entran L18 + L9 a maxima potencia en cyan."
+              "descripcion": "Impacto 2: ataque inmediato sincronizado con el impacto del agua.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 41320,
+              "at_ms": 41190,
               "fade_ms": 180,
               "lamps": [
                 "L11",
@@ -1453,13 +2163,14 @@
                 "h": 190,
                 "s": 0.98,
                 "brillo_inicio": 255,
-                "brillo": 62
+                "brillo": 38
               },
-              "descripcion": "Impacto 2: caida fuerte del golpe."
+              "descripcion": "Impacto 2: caida profunda tras el golpe.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 41680,
-              "fade_ms": 160,
+              "at_ms": 41460,
+              "fade_ms": 300,
               "lamps": [
                 "L11",
                 "L10",
@@ -1471,14 +2182,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 62,
-                "brillo": 245
+                "brillo_inicio": 38,
+                "brillo": 225
               },
-              "descripcion": "Impacto 2: primera onda de rebote."
+              "descripcion": "Impacto 2: primera onda de rebote.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 42100,
-              "fade_ms": 220,
+              "at_ms": 41880,
+              "fade_ms": 420,
               "lamps": [
                 "L11",
                 "L10",
@@ -1490,14 +2202,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 96
+                "brillo_inicio": 225,
+                "brillo": 78
               },
-              "descripcion": "Impacto 2: segunda caida de vibracion."
+              "descripcion": "Impacto 2: retroceso de la onda.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 42650,
-              "fade_ms": 260,
+              "at_ms": 42380,
+              "fade_ms": 520,
               "lamps": [
                 "L11",
                 "L10",
@@ -1509,14 +2222,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 96,
-                "brillo": 220
+                "brillo_inicio": 78,
+                "brillo": 180
               },
-              "descripcion": "Impacto 2: rebote controlado."
+              "descripcion": "Impacto 2: segunda onda, mas contenida.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 43400,
-              "fade_ms": 450,
+              "at_ms": 43080,
+              "fade_ms": 700,
               "lamps": [
                 "L11",
                 "L10",
@@ -1528,14 +2242,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 220,
-                "brillo": 150
+                "brillo_inicio": 180,
+                "brillo": 125
               },
-              "descripcion": "Impacto 2: ondas finales."
+              "descripcion": "Impacto 2: cola del agua en disipacion.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 44500,
-              "fade_ms": 900,
+              "at_ms": 43930,
+              "fade_ms": 1000,
               "lamps": [
                 "L11",
                 "L10",
@@ -1547,14 +2262,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 150,
+                "brillo_inicio": 125,
                 "brillo": 255
               },
-              "descripcion": "Impacto 2: estabilizacion en cyan pleno."
+              "descripcion": "Impacto 2: estabilizacion fluida en cyan pleno.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 51000,
-              "fade_ms": 90,
+              "at_ms": 50975,
+              "fade_ms": 0,
               "lamps": [
                 "L17",
                 "L13"
@@ -1566,10 +2282,11 @@
                 "brillo_inicio": 0,
                 "brillo": 255
               },
-              "descripcion": "Impacto 3: entran L17 + L13 a maxima potencia en cyan."
+              "descripcion": "Impacto 3: ataque inmediato sincronizado con el impacto del agua.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 51320,
+              "at_ms": 51135,
               "fade_ms": 180,
               "lamps": [
                 "L11",
@@ -1585,13 +2302,14 @@
                 "h": 190,
                 "s": 0.98,
                 "brillo_inicio": 255,
-                "brillo": 62
+                "brillo": 38
               },
-              "descripcion": "Impacto 3: caida fuerte del golpe."
+              "descripcion": "Impacto 3: caida profunda tras el golpe.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 51680,
-              "fade_ms": 160,
+              "at_ms": 51405,
+              "fade_ms": 300,
               "lamps": [
                 "L11",
                 "L10",
@@ -1605,14 +2323,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 62,
-                "brillo": 245
+                "brillo_inicio": 38,
+                "brillo": 225
               },
-              "descripcion": "Impacto 3: primera onda de rebote."
+              "descripcion": "Impacto 3: primera onda de rebote.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 52100,
-              "fade_ms": 220,
+              "at_ms": 51825,
+              "fade_ms": 420,
               "lamps": [
                 "L11",
                 "L10",
@@ -1626,14 +2345,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 96
+                "brillo_inicio": 225,
+                "brillo": 78
               },
-              "descripcion": "Impacto 3: segunda caida de vibracion."
+              "descripcion": "Impacto 3: retroceso de la onda.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 52650,
-              "fade_ms": 260,
+              "at_ms": 52325,
+              "fade_ms": 520,
               "lamps": [
                 "L11",
                 "L10",
@@ -1647,14 +2367,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 96,
-                "brillo": 220
+                "brillo_inicio": 78,
+                "brillo": 180
               },
-              "descripcion": "Impacto 3: rebote controlado."
+              "descripcion": "Impacto 3: segunda onda, mas contenida.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 53400,
-              "fade_ms": 450,
+              "at_ms": 53025,
+              "fade_ms": 700,
               "lamps": [
                 "L11",
                 "L10",
@@ -1668,14 +2389,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 220,
-                "brillo": 150
+                "brillo_inicio": 180,
+                "brillo": 125
               },
-              "descripcion": "Impacto 3: ondas finales."
+              "descripcion": "Impacto 3: cola del agua en disipacion.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 54500,
-              "fade_ms": 900,
+              "at_ms": 53875,
+              "fade_ms": 1000,
               "lamps": [
                 "L11",
                 "L10",
@@ -1689,14 +2411,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 150,
+                "brillo_inicio": 125,
                 "brillo": 255
               },
-              "descripcion": "Impacto 3: estabilizacion en cyan pleno."
+              "descripcion": "Impacto 3: estabilizacion fluida en cyan pleno.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 61000,
-              "fade_ms": 90,
+              "at_ms": 60925,
+              "fade_ms": 0,
               "lamps": [
                 "L15",
                 "L14"
@@ -1708,10 +2431,11 @@
                 "brillo_inicio": 0,
                 "brillo": 255
               },
-              "descripcion": "Impacto 4: entran L15 + L14 a maxima potencia en cyan."
+              "descripcion": "Impacto 4: ataque inmediato sincronizado con el impacto del agua.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 61320,
+              "at_ms": 61085,
               "fade_ms": 180,
               "lamps": [
                 "L11",
@@ -1729,13 +2453,14 @@
                 "h": 190,
                 "s": 0.98,
                 "brillo_inicio": 255,
-                "brillo": 62
+                "brillo": 38
               },
-              "descripcion": "Impacto 4: caida fuerte del golpe."
+              "descripcion": "Impacto 4: caida profunda tras el golpe.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 61680,
-              "fade_ms": 160,
+              "at_ms": 61355,
+              "fade_ms": 300,
               "lamps": [
                 "L11",
                 "L10",
@@ -1751,14 +2476,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 62,
-                "brillo": 245
+                "brillo_inicio": 38,
+                "brillo": 225
               },
-              "descripcion": "Impacto 4: primera onda de rebote."
+              "descripcion": "Impacto 4: primera onda de rebote.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 62100,
-              "fade_ms": 220,
+              "at_ms": 61775,
+              "fade_ms": 420,
               "lamps": [
                 "L11",
                 "L10",
@@ -1774,14 +2500,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 96
+                "brillo_inicio": 225,
+                "brillo": 78
               },
-              "descripcion": "Impacto 4: segunda caida de vibracion."
+              "descripcion": "Impacto 4: retroceso de la onda.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 62650,
-              "fade_ms": 260,
+              "at_ms": 62275,
+              "fade_ms": 520,
               "lamps": [
                 "L11",
                 "L10",
@@ -1797,14 +2524,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 96,
-                "brillo": 220
+                "brillo_inicio": 78,
+                "brillo": 180
               },
-              "descripcion": "Impacto 4: rebote controlado."
+              "descripcion": "Impacto 4: segunda onda, mas contenida.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 63400,
-              "fade_ms": 450,
+              "at_ms": 62975,
+              "fade_ms": 700,
               "lamps": [
                 "L11",
                 "L10",
@@ -1820,14 +2548,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 220,
-                "brillo": 150
+                "brillo_inicio": 180,
+                "brillo": 125
               },
-              "descripcion": "Impacto 4: ondas finales."
+              "descripcion": "Impacto 4: cola del agua en disipacion.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 64500,
-              "fade_ms": 900,
+              "at_ms": 63825,
+              "fade_ms": 1000,
               "lamps": [
                 "L11",
                 "L10",
@@ -1843,14 +2572,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 150,
+                "brillo_inicio": 125,
                 "brillo": 255
               },
-              "descripcion": "Impacto 4: estabilizacion en cyan pleno."
+              "descripcion": "Impacto 4: estabilizacion fluida en cyan pleno.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 71000,
-              "fade_ms": 90,
+              "at_ms": 71010,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -1866,13 +2596,14 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 255,
+                "brillo_inicio": 0,
                 "brillo": 255
               },
-              "descripcion": "Impacto 5: golpe inicial explicito para todo el cardumen azul."
+              "descripcion": "Impacto 5: ataque inmediato sincronizado con el impacto del agua.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 71320,
+              "at_ms": 71170,
               "fade_ms": 180,
               "lamps": [
                 "L11",
@@ -1890,13 +2621,14 @@
                 "h": 190,
                 "s": 0.98,
                 "brillo_inicio": 255,
-                "brillo": 62
+                "brillo": 20
               },
-              "descripcion": "Impacto 5: caida fuerte del golpe."
+              "descripcion": "Impacto 5 reforzado: caida profunda y contraste mayor tras el golpe.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 71680,
-              "fade_ms": 160,
+              "at_ms": 71440,
+              "fade_ms": 300,
               "lamps": [
                 "L11",
                 "L10",
@@ -1912,14 +2644,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 62,
-                "brillo": 245
+                "brillo_inicio": 20,
+                "brillo": 250
               },
-              "descripcion": "Impacto 5: primera onda de rebote."
+              "descripcion": "Impacto 5 reforzado: primera onda de rebote a maxima presencia.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 72100,
-              "fade_ms": 220,
+              "at_ms": 71860,
+              "fade_ms": 420,
               "lamps": [
                 "L11",
                 "L10",
@@ -1935,14 +2668,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 96
+                "brillo_inicio": 250,
+                "brillo": 55
               },
-              "descripcion": "Impacto 5: segunda caida de vibracion."
+              "descripcion": "Impacto 5 reforzado: retroceso profundo de la onda.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 72650,
-              "fade_ms": 260,
+              "at_ms": 72360,
+              "fade_ms": 520,
               "lamps": [
                 "L11",
                 "L10",
@@ -1958,14 +2692,15 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 96,
+                "brillo_inicio": 55,
                 "brillo": 220
               },
-              "descripcion": "Impacto 5: rebote controlado."
+              "descripcion": "Impacto 5 reforzado: segunda onda amplia.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 73400,
-              "fade_ms": 450,
+              "at_ms": 73060,
+              "fade_ms": 700,
               "lamps": [
                 "L11",
                 "L10",
@@ -1982,13 +2717,14 @@
                 "h": 190,
                 "s": 0.98,
                 "brillo_inicio": 220,
-                "brillo": 150
+                "brillo": 90
               },
-              "descripcion": "Impacto 5: ondas finales."
+              "descripcion": "Impacto 5 reforzado: cola del agua con disipacion profunda.",
+              "tick_ms": 80
             },
             {
-              "at_ms": 74500,
-              "fade_ms": 900,
+              "at_ms": 73910,
+              "fade_ms": 1000,
               "lamps": [
                 "L11",
                 "L10",
@@ -2004,10 +2740,11 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 150,
+                "brillo_inicio": 90,
                 "brillo": 255
               },
-              "descripcion": "Impacto 5: estabilizacion en cyan pleno."
+              "descripcion": "Impacto 5: estabilizacion fluida en cyan pleno.",
+              "tick_ms": 80
             },
             {
               "at_ms": 78000,
@@ -5716,260 +6453,8 @@
               "descripcion": "Cierre de oleaje: el cardumen vuelve a cyan pleno antes de los cortocircuitos."
             },
             {
-              "at_ms": 159000,
-              "fade_ms": 65,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 202,
-                "s": 0.98,
-                "brillo_inicio": 255,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 0ms."
-            },
-            {
-              "at_ms": 159140,
-              "fade_ms": 90,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 214,
-                "s": 0.94,
-                "brillo_inicio": 255,
-                "brillo": 24
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 140ms."
-            },
-            {
-              "at_ms": 159330,
-              "fade_ms": 60,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 24,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 330ms."
-            },
-            {
-              "at_ms": 159500,
-              "fade_ms": 80,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 222,
-                "s": 0.88,
-                "brillo_inicio": 255,
-                "brillo": 42
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 500ms."
-            },
-            {
-              "at_ms": 159720,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 204,
-                "s": 0.96,
-                "brillo_inicio": 42,
-                "brillo": 245
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 720ms."
-            },
-            {
-              "at_ms": 159790,
-              "fade_ms": 50,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 206,
-                "s": 0.95,
-                "brillo_inicio": 245,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 1: variacion lateral breve."
-            },
-            {
-              "at_ms": 159790,
-              "fade_ms": 50,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.9,
-                "brillo_inicio": 245,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 1: variacion lateral breve."
-            },
-            {
-              "at_ms": 159940,
-              "fade_ms": 100,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 192,
-                "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 18
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 940ms."
-            },
-            {
-              "at_ms": 160210,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.92,
-                "brillo_inicio": 18,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 1210ms."
-            },
-            {
-              "at_ms": 160390,
-              "fade_ms": 110,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 208,
-                "s": 0.95,
-                "brillo_inicio": 255,
-                "brillo": 72
-              },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 1390ms."
-            },
-            {
-              "at_ms": 160480,
-              "fade_ms": 60,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
-              },
-              "descripcion": "Cortocircuito azul 1: regreso de variacion lateral al cyan."
-            },
-            {
-              "at_ms": 160480,
-              "fade_ms": 60,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
-              },
-              "descripcion": "Cortocircuito azul 1: regreso de variacion lateral al cyan."
-            },
-            {
-              "at_ms": 160660,
-              "fade_ms": 85,
+              "at_ms": 159200,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -5985,14 +6470,13 @@
               "color": {
                 "h": 196,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 232
+                "brillo": 235
               },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 1660ms."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 1/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 160920,
-              "fade_ms": 130,
+              "at_ms": 159340,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6006,16 +6490,15 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 210,
-                "s": 0.92,
-                "brillo_inicio": 232,
-                "brillo": 105
+                "h": 218,
+                "s": 0.94,
+                "brillo": 45
               },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 1920ms."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 2/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 161110,
-              "fade_ms": 90,
+              "at_ms": 159473,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6030,15 +6513,36 @@
               "mode": "colour",
               "color": {
                 "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 105,
-                "brillo": 255
+                "s": 0.99,
+                "brillo": 250
               },
-              "descripcion": "Cortocircuito azul 1: descarga electrica de 2.2 segundos, pulso 2110ms."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 3/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 163400,
-              "fade_ms": 65,
+              "at_ms": 159612,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 224,
+                "s": 0.92,
+                "brillo": 30
+              },
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 4/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 159752,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6053,15 +6557,14 @@
               "mode": "colour",
               "color": {
                 "h": 202,
-                "s": 0.98,
-                "brillo_inicio": 255,
-                "brillo": 255
+                "s": 0.97,
+                "brillo": 225
               },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 0ms."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 5/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 163540,
-              "fade_ms": 90,
+              "at_ms": 159891,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6075,16 +6578,103 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 214,
+                "h": 216,
                 "s": 0.94,
-                "brillo_inicio": 255,
-                "brillo": 24
+                "brillo": 55
               },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 140ms."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 6/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 163730,
-              "fade_ms": 60,
+              "at_ms": 160030,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 188,
+                "s": 1.0,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 7/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 160164,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 220,
+                "s": 0.91,
+                "brillo": 22
+              },
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 8/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 160303,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 198,
+                "s": 0.98,
+                "brillo": 235
+              },
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 9/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 160443,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 212,
+                "s": 0.95,
+                "brillo": 50
+              },
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 10/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 160582,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6099,95 +6689,37 @@
               "mode": "colour",
               "color": {
                 "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 24,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 330ms."
-            },
-            {
-              "at_ms": 163900,
-              "fade_ms": 80,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 222,
-                "s": 0.88,
-                "brillo_inicio": 255,
-                "brillo": 42
-              },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 500ms."
-            },
-            {
-              "at_ms": 164120,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 204,
-                "s": 0.96,
-                "brillo_inicio": 42,
+                "s": 0.99,
                 "brillo": 245
               },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 720ms."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 11/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 164190,
-              "fade_ms": 50,
+              "at_ms": 160721,
+              "fade_ms": 0,
               "lamps": [
+                "L11",
                 "L10",
+                "L12",
                 "L18",
                 "L9",
-                "L13"
+                "L17",
+                "L13",
+                "L15",
+                "L14"
               ],
               "mode": "colour",
               "color": {
                 "h": 206,
-                "s": 0.95,
-                "brillo_inicio": 245,
-                "brillo": 255
+                "s": 0.96,
+                "brillo": 70
               },
-              "descripcion": "Cortocircuito azul 2: variacion lateral breve."
+              "descripcion": "Cortocircuito azul 1: pulso eléctrico 12/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 164190,
-              "fade_ms": 50,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.9,
-                "brillo_inicio": 245,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 2: variacion lateral breve."
-            },
-            {
-              "at_ms": 164340,
-              "fade_ms": 100,
+              "at_ms": 160941,
+              "fade_ms": 120,
+              "tick_ms": 40,
               "lamps": [
                 "L11",
                 "L10",
@@ -6198,99 +6730,19 @@
                 "L13",
                 "L15",
                 "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 192,
-                "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 18
-              },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 940ms."
-            },
-            {
-              "at_ms": 164610,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.92,
-                "brillo_inicio": 18,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 1210ms."
-            },
-            {
-              "at_ms": 164790,
-              "fade_ms": 110,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 208,
-                "s": 0.95,
-                "brillo_inicio": 255,
-                "brillo": 72
-              },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 1390ms."
-            },
-            {
-              "at_ms": 164880,
-              "fade_ms": 60,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
               ],
               "mode": "colour",
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
+                "brillo_inicio": 70,
+                "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 2: regreso de variacion lateral al cyan."
+              "descripcion": "Cortocircuito azul 1: estabilización breve después de la descarga."
             },
             {
-              "at_ms": 164880,
-              "fade_ms": 60,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
-              },
-              "descripcion": "Cortocircuito azul 2: regreso de variacion lateral al cyan."
-            },
-            {
-              "at_ms": 165060,
-              "fade_ms": 85,
+              "at_ms": 163618,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6306,14 +6758,13 @@
               "color": {
                 "h": 196,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 232
+                "brillo": 245
               },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 1660ms."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 1/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 165320,
-              "fade_ms": 130,
+              "at_ms": 163757,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6327,16 +6778,15 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 210,
-                "s": 0.92,
-                "brillo_inicio": 232,
-                "brillo": 105
+                "h": 218,
+                "s": 0.94,
+                "brillo": 32
               },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 1920ms."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 2/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 165510,
-              "fade_ms": 90,
+              "at_ms": 163897,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6351,15 +6801,36 @@
               "mode": "colour",
               "color": {
                 "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 105,
+                "s": 0.99,
                 "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 2: descarga electrica de 2.2 segundos, pulso 2110ms."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 3/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 167800,
-              "fade_ms": 65,
+              "at_ms": 164036,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 224,
+                "s": 0.92,
+                "brillo": 18
+              },
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 4/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 164175,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6374,15 +6845,14 @@
               "mode": "colour",
               "color": {
                 "h": 202,
-                "s": 0.98,
-                "brillo_inicio": 255,
-                "brillo": 255
+                "s": 0.97,
+                "brillo": 235
               },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 0ms."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 5/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 167940,
-              "fade_ms": 90,
+              "at_ms": 164309,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6396,16 +6866,103 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 214,
+                "h": 216,
                 "s": 0.94,
-                "brillo_inicio": 255,
-                "brillo": 24
+                "brillo": 45
               },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 140ms."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 6/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 168130,
-              "fade_ms": 60,
+              "at_ms": 164448,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 188,
+                "s": 1.0,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 7/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 164587,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 220,
+                "s": 0.91,
+                "brillo": 15
+              },
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 8/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 164727,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 198,
+                "s": 0.98,
+                "brillo": 245
+              },
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 9/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 164866,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 212,
+                "s": 0.95,
+                "brillo": 30
+              },
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 10/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 165000,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6420,15 +6977,14 @@
               "mode": "colour",
               "color": {
                 "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 24,
+                "s": 0.99,
                 "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 330ms."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 11/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 168300,
-              "fade_ms": 80,
+              "at_ms": 165139,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6439,76 +6995,19 @@
                 "L13",
                 "L15",
                 "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 222,
-                "s": 0.88,
-                "brillo_inicio": 255,
-                "brillo": 42
-              },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 500ms."
-            },
-            {
-              "at_ms": 168520,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 204,
-                "s": 0.96,
-                "brillo_inicio": 42,
-                "brillo": 245
-              },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 720ms."
-            },
-            {
-              "at_ms": 168590,
-              "fade_ms": 50,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
               ],
               "mode": "colour",
               "color": {
                 "h": 206,
-                "s": 0.95,
-                "brillo_inicio": 245,
-                "brillo": 255
+                "s": 0.96,
+                "brillo": 60
               },
-              "descripcion": "Cortocircuito azul 3: variacion lateral breve."
+              "descripcion": "Cortocircuito azul 2: pulso eléctrico 12/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 168590,
-              "fade_ms": 50,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.9,
-                "brillo_inicio": 245,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 3: variacion lateral breve."
-            },
-            {
-              "at_ms": 168740,
-              "fade_ms": 100,
+              "at_ms": 165359,
+              "fade_ms": 120,
+              "tick_ms": 40,
               "lamps": [
                 "L11",
                 "L10",
@@ -6519,99 +7018,19 @@
                 "L13",
                 "L15",
                 "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 192,
-                "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 18
-              },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 940ms."
-            },
-            {
-              "at_ms": 169010,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.92,
-                "brillo_inicio": 18,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 1210ms."
-            },
-            {
-              "at_ms": 169190,
-              "fade_ms": 110,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 208,
-                "s": 0.95,
-                "brillo_inicio": 255,
-                "brillo": 72
-              },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 1390ms."
-            },
-            {
-              "at_ms": 169280,
-              "fade_ms": 60,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
               ],
               "mode": "colour",
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
+                "brillo_inicio": 60,
+                "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 3: regreso de variacion lateral al cyan."
+              "descripcion": "Cortocircuito azul 2: estabilización breve después de la descarga."
             },
             {
-              "at_ms": 169280,
-              "fade_ms": 60,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
-              },
-              "descripcion": "Cortocircuito azul 3: regreso de variacion lateral al cyan."
-            },
-            {
-              "at_ms": 169460,
-              "fade_ms": 85,
+              "at_ms": 168041,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6627,14 +7046,13 @@
               "color": {
                 "h": 196,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 232
+                "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 1660ms."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 1/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 169720,
-              "fade_ms": 130,
+              "at_ms": 168181,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6648,16 +7066,15 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 210,
-                "s": 0.92,
-                "brillo_inicio": 232,
-                "brillo": 105
+                "h": 218,
+                "s": 0.94,
+                "brillo": 22
               },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 1920ms."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 2/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 169910,
-              "fade_ms": 90,
+              "at_ms": 168320,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6672,15 +7089,36 @@
               "mode": "colour",
               "color": {
                 "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 105,
+                "s": 0.99,
                 "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 3: descarga electrica de 2.2 segundos, pulso 2110ms."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 3/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 172200,
-              "fade_ms": 65,
+              "at_ms": 168453,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 224,
+                "s": 0.92,
+                "brillo": 10
+              },
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 4/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 168593,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6695,15 +7133,14 @@
               "mode": "colour",
               "color": {
                 "h": 202,
-                "s": 0.98,
-                "brillo_inicio": 255,
-                "brillo": 255
+                "s": 0.97,
+                "brillo": 245
               },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 0ms."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 5/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 172340,
-              "fade_ms": 90,
+              "at_ms": 168732,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6717,16 +7154,103 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 214,
+                "h": 216,
                 "s": 0.94,
-                "brillo_inicio": 255,
-                "brillo": 24
+                "brillo": 35
               },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 140ms."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 6/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 172530,
-              "fade_ms": 60,
+              "at_ms": 168871,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 188,
+                "s": 1.0,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 7/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 169011,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 220,
+                "s": 0.91,
+                "brillo": 8
+              },
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 8/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 169167,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 198,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 9/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 169284,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 212,
+                "s": 0.95,
+                "brillo": 20
+              },
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 10/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 169423,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6741,15 +7265,14 @@
               "mode": "colour",
               "color": {
                 "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 24,
+                "s": 0.99,
                 "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 330ms."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 11/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 172700,
-              "fade_ms": 80,
+              "at_ms": 169562,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6760,76 +7283,19 @@
                 "L13",
                 "L15",
                 "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 222,
-                "s": 0.88,
-                "brillo_inicio": 255,
-                "brillo": 42
-              },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 500ms."
-            },
-            {
-              "at_ms": 172920,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 204,
-                "s": 0.96,
-                "brillo_inicio": 42,
-                "brillo": 245
-              },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 720ms."
-            },
-            {
-              "at_ms": 172990,
-              "fade_ms": 50,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
               ],
               "mode": "colour",
               "color": {
                 "h": 206,
-                "s": 0.95,
-                "brillo_inicio": 245,
-                "brillo": 255
+                "s": 0.96,
+                "brillo": 45
               },
-              "descripcion": "Cortocircuito azul 4: variacion lateral breve."
+              "descripcion": "Cortocircuito azul 3: pulso eléctrico 12/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 172990,
-              "fade_ms": 50,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.9,
-                "brillo_inicio": 245,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 4: variacion lateral breve."
-            },
-            {
-              "at_ms": 173140,
-              "fade_ms": 100,
+              "at_ms": 169782,
+              "fade_ms": 120,
+              "tick_ms": 40,
               "lamps": [
                 "L11",
                 "L10",
@@ -6840,99 +7306,19 @@
                 "L13",
                 "L15",
                 "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 192,
-                "s": 0.98,
-                "brillo_inicio": 245,
-                "brillo": 18
-              },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 940ms."
-            },
-            {
-              "at_ms": 173410,
-              "fade_ms": 70,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 218,
-                "s": 0.92,
-                "brillo_inicio": 18,
-                "brillo": 255
-              },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 1210ms."
-            },
-            {
-              "at_ms": 173590,
-              "fade_ms": 110,
-              "lamps": [
-                "L11",
-                "L10",
-                "L12",
-                "L18",
-                "L9",
-                "L17",
-                "L13",
-                "L15",
-                "L14"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 208,
-                "s": 0.95,
-                "brillo_inicio": 255,
-                "brillo": 72
-              },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 1390ms."
-            },
-            {
-              "at_ms": 173680,
-              "fade_ms": 60,
-              "lamps": [
-                "L10",
-                "L18",
-                "L9",
-                "L13"
               ],
               "mode": "colour",
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
+                "brillo_inicio": 45,
+                "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 4: regreso de variacion lateral al cyan."
+              "descripcion": "Cortocircuito azul 3: estabilización breve después de la descarga."
             },
             {
-              "at_ms": 173680,
-              "fade_ms": 60,
-              "lamps": [
-                "L12",
-                "L15"
-              ],
-              "mode": "colour",
-              "color": {
-                "h": 190,
-                "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 215
-              },
-              "descripcion": "Cortocircuito azul 4: regreso de variacion lateral al cyan."
-            },
-            {
-              "at_ms": 173860,
-              "fade_ms": 85,
+              "at_ms": 172465,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6948,14 +7334,13 @@
               "color": {
                 "h": 196,
                 "s": 0.98,
-                "brillo_inicio": 72,
-                "brillo": 232
+                "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 1660ms."
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 1/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 174120,
-              "fade_ms": 130,
+              "at_ms": 172598,
+              "fade_ms": 0,
               "lamps": [
                 "L11",
                 "L10",
@@ -6969,16 +7354,236 @@
               ],
               "mode": "colour",
               "color": {
-                "h": 210,
-                "s": 0.92,
-                "brillo_inicio": 232,
-                "brillo": 105
+                "h": 218,
+                "s": 0.94,
+                "brillo": 12
               },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 1920ms."
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 2/12 sincronizado con Escena1.wav."
             },
             {
-              "at_ms": 174310,
-              "fade_ms": 90,
+              "at_ms": 172738,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 190,
+                "s": 0.99,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 3/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 172877,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 224,
+                "s": 0.92,
+                "brillo": 4
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 4/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173016,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 202,
+                "s": 0.97,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 5/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173156,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 216,
+                "s": 0.94,
+                "brillo": 20
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 6/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173295,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 188,
+                "s": 1.0,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 7/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173428,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 220,
+                "s": 0.91,
+                "brillo": 3
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 8/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173568,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 198,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 9/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173707,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 212,
+                "s": 0.95,
+                "brillo": 10
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 10/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173846,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 190,
+                "s": 0.99,
+                "brillo": 255
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 11/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 173986,
+              "fade_ms": 0,
+              "lamps": [
+                "L11",
+                "L10",
+                "L12",
+                "L18",
+                "L9",
+                "L17",
+                "L13",
+                "L15",
+                "L14"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 206,
+                "s": 0.96,
+                "brillo": 35
+              },
+              "descripcion": "Cortocircuito azul 4: pulso eléctrico 12/12 sincronizado con Escena1.wav."
+            },
+            {
+              "at_ms": 174206,
+              "fade_ms": 120,
+              "tick_ms": 40,
               "lamps": [
                 "L11",
                 "L10",
@@ -6994,10 +7599,10 @@
               "color": {
                 "h": 190,
                 "s": 0.98,
-                "brillo_inicio": 105,
+                "brillo_inicio": 35,
                 "brillo": 255
               },
-              "descripcion": "Cortocircuito azul 4: descarga electrica de 2.2 segundos, pulso 2110ms."
+              "descripcion": "Cortocircuito azul 4: estabilización breve después de la descarga."
             },
             {
               "at_ms": 175000,
@@ -7022,6 +7627,7 @@
               },
               "descripcion": "Inicio del colapso: todo el cardumen cambia hacia C-H142-S083-I180 #2BFF78."
             },
+
             {
               "at_ms": 185000,
               "fade_ms": 80,
@@ -19762,7 +20368,21 @@
               "descripcion": "Colapso final 47: tension sostenida visible."
             },
             {
-              "at_ms": 283000,
+              "at_ms": 279009,
+              "fade_ms": 120,
+              "lamps": [
+                "L9"
+              ],
+              "mode": "colour",
+              "color": {
+                "h": 240,
+                "s": 1.0,
+                "brillo": 82
+              },
+              "descripcion": "Colapso final 47: cierre del ciclo antes de prolongar el parpadeo."
+            },
+            {
+              "at_ms": 283700,
               "fade_ms": 90,
               "lamps": [
                 "L11",
@@ -19785,7 +20405,7 @@
               "descripcion": "Impacto final: golpe azul a maxima potencia como los impactos del inicio."
             },
             {
-              "at_ms": 283320,
+              "at_ms": 284020,
               "fade_ms": 180,
               "lamps": [
                 "L11",
@@ -19808,7 +20428,7 @@
               "descripcion": "Impacto final: caida fuerte del golpe."
             },
             {
-              "at_ms": 283680,
+              "at_ms": 284380,
               "fade_ms": 160,
               "lamps": [
                 "L11",
@@ -19831,7 +20451,7 @@
               "descripcion": "Impacto final: primera onda de rebote."
             },
             {
-              "at_ms": 284100,
+              "at_ms": 284800,
               "fade_ms": 220,
               "lamps": [
                 "L11",
@@ -19854,7 +20474,7 @@
               "descripcion": "Impacto final: segunda caida de vibracion."
             },
             {
-              "at_ms": 284650,
+              "at_ms": 285350,
               "fade_ms": 260,
               "lamps": [
                 "L11",
@@ -19874,10 +20494,10 @@
                 "brillo_inicio": 96,
                 "brillo": 220
               },
-              "descripcion": "Impacto final: rebote controlado."
+              "descripcion": "Impacto final: rebote azul controlado restaurado."
             },
             {
-              "at_ms": 285400,
+              "at_ms": 286100,
               "fade_ms": 450,
               "lamps": [
                 "L11",
@@ -19897,10 +20517,10 @@
                 "brillo_inicio": 220,
                 "brillo": 150
               },
-              "descripcion": "Impacto final: ondas finales."
+              "descripcion": "Impacto final: ondas azules finales restauradas."
             },
             {
-              "at_ms": 291050,
+              "at_ms": 287260,
               "fade_ms": 0,
               "lamps": [
                 "L16"
@@ -19929,9 +20549,10 @@
             "nota": "Referencia espacial para Laberintos: puntas del rectangulo de derecha a izquierda. L16 funciona como farol calido en esta escena y no participa del cardumen."
           },
           "final_fade_out": {
-            "start_ms": 285850,
-            "duration_ms": 5000,
-            "tick_ms": 180,
+            "start_ms": 286550,
+            "duration_ms": 700,
+            "tick_ms": 40,
+            "off_retry_delays_ms": [10, 20],
             "lamps": [
               "L11",
               "L10",
@@ -19947,14 +20568,14 @@
             "s": 1.0,
             "from_brightness": 150,
             "to_brightness": 0,
-            "descripcion": "Fade out limpio de 5 segundos en azul C-H240-S100-I008 #0000FF."
+            "descripcion": "Fade out final en azul puro después de los rebotes restaurados; llega a cero antes del cierre exacto en 04:47.285."
           }
         },
         "created_at": "2026-08-14T12:00:00",
-        "updated_at": "2026-08-14T18:25:00",
+        "updated_at": "2026-11-01T17:39:05",
         "from_bank": "1C-M1-Vicente-cardumen",
-        "bank_description": "Vicente cardumen: cierre limpio. En 4:43 se replica un impacto del inicio en azul C-H240-S100-I008 #0000FF; luego las luces del cardumen se apagan en fade de 5 segundos. Solo L16 queda calida encendida. L19 no participa.",
-        "description": "Vicente cardumen: cierre limpio. En 4:43 se replica un impacto del inicio en azul C-H240-S100-I008 #0000FF; luego las luces del cardumen se apagan en fade de 5 segundos. Solo L16 queda calida encendida. L19 no participa."
+        "bank_description": "Vicente cardumen: cinco impactos de agua sincronizados con Escena1.wav incorporan el cardumen mediante ataques inmediatos y ondas decrecientes. El impacto final sucede en 04:43.700, recupera sus rebotes y ondas azules originales y termina exactamente en 04:47.285; solo L16 queda encendida como farol cálido.",
+        "description": "Vicente cardumen: cinco impactos de agua sincronizados con Escena1.wav incorporan el cardumen mediante ataques inmediatos y ondas decrecientes. El impacto final sucede en 04:43.700, recupera sus rebotes y ondas azules originales y termina exactamente en 04:47.285; solo L16 queda encendida como farol cálido."
       }
     },
     "3C-M1-Parto_de_Maria": {
@@ -20636,7 +21257,7 @@
     "7C-M1-Cenando_pez": {
       "name": "7C-M1-Cenando_pez",
       "source_scene": "programada",
-      "description": "Escena Cenando pez, sincronizada con Cuadro7.wav. Parte exactamente de la composición final de 6C-M1 y durante diez segundos retira progresivamente todas las luces excepto L18, que transiciona del blanco cálido al rojo-anaranjado C-H013-S090-I255. En 00:21.500 se incorporan simultáneamente L16, L17 y L15 en el mismo tono.",
+      "description": "Escena Cenando pez, sincronizada con Cuadro7.wav. Parte exactamente de la composición final de 6C-M1 y durante diez segundos retira progresivamente todas las luces excepto L18, que transiciona del blanco cálido al rojo-anaranjado C-H013-S090-I255. En 00:21.500 se incorporan simultáneamente L16, L17, L15, L13 y L12 en el mismo tono. Desde 00:48 hasta 01:40 L17 recorre una ola de azules intensos y claros y queda fija en H240 I180. En 02:08 L13 y L18 se suman al azul; de 02:56 a 03:03.900 cinco lámparas pasan a B-T129-I255 y recuperan su estado anterior. En 03:11.097 todas las activas adoptan el tono de L16 y avanzan solo hasta H006/S097/I210. En 04:18.023 el rojo puro H000/I255 aparece directamente en todas las lámparas L9-L20 excepto L8. Tras el impacto se apagan L14, L15 y L16; las restantes llegan a C-H342-S100-I255 #FF004C en 05:49. L8 late rápidamente en violeta hasta 06:10, una onda violeta recorre las lámparas activas hasta 06:40 y el cierre deja únicamente L13, L14 y L15 en C-H295-S023-I180 #FAC4FF.",
       "documentation": {
         "purpose": "Abrir el cuadro 7 desde la continuidad visual del colapso anterior y ofrecer una base estable para programar los siguientes acontecimientos de la cena.",
         "lamps": "L18, L17, L12 y L13 permanecen en blanco cálido. L9, L10, L11, L14, L15 y L16 permanecen azules. L8 continúa apagada.",
@@ -20644,15 +21265,33 @@
           "00:00: se reconstruye inmediatamente el estado final exacto de 6C-M1-Colapso_de_Vicente.",
           "00:00-00:10: L9 a L17 descienden suavemente hasta apagarse. L18 transiciona desde B-T000-I255 hacia C-H013-S090-I255 #FF4B19.",
           "00:10-00:21.500: L18 permanece sola en C-H013-S090-I255.",
-          "00:21.500-06:56: L16, L17 y L15 se encienden simultáneamente en C-H013-S090-I255 y permanecen junto con L18 mientras se definen los siguientes movimientos."
+          "00:21.500-00:48: L16, L17, L15, L13 y L12 se encienden simultáneamente en C-H013-S090-I255 y permanecen junto con L18.",
+          "00:48-01:40: L17 desarrolla una ola fluida entre azules profundos, eléctricos y claros, con brillo alto; L18, L16, L15, L13 y L12 conservan el rojo-anaranjado anterior.",
+          "01:40-02:08: L17 permanece estable en azul puro C-H240-S100-I180 #0000FF.",
+          "02:08-02:56: L13 y L18 se suman al mismo azul de L17; L15 y L12 conservan el rojo-anaranjado.",
+          "02:56-03:03.900: L15, L17, L18, L12 y L13 cambian de inmediato a blanco cálido B-T129-I255 #F8DBB4; L16 conserva el rojo-anaranjado.",
+          "03:03.900: se restaura el estado anterior al último cambio: L17, L18 y L13 vuelven a H240 I180; L15 y L12 regresan a H013 I255.",
+          "03:11.097: todas las lámparas activas L12, L13, L15, L16, L17 y L18 adoptan inmediatamente el tono de L16, C-H013-S090-I255.",
+          "03:11.097-04:18.023: las seis lámparas incrementan gradualmente la tensión desde H013/S090/I255, pero se detienen en H006/S097/I210 sin alcanzar aún el rojo final.",
+          "04:18.023: el rojo puro C-H000-S100-I255 #FF0000 aparece directamente en L9-L20, exceptuando L8, para producir el impacto máximo de la escena.",
+          "04:18.023-04:18.473: todas las participantes sostienen el rojo puro a máxima intensidad para que el golpe sea plenamente visible.",
+          "04:18.473-04:21.023: el brillo cae con fuerza y genera réplicas amplias en todo el espacio sin abandonar H000/S100.",
+          "04:21.023: L14, L15 y L16 se apagan. L9, L10, L11, L12, L13, L17, L18, L19 y L20 quedan en H000/S100/I180.",
+          "04:21.023-05:49: las nueve lámparas restantes transicionan lenta y continuamente hacia C-H342-S100-I255 #FF004C.",
+          "05:49: la transición concluye exactamente en H342/S100/I255.",
+          "05:49-06:10: L8 desarrolla un latido doble rápido en C-H294-S038-I180 #F59EFF mientras las nueve lámparas restantes sostienen H342/S100/I255.",
+          "06:10: L8 se apaga por completo.",
+          "06:10-06:40: una onda viajera de brillo recorre L9, L10, L11, L12, L13, L17, L18, L19 y L20 en C-H294-S038 #F59EFF.",
+          "06:40-06:55: la onda se disuelve; las lámparas anteriores se apagan progresivamente mientras L14 y L15 ingresan y, junto con L13, transicionan hacia C-H295-S023-I180 #FAC4FF.",
+          "06:55-06:56: solo L13, L14 y L15 permanecen encendidas en C-H295-S023-I180 #FAC4FF."
         ],
         "palette": "Blanco cálido B-T000-I255 #FFBE69 en L18, L17, L12 y L13; azul C-H199-S096-I180 #0AB1FF en L9, L10, L11, L14, L15 y L16.",
-        "ending": "En esta versión L18, L16, L17 y L15 permanecen en C-H013-S090-I255 hasta 06:56; este sostén será reemplazado progresivamente al definir los siguientes movimientos.",
-        "notes": "Duración tomada directamente del archivo Cuadro7.wav: 416000 ms exactos, estéreo 44.1 kHz/24 bits. L8 permanece apagada por continuidad narrativa."
+        "ending": "Desde 06:55 solo L13, L14 y L15 permanecen encendidas en C-H295-S023-I180 #FAC4FF; todas las demás lámparas quedan apagadas.",
+        "notes": "Duración tomada directamente del archivo Cuadro7.wav: 416000 ms exactos, estéreo 44.1 kHz/24 bits. La onda de 06:10 sigue el orden físico de las lámparas activas y el cierre queda estable durante el último segundo."
       },
-      "summary": "06:56 | continuidad de 6C-M1 | fade 10 s | 00:21.500 entran L16, L17 y L15 con L18",
+      "summary": "06:56 | impacto 04:18.023 | L8 late 05:49 | onda 06:10 | cierre L13/L14/L15",
       "created_at": "2026-10-17T00:00:00",
-      "updated_at": "2026-10-17T00:00:00",
+      "updated_at": "2026-10-21T00:00:00",
       "scene_data": {
         "tipo": "escena_luces",
         "version": 3,
@@ -20666,18 +21305,18 @@
         "lamparas": {},
         "scripted_scene": {
           "type": "laberintos_cenando_pez",
-          "summary": "Continuidad de 6C-M1 | fade 10 s | 00:21.500 entran L16, L17 y L15 con L18",
+          "summary": "04:18.023 impacto | 05:49 H342 | latido L8 | onda H294 | cierre L13/L14/L15",
           "duration_ms": 416000,
           "tick_ms": 250,
           "initial_source_scene": "6C-M1-Colapso_de_Vicente",
           "target_group": "bichos",
-          "target_lamps": ["L8", "L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+          "target_lamps": ["L8", "L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18", "L19", "L20"],
           "opening_state": {
             "warm_lamps": ["L18", "L17", "L12", "L13"],
             "warm": {"temp": 0, "brillo": 255, "preview_h": 34},
             "blue_lamps": ["L9", "L10", "L11", "L14", "L15", "L16"],
             "blue": {"h": 199, "s": 0.96, "brillo": 180},
-            "off_lamps": ["L8"]
+            "off_lamps": ["L8", "L19", "L20"]
           },
           "opening_fade": {
             "duration_ms": 10000,
@@ -20688,10 +21327,368 @@
           },
           "first_group_entry": {
             "at_ms": 21500,
-            "lamps": ["L16", "L17", "L15"],
+            "lamps": ["L16", "L17", "L15", "L13", "L12"],
             "h": 13,
             "s": 0.90,
             "brillo": 255
+          },
+          "l17_blue_change": {
+            "at_ms": 48000,
+            "end_ms": 100000,
+            "tick_ms": 180,
+            "period_ms": 10000,
+            "lamps": ["L17"],
+            "palette": [
+              {"h": 240, "s": 1.0, "brillo": 235},
+              {"h": 226, "s": 0.98, "brillo": 255},
+              {"h": 205, "s": 0.86, "brillo": 255},
+              {"h": 216, "s": 0.94, "brillo": 245},
+              {"h": 234, "s": 1.0, "brillo": 225}
+            ],
+            "final": {"h": 240, "s": 1.0, "brillo": 180}
+          },
+          "blue_expansion": {
+            "at_ms": 128000,
+            "lamps": ["L13", "L18"],
+            "h": 240,
+            "s": 1.0,
+            "brillo": 180
+          },
+          "warm_group_change": {
+            "at_ms": 176000,
+            "lamps": ["L15", "L17", "L18", "L12", "L13"],
+            "temp": 129,
+            "brillo": 255,
+            "preview_h": 34
+          },
+          "warm_group_restore": {
+            "at_ms": 183900,
+            "blue_lamps": ["L17", "L18", "L13"],
+            "red_lamps": ["L15", "L12"]
+          },
+          "unify_l16": {
+            "at_ms": 191097,
+            "lamps": ["L12", "L13", "L15", "L16", "L17", "L18"],
+            "h": 13,
+            "s": 0.90,
+            "brillo": 255
+          },
+          "red_tension_transition": {
+            "start_ms": 191097,
+            "end_ms": 258023,
+            "tick_ms": 180,
+            "lamps": ["L12", "L13", "L15", "L16", "L17", "L18"],
+            "target": {"h": 6, "s": 0.97, "brillo": 210}
+          },
+          "red_impact": {
+            "at_ms": 258023,
+            "duration_ms": 3000,
+            "tick_ms": 70,
+            "expansion_at_ms": 258023,
+            "return_fade_ms": 0,
+            "color": {"h": 0, "s": 1.0},
+            "final_brightness": 180,
+            "lamps": ["L12", "L13", "L15", "L16", "L17", "L18"],
+            "expansion_lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18", "L19", "L20"],
+            "brightness_frames": [
+              {"at_ms": 0, "brillo": 255},
+              {"at_ms": 450, "brillo": 255},
+              {"at_ms": 700, "brillo": 30},
+              {"at_ms": 950, "brillo": 255},
+              {"at_ms": 1250, "brillo": 65},
+              {"at_ms": 1550, "brillo": 235},
+              {"at_ms": 1850, "brillo": 130},
+              {"at_ms": 1999, "brillo": 180},
+              {"at_ms": 2000, "brillo": 255},
+              {"at_ms": 2110, "brillo": 255},
+              {"at_ms": 2250, "brillo": 55},
+              {"at_ms": 2420, "brillo": 240},
+              {"at_ms": 2640, "brillo": 90},
+              {"at_ms": 2860, "brillo": 210},
+              {"at_ms": 3000, "brillo": 180}
+            ]
+          },
+          "post_impact_transition": {
+            "start_ms": 261023,
+            "end_ms": 349000,
+            "tick_ms": 180,
+            "lamps": ["L9", "L10", "L11", "L12", "L13", "L17", "L18", "L19", "L20"],
+            "off_lamps": ["L8", "L14", "L15", "L16"],
+            "target": {"h": 342, "s": 1.0, "brillo": 255}
+          },
+          "l8_heartbeat": {
+            "start_ms": 349000,
+            "end_ms": 370000,
+            "tick_ms": 70,
+            "period_ms": 1000,
+            "lamp": "L8",
+            "h": 294,
+            "s": 0.38,
+            "brillo_min": 12,
+            "brillo_max": 180
+          },
+          "active_wave": {
+            "start_ms": 370000,
+            "end_ms": 400000,
+            "tick_ms": 120,
+            "period_ms": 5200,
+            "lamps": ["L9", "L10", "L11", "L12", "L13", "L17", "L18", "L19", "L20"],
+            "h": 294,
+            "s": 0.38,
+            "brillo_min": 35,
+            "brillo_max": 180
+          },
+          "final_transition": {
+            "start_ms": 400000,
+            "end_ms": 415000,
+            "tick_ms": 160,
+            "target_lamps": ["L15", "L14", "L13"],
+            "off_lamps": ["L8", "L9", "L10", "L11", "L12", "L16", "L17", "L18", "L19", "L20"],
+            "target": {"h": 295, "s": 0.23, "brillo": 180}
+          }
+        }
+      }
+    },
+    "8C-M1-Barca_y_muerte_Vicente": {
+      "name": "8C-M1-Barca_y_muerte_Vicente",
+      "source_scene": "programada",
+      "description": "Escena Barca y muerte de Vicente, sincronizada con Cuadro8.wav y con una cola lumínica hasta 05:55. Comienza reconstruyendo sin salto visible el cierre de 7C-M1-Cenando_pez: L13, L14 y L15 sostienen durante cinco segundos C-H295-S023-I180 #FAC4FF. Entre 00:05 y 00:25 se transforman gradualmente en un amanecer a brillo máximo. Desde 00:25 se incorporan por parejas las demás luces del rectángulo hasta quedar completo en 00:56. Entre 00:56 y 02:15 el rectángulo funciona como una máquina que construye una barca. Desde 02:15 hasta 02:40 el amanecer se transforma en mar y playa. La composición se sostiene hasta 03:28; entonces la arena se convierte en mar y una ola representa la navegación hasta 03:51. Entre 03:51 y 04:05 L18, L9, L10, L11 y L12 desarrollan impulsos violentos de azul eléctrico mientras el resto del mar se oscurece, haciendo visible que un personaje ahoga a otro. Tras una pausa de tensión, en 04:14 todas las luces entran en navegación azul de brillo alto. Desde 05:09 la navegación baja y el cierre cruza el blackout general con la aparición cálida de L18, evitando un negro total.",
+      "documentation": {
+        "purpose": "Iniciar el cuadro 8 con continuidad visual exacta respecto del cierre de Cenando pez y desarrollar la construcción de la barca, el ahogo, la navegación y el aislamiento final de L18.",
+        "lamps": "L13, L14 y L15 comienzan encendidas. Se incorporan L12+L16, L11+L17, L10+L18 y finalmente L9. En 02:15 ingresan L19 y L20 para formar mar y playa. L8 permanece apagada hasta 04:14, cuando se suma a la navegación de todo el espacio. En el cierre todas se apagan excepto L18.",
+        "timeline": [
+          "00:00: se reconstruye inmediatamente el estado final exacto de 7C-M1-Cenando_pez.",
+          "00:00-00:05: L13, L14 y L15 sostienen C-H295-S023-I180 #FAC4FF.",
+          "00:05-00:25: L13, L14 y L15 transicionan suavemente hacia rosa, coral y naranja, alcanzando I255 para iniciar la salida del sol.",
+          "00:25-00:32.750: L12 y L16 ingresan mediante fade en dorado y rojo profundo; las luces anteriores continúan evolucionando.",
+          "00:32.750-00:40.500: L11 y L17 se incorporan en ámbar y rojo; todo el conjunto activo sigue cambiando.",
+          "00:40.500-00:48.250: L10 y L18 se incorporan en naranja coral y rojo coral.",
+          "00:48.250-00:56: L9 entra en coral y completa un gradiente continuo alrededor de todo el rectángulo a brillo máximo.",
+          "00:56-02:15: comienza la máquina de la barca a 120 BPM. Cada frase de ocho tiempos alterna laterales, base, cubierta superior, casco inferior y costillas diagonales; el tiempo 8 reúne todo el rectángulo. Las frases pares invierten el sentido y el brillo base crece progresivamente, como si la estructura se consolidara.",
+          "02:15-02:27.500: la paleta del amanecer pierde saturación de manera continua y se acerca a un neutro cálido suave, sin pasar por verdes ni violetas accidentales.",
+          "02:27.500-02:40: L9-L13 y L17-L20 se transforman en una superficie de azules y cianes; L14-L16 pasan a tonos de arena. L19 y L20 ingresan mediante fade y L8 continúa apagada.",
+          "02:40-03:28: se sostiene estable la composición de mar y playa.",
+          "03:28-03:38: L14, L15 y L16 pierden progresivamente su tono de arena y se convierten en azules de mar. El cambio desatura primero los cálidos para evitar tonos violetas o verdes accidentales.",
+          "03:38-03:51: todo el espacio, excepto L8, representa el mar. Una cresta de brillo y cian recorre el rectángulo físico para sugerir que la barca navega y se aleja de la orilla.",
+          "03:51-04:05: L18, L9, L10, L11 y L12 pasan a azul eléctrico H208/S098 y reciben impulsos dobles desfasados entre I035 e I255, cada vez más rápidos. Simultáneamente las demás luces bajan a I080 para que el ahogo domine visualmente.",
+          "04:05-04:14: las cinco luces de tensión quedan brillantes y el resto permanece oscuro; esta pausa sostiene la resolución del ahogo.",
+          "04:14-05:09: todas las luces, incluida L8, producen una navegación media con azules de alto brillo I170-I255. La entrada conjunta genera un cambio notorio respecto de la pausa anterior.",
+          "05:09-05:42: la navegación continúa más lenta y baja, entre I045 e I125.",
+          "05:42-05:54: todas las luces excepto L18 descienden progresivamente a blackout. Al mismo tiempo L18 pierde saturación y aparece en tono arena H042/S045/I230, por lo que nunca existe un blackout total.",
+          "05:54-05:55: solo L18 permanece encendida en el tono arena."
+        ],
+        "palette": "Amanecer en rojo, coral, naranja y ámbar. Mar H185-H225. Ahogo H208/S098 con contraste I035-I255. Navegación media en azules I170-I255 y navegación baja I045-I125. Cierre de L18 en arena H042/S045/I230.",
+        "ending": "En 05:54 todas las luces quedan apagadas excepto L18, que permanece encendida en H042/S045/I230 hasta 05:55.",
+        "notes": "Cuadro8.wav dura 352000 ms; la escena añade una cola lumínica de tres segundos y termina en 355000 ms. El ahogo oscurece el fondo y acelera impulsos dobles entre 2.3 s y 0.85 s. Desde 04:14 la navegación incluye L8. El cierre desatura L18 antes de asignarle el cálido de arena, evitando violetas, y solapa su encendido con el fade a negro de las demás."
+      },
+      "summary": "05:55 | ahogo 03:51 | navegación alta 04:14 | baja 05:09 | cierre L18",
+      "created_at": "2026-10-22T00:00:00",
+      "updated_at": "2026-10-24T00:00:00",
+      "scene_data": {
+        "tipo": "escena_luces",
+        "version": 1,
+        "scene_kind": "scripted",
+        "nombre": "8C-M1-Barca_y_muerte_Vicente",
+        "fade_in": 0.0,
+        "fade_out": 0.0,
+        "effects": {},
+        "effects_config": {},
+        "effects_layers": [],
+        "lamparas": {},
+        "scripted_scene": {
+          "type": "laberintos_barca_muerte_vicente",
+          "summary": "Ahogo 03:51 | navegación alta 04:14 | baja 05:09 | cierre L18 05:54",
+          "duration_ms": 355000,
+          "initial_source_scene": "7C-M1-Cenando_pez",
+          "target_group": "bichos",
+          "target_lamps": ["L8", "L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18", "L19", "L20"],
+          "opening_state": {
+            "colour_lamps": ["L13", "L14", "L15"],
+            "colour": {"h": 295, "s": 0.23, "brillo": 180},
+            "off_lamps": ["L8", "L9", "L10", "L11", "L12", "L16", "L17", "L18", "L19", "L20"]
+          },
+          "dawn_transition": {
+            "start_ms": 5000,
+            "end_ms": 25000,
+            "tick_ms": 180,
+            "targets": {
+              "L13": {"h": 332, "s": 0.75, "brillo": 255},
+              "L14": {"h": 8, "s": 0.88, "brillo": 255},
+              "L15": {"h": 28, "s": 0.92, "brillo": 255}
+            }
+          },
+          "rectangle_build": {
+            "start_ms": 25000,
+            "end_ms": 56000,
+            "tick_ms": 180,
+            "off_lamps": ["L8", "L19", "L20"],
+            "final_targets": {
+              "L9": {"h": 8, "s": 0.88, "brillo": 255},
+              "L10": {"h": 22, "s": 0.92, "brillo": 255},
+              "L11": {"h": 40, "s": 0.90, "brillo": 255},
+              "L12": {"h": 52, "s": 0.82, "brillo": 255},
+              "L13": {"h": 28, "s": 0.90, "brillo": 255},
+              "L14": {"h": 10, "s": 0.88, "brillo": 255},
+              "L15": {"h": 0, "s": 1.00, "brillo": 255},
+              "L16": {"h": 6, "s": 1.00, "brillo": 255},
+              "L17": {"h": 2, "s": 0.92, "brillo": 255},
+              "L18": {"h": 10, "s": 0.90, "brillo": 255}
+            },
+            "stages": [
+              {
+                "start_ms": 25000,
+                "end_ms": 32750,
+                "targets": {
+                  "L12": {"h": 48, "s": 0.82, "brillo": 255},
+                  "L16": {"h": 4, "s": 1.00, "brillo": 255}
+                }
+              },
+              {
+                "start_ms": 32750,
+                "end_ms": 40500,
+                "targets": {
+                  "L11": {"h": 35, "s": 0.90, "brillo": 255},
+                  "L17": {"h": 355, "s": 0.86, "brillo": 255}
+                }
+              },
+              {
+                "start_ms": 40500,
+                "end_ms": 48250,
+                "targets": {
+                  "L10": {"h": 20, "s": 0.95, "brillo": 255},
+                  "L18": {"h": 5, "s": 0.88, "brillo": 255}
+                }
+              },
+              {
+                "start_ms": 48250,
+                "end_ms": 56000,
+                "targets": {
+                  "L9": {"h": 8, "s": 0.88, "brillo": 255}
+                }
+              }
+            ]
+          },
+          "machine_build": {
+            "start_ms": 56000,
+            "end_ms": 135000,
+            "beat_ms": 500,
+            "tick_ms": 250,
+            "lamps": ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"],
+            "base_brightness_start": 72,
+            "base_brightness_end": 150,
+            "active_brightness": 255,
+            "settle_brightness": 215,
+            "trail_brightness": 175,
+            "patterns": [
+              ["L15", "L16", "L14"],
+              ["L14", "L13", "L12"],
+              ["L9", "L10", "L11"],
+              ["L11", "L12", "L13"],
+              ["L16", "L17", "L18", "L9"],
+              ["L11", "L12", "L13", "L14", "L15"],
+              ["L17", "L10", "L13", "L15"],
+              ["L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18"]
+            ],
+            "mirror": {
+              "L16": "L9", "L17": "L18", "L18": "L17", "L9": "L16",
+              "L15": "L10", "L10": "L15", "L14": "L11", "L11": "L14",
+              "L13": "L12", "L12": "L13"
+            }
+          },
+          "shore_transition": {
+            "start_ms": 135000,
+            "midpoint_ms": 147500,
+            "end_ms": 160000,
+            "hold_end_ms": 208000,
+            "tick_ms": 200,
+            "neutral_h": 34,
+            "neutral_s": 0.08,
+            "neutral_brightness": 220,
+            "sea_lamps": ["L9", "L10", "L11", "L12", "L13", "L17", "L18", "L19", "L20"],
+            "sand_lamps": ["L14", "L15", "L16"],
+            "off_lamps": ["L8"],
+            "sea_targets": {
+              "L9": {"h": 218, "s": 0.92, "brillo": 220},
+              "L10": {"h": 205, "s": 0.90, "brillo": 235},
+              "L11": {"h": 195, "s": 0.86, "brillo": 255},
+              "L12": {"h": 188, "s": 0.80, "brillo": 240},
+              "L13": {"h": 200, "s": 0.88, "brillo": 230},
+              "L17": {"h": 212, "s": 0.95, "brillo": 230},
+              "L18": {"h": 225, "s": 0.95, "brillo": 210},
+              "L19": {"h": 198, "s": 0.92, "brillo": 240},
+              "L20": {"h": 185, "s": 0.78, "brillo": 255}
+            },
+            "sand_targets": {
+              "L14": {"h": 42, "s": 0.45, "brillo": 230},
+              "L15": {"h": 34, "s": 0.55, "brillo": 240},
+              "L16": {"h": 48, "s": 0.40, "brillo": 220}
+            }
+          },
+          "sea_takeover": {
+            "start_ms": 208000,
+            "end_ms": 218000,
+            "tick_ms": 180,
+            "lamps": ["L14", "L15", "L16"],
+            "targets": {
+              "L14": {"h": 202, "s": 0.86, "brillo": 235},
+              "L15": {"h": 190, "s": 0.80, "brillo": 250},
+              "L16": {"h": 215, "s": 0.94, "brillo": 225}
+            }
+          },
+          "navigation_wave": {
+            "start_ms": 218000,
+            "end_ms": 231000,
+            "tick_ms": 120,
+            "period_ms": 6200,
+            "brightness_depth": 82,
+            "hue_swing": 10,
+            "order": ["L16", "L17", "L18", "L19", "L20", "L9", "L10", "L11", "L12", "L13", "L14", "L15"]
+          },
+          "drowning_tension": {
+            "start_ms": 231000,
+            "end_ms": 245000,
+            "hold_end_ms": 254000,
+            "tick_ms": 70,
+            "lamps": ["L18", "L9", "L10", "L11", "L12"],
+            "h": 208,
+            "s": 0.98,
+            "brillo_min": 35,
+            "brillo_max": 255,
+            "background_brightness": 80,
+            "period_start_ms": 2300,
+            "period_end_ms": 850,
+            "phase_step": 0.11,
+            "colour_transition_ms": 1800
+          },
+          "medium_navigation": {
+            "start_ms": 254000,
+            "end_ms": 309000,
+            "tick_ms": 100,
+            "period_ms": 4600,
+            "brillo_min": 170,
+            "brillo_max": 255,
+            "hue_swing": 12,
+            "order": ["L16", "L17", "L18", "L19", "L20", "L9", "L10", "L11", "L12", "L13", "L14", "L15", "L8"],
+            "extra_targets": {
+              "L8": {"h": 205, "s": 0.92, "brillo": 240}
+            }
+          },
+          "low_navigation": {
+            "start_ms": 309000,
+            "end_ms": 342000,
+            "tick_ms": 140,
+            "period_ms": 7200,
+            "brillo_min": 45,
+            "brillo_max": 125,
+            "hue_swing": 8,
+            "entry_ms": 3500
+          },
+          "final_crossfade": {
+            "start_ms": 342000,
+            "end_ms": 354000,
+            "tick_ms": 160,
+            "survivor_lamp": "L18",
+            "survivor_target": {"h": 42, "s": 0.45, "brillo": 230}
           }
         }
       }
@@ -20937,6 +21934,550 @@
         },
         "created_at": "2026-09-05T00:00:00",
         "updated_at": "2026-09-05T00:00:00"
+      }
+    },
+    "9C-M1-Vicente_y_las_lilas": {
+      "name": "9C-M1-Vicente_y_las_lilas",
+      "source_scene": "programada",
+      "description": "Escena del cuadro 9 sincronizada con cuadro9.wav (05:53.103). El movimiento inicial conserva exactamente el cierre de 8C-M1-Barca_y_muerte_Vicente: todas las lámparas quedan apagadas excepto L18, que permanece encendida en el tono arena C-H042-S045-I230. Entre 00:07 y 00:56 se incorporan progresivamente L9, L10, L11, L12, L13, L15, L16 y finalmente L14+L17. L9-L13 ingresan en azul profundo C-H224-S098-I006; L15-L16 en ámbar C-H035-S092-I010; L14 y L17 en rojo cálido C-H009-S096-I010. En 00:59.100 todas las lámparas encendidas suben de forma directa a brillo máximo. Desde allí hasta 03:00, L14 y L17 alternan pulsos de fiesta mientras L9-L13 producen una marea azul lenta y de contraste mínimo. En 01:38.700 L14 y L17 cambian directamente a C-H313-S095-I255 #FF0CCA. En 02:28.200 L18 adopta el mismo violeta y se incorpora como una tercera fase del baile. Entre 03:00 y 03:30, todas las lámparas salvo L18 transicionan suavemente a C-H224-S098-I255; L18 conserva el violeta. La composición se sostiene hasta 05:13. El modo MIDI Flor al mar actúa por lámpara; además, el disparador asignable Flores al mar (sin L8) aplica simultáneamente el impacto violeta y el regreso azul de 10 segundos a todas las luces conectadas excepto L8.",
+      "documentation": {
+        "purpose": "Iniciar el cuadro 9 con continuidad visual exacta respecto del cierre de Barca y muerte de Vicente.",
+        "lamps": "Comienza únicamente L18. Luego participan L9-L17, completando las diez lámparas del rectángulo. L8, L19 y L20 permanecen apagadas.",
+        "timeline": [
+          "00:00: se reconstruye el estado final exacto de 8C-M1-Barca_y_muerte_Vicente.",
+          "00:07: L9 se enciende en C-H224-S098-I006 #0547FF.",
+          "00:14: L10 se enciende en C-H224-S098-I006 #0547FF.",
+          "00:21: L11 se enciende en C-H224-S098-I006 #0547FF.",
+          "00:28: L12 se enciende en C-H224-S098-I006 #0547FF.",
+          "00:35: L13 se enciende en C-H224-S098-I006 #0547FF.",
+          "00:42: L15 se enciende en C-H035-S092-I010 #FF9D14.",
+          "00:49: L16 se enciende en C-H035-S092-I010 #FF9D14.",
+          "00:56: L14 y L17 se encienden simultáneamente en C-H009-S096-I010 #FF2E0A.",
+          "00:59.100: las diez lámparas encendidas saltan de forma directa a brillo máximo, conservando sus respectivos colores.",
+          "00:59.100-01:38.700: L14 y L17 alternan pulsos rítmicos dobles entre I095 e I255, con un acento conjunto cada cuatro ciclos, para sugerir una fiesta dentro de un bar sin convertirse en estrobo.",
+          "00:59.100-01:38.700: una onda lenta recorre L9-L13 en azul H224/S098 entre I205 e I255, generando una marea mínima que no compite con la acción del bar.",
+          "01:38.700: L14 y L17 cambian directamente a C-H313-S095-I255 #FF0CCA sin interrumpir el pulso alternado de fiesta.",
+          "01:38.700-02:28.200: continúa el mismo pulso de bar en magenta sobre L14 y L17, mientras la marea azul de L9-L13 mantiene su cadencia y contraste mínimos.",
+          "02:28.200: L18 cambia del tono arena a C-H313-S095-I255 #FF0CCA y entra suavemente en una tercera fase del baile violeta.",
+          "02:28.200-03:00: L14, L17 y L18 continúan el pulso de fiesta distribuidas en tres fases, mientras L9-L13 sostienen la marea azul mínima.",
+          "L15 y L16 permanecen estables a brillo máximo como base cálida de toda la composición hasta 03:00.",
+          "03:00-03:30: L9-L17 transicionan con una curva continua hacia C-H224-S098-I255. L9-L13 ya están en ese azul y permanecen estables; L14-L17 recorren el camino corto por violetas para evitar verdes accidentales.",
+          "Durante la transición de 03:00 a 03:30, L18 queda excluida y sostiene C-H313-S095-I255.",
+          "03:30: L9-L17 quedan unificadas en azul H224/S098 a brillo máximo; L18 continúa violeta a brillo máximo.",
+          "03:30-05:13: se sostiene la composición de mar azul con L18 violeta y queda habilitada la intervención manual desde los pads.",
+          "Modo MIDI Flor al mar: al pulsar una lámpara, salta a C-H313-S095-I255 y regresa con una curva suave a C-H224-S098-I255 durante 10 segundos. Al finalizar queda azul y la escena continúa corriendo.",
+          "Disparador MIDI Flores al mar (sin L8): inicia el mismo recorrido simultáneamente en todas las lámparas conectadas excepto L8 para producir un impacto conjunto.",
+          "05:13-05:53.103: L9-L18 descienden con una curva continua hacia C-H224-S098-I006. L18 abandona progresivamente el violeta y se integra al azul.",
+          "05:53.103: L9, L16, L17 y L18 se apagan por completo; L10-L15 conservan el azul en el brillo mínimo."
+        ],
+        "palette": "L18 inicia en arena C-H042-S045. L9-L13 usan azul H224/S098; L15-L16 ámbar H035/S092. L14 y L17 comienzan en rojo cálido H009/S096 y pasan a magenta H313/S095 en 01:38.700; L18 se suma al magenta en 02:28.200.",
+        "ending": "Desde 05:13 todas las lámparas del rectángulo descienden al azul H224/S098/I006. En 05:53.103 se apagan L9, L16, L17 y L18; L10-L15 quedan encendidas en ese azul mínimo.",
+        "notes": "Audio de referencia: cuadro9.wav, 44.1 kHz estéreo, duración 353.103 segundos. Los pulsos de bar nunca llegan a apagado y los cambios de integrantes o color no reinician su fase. L18 entra a brillo máximo y se integra suavemente durante un segundo. La transición de 03:00 evita el recorrido largo por verdes y mantiene el brillo máximo. El modo Flor al mar no pausa el reloj; cada nueva pulsación reinicia la transición correspondiente. El disparador global aparece en Configuración MIDI sin nota predeterminada para evitar conflictos y permite aprendizaje desde un pad de la APC. La intervención MIDI se deshabilita al comenzar el cierre de 05:13."
+      },
+      "summary": "05:53.103 | cierre azul mínimo | L9/L16/L17/L18 off",
+      "created_at": "2026-11-07T10:40:23",
+      "updated_at": "2026-11-07T12:34:09",
+      "scene_data": {
+        "tipo": "escena_luces",
+        "version": 3,
+        "scene_kind": "scripted",
+        "nombre": "9C-M1-Vicente_y_las_lilas",
+        "fade_in": 0.0,
+        "fade_out": 0.0,
+        "effects": {},
+        "effects_config": {
+          "version": 1,
+          "active": {}
+        },
+        "effects_layers": [],
+        "lamparas": {},
+        "scripted_scene": {
+          "type": "laberintos_sunset_sequence",
+          "summary": "05:53.103 | cierre azul mínimo | L9/L16/L17/L18 off",
+          "duration_ms": 353103,
+          "tick_ms": 250,
+          "realtime_timeline": true,
+          "realtime_tick_ms": 80,
+          "hard_stop_at_duration": true,
+          "initial_source_scene": "8C-M1-Barca_y_muerte_Vicente",
+          "target_group": "bichos",
+          "target_lamps": [
+            "L9",
+            "L10",
+            "L11",
+            "L12",
+            "L13",
+            "L14",
+            "L15",
+            "L16",
+            "L17",
+            "L18"
+          ],
+          "steps": [
+            {
+              "at_ms": 0,
+              "fade_ms": 0,
+              "mode": "off",
+              "lamps": [
+                "L8",
+                "L9",
+                "L10",
+                "L11",
+                "L12",
+                "L13",
+                "L14",
+                "L15",
+                "L16",
+                "L17",
+                "L19",
+                "L20"
+              ],
+              "color": {
+                "h": 42,
+                "s": 0.45,
+                "brillo": 0
+              }
+            },
+            {
+              "at_ms": 0,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L18"
+              ],
+              "color": {
+                "h": 42,
+                "s": 0.45,
+                "brillo_inicio": 230,
+                "brillo": 230
+              }
+            },
+            {
+              "at_ms": 7000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L9"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 6
+              }
+            },
+            {
+              "at_ms": 14000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L10"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 6
+              }
+            },
+            {
+              "at_ms": 21000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L11"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 6
+              }
+            },
+            {
+              "at_ms": 28000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L12"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 6
+              }
+            },
+            {
+              "at_ms": 35000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L13"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 6
+              }
+            },
+            {
+              "at_ms": 42000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L15"
+              ],
+              "color": {
+                "h": 35,
+                "s": 0.92,
+                "brillo": 10
+              }
+            },
+            {
+              "at_ms": 49000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L16"
+              ],
+              "color": {
+                "h": 35,
+                "s": 0.92,
+                "brillo": 10
+              }
+            },
+            {
+              "at_ms": 56000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L14",
+                "L17"
+              ],
+              "color": {
+                "h": 9,
+                "s": 0.96,
+                "brillo": 10
+              }
+            },
+            {
+              "at_ms": 59100,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L9",
+                "L10",
+                "L11",
+                "L12",
+                "L13"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 59100,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L15",
+                "L16"
+              ],
+              "color": {
+                "h": 35,
+                "s": 0.92,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 59100,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L14",
+                "L17"
+              ],
+              "color": {
+                "h": 9,
+                "s": 0.96,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 59100,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L18"
+              ],
+              "color": {
+                "h": 42,
+                "s": 0.45,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 98700,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L14",
+                "L17"
+              ],
+              "color": {
+                "h": 313,
+                "s": 0.95,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 148200,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L18"
+              ],
+              "color": {
+                "h": 313,
+                "s": 0.95,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 210000,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L9",
+                "L10",
+                "L11",
+                "L12",
+                "L13",
+                "L14",
+                "L15",
+                "L16",
+                "L17"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              }
+            },
+            {
+              "at_ms": 353103,
+              "fade_ms": 0,
+              "mode": "off",
+              "lamps": [
+                "L9",
+                "L16",
+                "L17",
+                "L18"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 0
+              }
+            },
+            {
+              "at_ms": 353103,
+              "fade_ms": 0,
+              "mode": "colour",
+              "lamps": [
+                "L10",
+                "L11",
+                "L12",
+                "L13",
+                "L14",
+                "L15"
+              ],
+              "color": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 6
+              }
+            }
+          ],
+          "perimeter_wave": {
+            "start_ms": 59100,
+            "end_ms": 180000,
+            "lamps": [
+              "L9",
+              "L10",
+              "L11",
+              "L12",
+              "L13"
+            ],
+            "h": 224,
+            "s": 0.98,
+            "brillo_min": 205,
+            "brillo_max": 255,
+            "period_ms": 10000,
+            "period_start_ms": 10000,
+            "period_end_ms": 10000,
+            "frame_ms": 180,
+            "entry_ms": 1600,
+            "settle_ms": 1600,
+            "direction": 1,
+            "shape_power": 1.2,
+            "acceleration_power": 1.0
+          },
+          "party_pulse": {
+            "start_ms": 59100,
+            "end_ms": 180000,
+            "lamps": [
+              "L14",
+              "L17",
+              "L18"
+            ],
+            "h": 9,
+            "s": 0.96,
+            "brillo_min": 95,
+            "brillo_max": 255,
+            "period_ms": 1450,
+            "frame_ms": 80,
+            "entry_ms": 1000,
+            "settle_ms": 1500,
+            "accent_every": 4,
+            "color_changes": [
+              {
+                "at_ms": 98700,
+                "h": 313,
+                "s": 0.95
+              }
+            ],
+            "lamp_start_ms": {
+              "L18": 148200
+            },
+            "phase_offsets": {
+              "L14": 0.0,
+              "L17": 0.5,
+              "L18": 0.25
+            }
+          },
+          "color_transition": {
+            "start_ms": 180000,
+            "end_ms": 210000,
+            "frame_ms": 120,
+            "lamps": [
+              "L9",
+              "L10",
+              "L11",
+              "L12",
+              "L13",
+              "L14",
+              "L15",
+              "L16",
+              "L17"
+            ],
+            "target": {
+              "h": 224,
+              "s": 0.98,
+              "brillo": 255
+            },
+            "sources": {
+              "L9": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "L10": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "L11": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "L12": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "L13": {
+                "h": 224,
+                "s": 0.98,
+                "brillo": 255
+              },
+              "L14": {
+                "h": 313,
+                "s": 0.95,
+                "brillo": 255
+              },
+              "L15": {
+                "h": 35,
+                "s": 0.92,
+                "brillo": 255
+              },
+              "L16": {
+                "h": 35,
+                "s": 0.92,
+                "brillo": 255
+              },
+              "L17": {
+                "h": 313,
+                "s": 0.95,
+                "brillo": 255
+              }
+            }
+          },
+          "manual_midi_window": {
+            "start_ms": 210000,
+            "end_ms": 313000,
+            "mode": "flower_sink",
+            "all_lamps_action": "trigger_flower_sink_all",
+            "exclude_lamps": [
+              "L8"
+            ],
+            "duration_ms": 10000,
+            "from_color": {
+              "h": 313,
+              "s": 0.95,
+              "brillo": 255
+            },
+            "to_color": {
+              "h": 224,
+              "s": 0.98,
+              "brillo": 255
+            }
+          },
+          "closing_transition": {
+            "start_ms": 313000,
+            "end_ms": 353103,
+            "frame_ms": 160,
+            "lamps": [
+              "L9",
+              "L10",
+              "L11",
+              "L12",
+              "L13",
+              "L14",
+              "L15",
+              "L16",
+              "L17",
+              "L18"
+            ],
+            "target": {
+              "h": 224,
+              "s": 0.98,
+              "brillo": 6
+            },
+            "sources": {
+              "L9": {"h": 224, "s": 0.98, "brillo": 255},
+              "L10": {"h": 224, "s": 0.98, "brillo": 255},
+              "L11": {"h": 224, "s": 0.98, "brillo": 255},
+              "L12": {"h": 224, "s": 0.98, "brillo": 255},
+              "L13": {"h": 224, "s": 0.98, "brillo": 255},
+              "L14": {"h": 224, "s": 0.98, "brillo": 255},
+              "L15": {"h": 224, "s": 0.98, "brillo": 255},
+              "L16": {"h": 224, "s": 0.98, "brillo": 255},
+              "L17": {"h": 224, "s": 0.98, "brillo": 255},
+              "L18": {"h": 313, "s": 0.95, "brillo": 255}
+            }
+          }
+        }
       }
     }
   }
